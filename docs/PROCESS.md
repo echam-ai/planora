@@ -32,13 +32,13 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 | `designer` | Audits UI against the spec; reports only |
 | `oncall-engineer` | Sole CI observer after push |
 
-Definitions live in `.agents/` — the single source of role policy, in Markdown with `name` and `description` frontmatter. Harness adapters load that policy:
+Definitions live in `.agents/` — the single source of role policy, in Markdown with `name` and `description` frontmatter. Both tracked harness paths, `.claude/agents` and `.codex/agents`, are symlinks to `../.agents` and expose the same six files. Edit roles only in `.agents/`; do not maintain copies or per-role adapters.
 
 - **Claude Code:** `CLAUDE.md` imports `AGENTS.md`; the tracked `.claude/agents -> ../.agents` symlink exposes all six roles. In a fresh session, check `/agents` for their names. Preserve the symlink rather than copying role files.
-- **Codex:** `.codex/agents/*.toml` registers the same six names. Each thin adapter instructs the agent to read its canonical Markdown role plus `AGENTS.md` and this process from the assigned worktree. Start a fresh session after changing registration; use a named custom role when the host exposes it.
-- **Fallback:** if native discovery, symlinks, or custom-role dispatch is unavailable, spawn a generic subagent with the explicit instruction: `Act as {role}. Work only in {absolute worktree cwd}. Before acting, read AGENTS.md, docs/PROCESS.md and .agents/{role}.md there, then handle issue #{N} in mode {implement|verify|groom|accept|audit|observe}.` Include the handoff fields below. Merely pointing a harness at a directory does not load role policy. Have the agent acknowledge its cwd and role file before work. If subagents themselves are unavailable, report that limitation; do not replace independent review with self-approval.
+- **Codex:** `.codex/agents -> ../.agents` provides the same shared path structure as Claude. This Markdown symlink does not natively register Codex custom roles; there are no TOML wrappers. The orchestrator must use the explicit generic-subagent dispatch below.
+- **Explicit dispatch (Codex, or Claude fallback):** spawn a generic subagent with the instruction: `Act as {role}. Work only in {absolute worktree cwd}. Before acting, read AGENTS.md, docs/PROCESS.md and .agents/{role}.md there, then handle issue #{N} in mode {implement|verify|groom|accept|audit|observe}.` Include the handoff fields below. Merely pointing a harness at a directory does not load role policy. Have the agent acknowledge its cwd and role file before work. If symlinks are unavailable, use the canonical `.agents/` paths directly. If subagents themselves are unavailable, report that limitation; do not replace independent review with self-approval.
 
-Adapters do not duplicate policy or override models, tools, permissions or sandbox settings. Host permissions still apply. See the official [Claude subagent format](https://code.claude.com/docs/en/sub-agents), [Claude instruction import](https://code.claude.com/docs/en/memory#agentsmd), and [Codex custom agent format](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+Shared roles do not override host models, tools, permissions or sandbox settings. Host permissions still apply. See the official [Claude subagent format](https://code.claude.com/docs/en/sub-agents), [Claude instruction import](https://code.claude.com/docs/en/memory#agentsmd), and [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 Nothing here pins a model or a tool list. Each role needs:
 
@@ -57,7 +57,7 @@ Use the strongest model available for grooming and acceptance, where misreading 
 | `src/` or `apps/web/`, Vite, bun, Vitest, Playwright, shadcn | `web-engineer` |
 | `apps/api/`, FastAPI, SQLAlchemy, Alembic, pytest, the LLM, Docker | `api-engineer` |
 | The contract — OpenAPI schema, field mapper, mock-to-HTTP swap | `api-engineer` first (schema is the source of truth), then `web-engineer` |
-| Process, shared role definitions, harness adapters, general documentation | `web-engineer` unless API/deployment expertise is needed |
+| Process, shared role definitions, harness setup, general documentation | `web-engineer` unless API/deployment expertise is needed |
 
 The `web`, `api`, `ai`, `contract` and `infra` labels on every backlog issue give the routing without opening it. Issues #34–36 are the only ones routinely needing both engineers — sequence them, never concurrently.
 
@@ -93,7 +93,7 @@ Select checks from actual files/scripts and issue scope, not just issue closure.
 
 | Work | Required verification |
 | --- | --- |
-| Documentation and agent configuration only | Diff/whitespace checks, links/paths, role/frontmatter and adapter syntax, discovery where supported, and walkthroughs of affected workflows. No application launch, application test coverage or new application harness is required. Record discovery limitations and verify the explicit dispatch fallback. |
+| Documentation and agent configuration only | Diff/whitespace checks, links/paths, role/frontmatter and symlink targets, discovery where supported, and walkthroughs of affected workflows. No application launch, application test coverage or new application harness is required. Record discovery limitations and verify explicit role dispatch. |
 | Web bootstrap before #8/#9 | Existing lint, TypeScript and build checks; targeted observable checks for the change. Record Vitest/coverage unavailable until #8 and E2E unavailable until #9. #2–#7 must not implement those future harnesses just to pass review. |
 | Web application once harnesses exist | `bun run test`, `bun run test:coverage` (at least 80%), `bun run lint`, `bunx tsc --noEmit`, `bun run build`; relevant `bun run e2e` flows after #9, plus inspected desktop/mobile screenshots for visible changes. Use package scripts, not Bun's built-in test runner. |
 | API from #1 | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected API health/startup and integration checks. #1 establishes/runs its test harness but does not require migrations from #22. |
