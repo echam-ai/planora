@@ -1,0 +1,206 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-cat-work: var(--cat-work);
+  --color-cat-work-foreground: var(--cat-work-foreground);
+  --color-cat-personal: var(--cat-personal);
+  --color-cat-personal-foreground: var(--cat-personal-foreground);
+  --color-cat-study: var(--cat-study);
+  --color-cat-study-foreground: var(--cat-study-foreground);
+  --color-cat-other: var(--cat-other);
+  --color-cat-other-foreground: var(--cat-other-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --radius: 0.9rem;
+  --background: oklch(0.985 0.008 90);
+  --foreground: oklch(0.24 0.03 280);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.03 280);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.24 0.03 280);
+  --primary: oklch(0.52 0.19 285);
+  --primary-foreground: oklch(0.99 0.005 285);
+  --secondary: oklch(0.955 0.02 285);
+  --secondary-foreground: oklch(0.35 0.11 285);
+  --muted: oklch(0.96 0.012 90);
+  --muted-foreground: oklch(0.52 0.03 280);
+  --accent: oklch(0.94 0.05 300);
+  --accent-foreground: oklch(0.34 0.12 290);
+  --destructive: oklch(0.58 0.21 25);
+  --destructive-foreground: oklch(0.99 0.01 25);
+  --warning: oklch(0.78 0.15 72);
+  --warning-foreground: oklch(0.32 0.09 60);
+  --success: oklch(0.68 0.14 155);
+  --success-foreground: oklch(0.25 0.06 155);
+  --border: oklch(0.91 0.012 285);
+  --input: oklch(0.91 0.012 285);
+  --ring: oklch(0.52 0.19 285);
+  --cat-work: oklch(0.93 0.06 250);
+  --cat-work-foreground: oklch(0.38 0.14 255);
+  --cat-personal: oklch(0.93 0.06 350);
+  --cat-personal-foreground: oklch(0.40 0.15 355);
+  --cat-study: oklch(0.93 0.07 160);
+  --cat-study-foreground: oklch(0.36 0.11 160);
+  --cat-other: oklch(0.94 0.02 90);
+  --cat-other-foreground: oklch(0.40 0.03 90);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0.008 90);
+  --sidebar-foreground: oklch(0.24 0.03 280);
+  --sidebar-primary: oklch(0.52 0.19 285);
+  --sidebar-primary-foreground: oklch(0.99 0.005 285);
+  --sidebar-accent: oklch(0.94 0.05 300);
+  --sidebar-accent-foreground: oklch(0.34 0.12 290);
+  --sidebar-border: oklch(0.91 0.012 285);
+  --sidebar-ring: oklch(0.52 0.19 285);
+  --gradient-brand: linear-gradient(135deg, oklch(0.56 0.2 288), oklch(0.62 0.17 330));
+  --shadow-card: 0 1px 2px oklch(0.24 0.03 280 / 0.06), 0 8px 24px oklch(0.24 0.03 280 / 0.06);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+}
+
+@utility bg-brand-gradient {
+  background-image: var(--gradient-brand);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.prose-dayweave h1,
+.prose-dayweave h2,
+.prose-dayweave h3 {
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  line-height: 1.3;
+}
+.prose-dayweave h1 {
+  font-size: 1.25rem;
+}
+.prose-dayweave h2 {
+  font-size: 1.1rem;
+}
+.prose-dayweave p {
+  margin: 0.5em 0;
+}
+.prose-dayweave ul,
+.prose-dayweave ol {
+  margin: 0.5em 0;
+  padding-left: 1.3em;
+  list-style: disc;
+}
+.prose-dayweave ol {
+  list-style: decimal;
+}
+.prose-dayweave a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.prose-dayweave code {
+  background: var(--color-muted);
+  padding: 0.1em 0.35em;
+  border-radius: 0.35rem;
+  font-size: 0.875em;
+}
+.prose-dayweave pre {
+  background: var(--color-muted);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  margin: 0.6em 0;
+}
+.prose-dayweave pre code {
+  background: transparent;
+  padding: 0;
+}
+.prose-dayweave blockquote {
+  border-left: 3px solid var(--color-primary);
+  padding-left: 0.85rem;
+  color: var(--color-muted-foreground);
+  margin: 0.6em 0;
+}
+.prose-dayweave input[type="checkbox"] {
+  margin-right: 0.4em;
+}

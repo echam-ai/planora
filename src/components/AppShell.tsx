@@ -1,0 +1,169 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { Archive, LayoutGrid, LogOut, Plus, Settings, Sparkles, WifiOff } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChatPanel } from "@/components/ChatPanel";
+import { CreateTaskDialog } from "@/components/CreateTaskDialog";
+import { api } from "@/services/api";
+import { APP_NAME } from "@/types";
+import { cn } from "@/lib/utils";
+
+const navItems = [
+  { to: "/tasks", label: "Active Tasks", icon: LayoutGrid },
+  { to: "/archive", label: "Archive", icon: Archive },
+] as const;
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const [chatOpen, setChatOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [online, setOnline] = useState(true);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  const logout = async () => {
+    await api.logout();
+    qc.clear();
+    navigate({ to: "/login" });
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
+      {!online && (
+        <div className="flex items-center justify-center gap-2 bg-warning/30 px-4 py-2 text-sm text-warning-foreground">
+          <WifiOff className="h-4 w-4" aria-hidden /> You're offline — changes may not be saved.
+        </div>
+      )}
+
+      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3">
+          <Link to="/tasks" className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-primary-foreground">
+              <Sparkles className="h-4 w-4" aria-hidden />
+            </span>
+            <span className="text-lg font-semibold tracking-tight">{APP_NAME}</span>
+          </Link>
+
+          <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Main">
+            {navItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground [&.active]:bg-secondary [&.active]:text-secondary-foreground"
+              >
+                <item.icon className="h-4 w-4" aria-hidden />
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2">
+            <Button onClick={() => setCreateOpen(true)} className="min-h-11">
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add task</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => setChatOpen((v) => !v)}
+              aria-pressed={chatOpen}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">AI Assistant</span>
+            </Button>
+            <Link
+              to="/settings"
+              aria-label="Settings"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Settings className="h-5 w-5" aria-hidden />
+            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground"
+                  aria-label="Account menu"
+                >
+                  D
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={logout}>
+                  <LogOut className="h-4 w-4" /> Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </header>
+
+      <div className="flex flex-1">
+        <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
+        <aside
+          className={cn(
+            "hidden border-l border-border lg:block",
+            chatOpen ? "w-[380px] shrink-0" : "w-0 overflow-hidden",
+          )}
+          aria-hidden={!chatOpen}
+        >
+          {chatOpen && (
+            <div className="sticky top-[65px] h-[calc(100vh-65px)]">
+              <ChatPanel onClose={() => setChatOpen(false)} />
+            </div>
+          )}
+        </aside>
+      </div>
+
+      {/* Mobile / tablet assistant drawer */}
+      <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+        <SheetContent side="right" className="w-full p-0 sm:max-w-md lg:hidden">
+          <SheetTitle className="sr-only">AI Assistant</SheetTitle>
+          <ChatPanel onClose={() => setChatOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background md:hidden"
+        aria-label="Main mobile"
+      >
+        {navItems.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground [&.active]:text-primary"
+          >
+            <item.icon className="h-5 w-5" aria-hidden />
+            {item.label}
+          </Link>
+        ))}
+        <Link
+          to="/settings"
+          className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground [&.active]:text-primary"
+        >
+          <Settings className="h-5 w-5" aria-hidden />
+          Settings
+        </Link>
+      </nav>
+
+      <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
+    </div>
+  );
+}
