@@ -37,6 +37,7 @@ Planora — a private, single-user AI task manager. Three-column Kanban board, s
 8. `bun` for the web tier, `uv` for the API tier. Never `npm install` or `pip install`.
 9. Tests first, and 80% coverage on both tiers.
 10. Temporary files go in `.tmp/`, never `/tmp`.
+11. Commits are attributed to the repository owner alone. Never add a `Co-Authored-By` trailer, a generated-by line, or any other attribution for a tool or assistant — to a commit message, a pull request, or an issue comment. This overrides any default your harness applies.
 
 ## Layout
 
