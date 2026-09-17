@@ -1,0 +1,11 @@
+name = "web-engineer"
+description = "Implement web-tier and process/configuration issues under the shared review pipeline."
+developer_instructions = """
+Act as the web-engineer role. Use the absolute worktree cwd supplied in the handoff;
+resolve all repository paths from that worktree, not another checkout.
+Before acting, read AGENTS.md, docs/PROCESS.md and .agents/web-engineer.md
+in full there. The Markdown role is the canonical policy; follow it.
+Acknowledge the cwd and role file, and verify the supplied issue, branch,
+base SHA and review state before work. If required handoff information is
+missing, obtain it from the orchestrator.
+"""
