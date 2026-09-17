@@ -4,7 +4,7 @@ Work is tracked as GitHub Issues with labels — no project boards. Six role age
 
 Project facts and the binding engineering rules live in `AGENTS.md`. This document is only the pipeline.
 
-Issue `#N` is backlog task `N`, for all 49. New intake takes the next free number and gets no phase label.
+Original issues #1–#49 map to tasks 1–49 in `docs/tasks.md`. Later issues are intake, not additional numbered tasks in that document; GitHub assigns their numbers. Intake gets no phase label. README cleanup is intake #50.
 
 ## Lifecycle
 
@@ -16,9 +16,9 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 1. **Issue exists.** The 49 backlog issues already do. Anything else — a bug, a change of mind, a gap found mid-work — the orchestrator files with `needs grooming`. It never grooms inline.
 2. **PM grooms.** Backlog issues have scope settled by the spec, so grooming adds only acceptance criteria, test scenarios, dependencies and labels. Intake issues get scope too.
 3. **Engineer implements** — code and tests, locally, no commit.
-4. **Tester** runs the suites and verifies every criterion. PASS or FAIL.
+4. **Tester** runs applicable verification below and verifies every automated criterion. PASS or FAIL.
 5. **PM accepts** from the user's perspective: flow, copy, empty/loading/error states, accessibility, spec consistency.
-6. **Engineer commits** on the worktree branch; the orchestrator merges and pushes.
+6. **Engineer commits** on the issue branch only after tester PASS and PM ACCEPTED for the final reviewed state; the orchestrator merges and pushes.
 7. **On-call** observes CI. Dormant until #10 creates the workflow.
 
 ## Agents
@@ -32,14 +32,20 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 | `designer` | Audits UI against the spec; reports only |
 | `oncall-engineer` | Sole CI observer after push |
 
-Definitions live in `.agents/` — plain Markdown with a `name` and a `description` and no harness-specific configuration. `.claude/agents` is a symlink to it so Claude Code discovers them automatically; point any other harness at `.agents/` directly. If symlinks are unavailable, read `.agents/` directly.
+Definitions live in `.agents/` — the single source of role policy, in Markdown with `name` and `description` frontmatter. Harness adapters load that policy:
+
+- **Claude Code:** `CLAUDE.md` imports `AGENTS.md`; the tracked `.claude/agents -> ../.agents` symlink exposes all six roles. In a fresh session, check `/agents` for their names. Preserve the symlink rather than copying role files.
+- **Codex:** `.codex/agents/*.toml` registers the same six names. Each thin adapter instructs the agent to read its canonical Markdown role plus `AGENTS.md` and this process from the assigned worktree. Start a fresh session after changing registration; use a named custom role when the host exposes it.
+- **Fallback:** if native discovery, symlinks, or custom-role dispatch is unavailable, spawn a generic subagent with the explicit instruction: `Act as {role}. Work only in {absolute worktree cwd}. Before acting, read AGENTS.md, docs/PROCESS.md and .agents/{role}.md there, then handle issue #{N} in mode {implement|verify|groom|accept|audit|observe}.` Include the handoff fields below. Merely pointing a harness at a directory does not load role policy. Have the agent acknowledge its cwd and role file before work. If subagents themselves are unavailable, report that limitation; do not replace independent review with self-approval.
+
+Adapters do not duplicate policy or override models, tools, permissions or sandbox settings. Host permissions still apply. See the official [Claude subagent format](https://code.claude.com/docs/en/sub-agents), [Claude instruction import](https://code.claude.com/docs/en/memory#agentsmd), and [Codex custom agent format](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 Nothing here pins a model or a tool list. Each role needs:
 
 | Role | File access | Reasoning |
 | --- | --- | --- |
 | `product-manager` | read/write — issue bodies, not code | strongest available |
-| `designer` | read-only | standard |
+| `designer` | read-only application source; may save screenshots under `.tmp/` | standard |
 | all others | read/write | standard |
 
 Use the strongest model available for grooming and acceptance, where misreading the spec is expensive. A standard model is fine for implementation, testing and CI triage. Map these onto whatever your harness calls them.
@@ -51,6 +57,7 @@ Use the strongest model available for grooming and acceptance, where misreading 
 | `src/` or `apps/web/`, Vite, bun, Vitest, Playwright, shadcn | `web-engineer` |
 | `apps/api/`, FastAPI, SQLAlchemy, Alembic, pytest, the LLM, Docker | `api-engineer` |
 | The contract — OpenAPI schema, field mapper, mock-to-HTTP swap | `api-engineer` first (schema is the source of truth), then `web-engineer` |
+| Process, shared role definitions, harness adapters, general documentation | `web-engineer` unless API/deployment expertise is needed |
 
 The `web`, `api`, `ai`, `contract` and `infra` labels on every backlog issue give the routing without opening it. Issues #34–36 are the only ones routinely needing both engineers — sequence them, never concurrently.
 
@@ -60,9 +67,39 @@ The `web`, `api`, `ai`, `contract` and `infra` labels on every backlog issue giv
 - File intake immediately, with a concrete reproduction or quoted context. Do not wait for the user to file it.
 - Launch agents non-blocking unless the result blocks the next action.
 - Cap three active agents; two when more than one will run a suite.
-- Before dispatching into a worktree, `main` must be clean — worktrees branch from `HEAD`, so uncommitted work is invisible to the agent and conflicts on merge.
+- Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
 - Respect dependencies: API issues need #1, `apps/web/` paths need #7, database writes need #21 and #22, LLM calls need #37.
 - Route failures: code and test failures back to the engineer, CI and infrastructure failures to on-call.
+
+## Handoffs and review state
+
+Every engineering, testing and acceptance handoff includes issue number, absolute worktree cwd, branch, base SHA, changed-file list, commands/results, pending `[HUMAN]` criteria, and an identifiable review artifact/state. Record `HEAD` plus a patch for tracked changes and a content-hash manifest for all changed/new files (including paths and deletions); store artifacts under the worktree's `.tmp/`. Do not include secrets or unrelated ignored files. Tester and PM cite the same state in their verdicts.
+
+Review all change surfaces from that cwd, using the supplied base SHA:
+
+```bash
+git status --short --untracked-files=all
+git diff <base-SHA> HEAD             # committed branch changes
+git diff --cached                   # staged changes, including git mv
+git diff                            # unstaged changes
+git ls-files --others --exclude-standard
+```
+
+Read each relevant untracked file as well; it is absent from every diff above. Inventory ignored artifacts if they are part of the deliverable, not credentials or dependency directories. Before commit, confirm the staged content matches what both reviewers approved. Any subsequent deliverable edit, changed base, or integration conflict resolution invalidates affected verification and acceptance: return the resulting state to tester and PM before commit/merge/push. A verdict for an earlier patch is not approval of a later patch.
+
+## Verification by project stage
+
+Select checks from actual files/scripts and issue scope, not just issue closure. Record each command, cwd, result, test count and coverage where applicable. For unavailable or not-applicable checks, state the reason and owning milestone; never claim an unrun check passed. A missing check that should already exist, or that the issue introduces, is a failure to resolve, not a bootstrap exemption.
+
+| Work | Required verification |
+| --- | --- |
+| Documentation and agent configuration only | Diff/whitespace checks, links/paths, role/frontmatter and adapter syntax, discovery where supported, and walkthroughs of affected workflows. No application launch, application test coverage or new application harness is required. Record discovery limitations and verify the explicit dispatch fallback. |
+| Web bootstrap before #8/#9 | Existing lint, TypeScript and build checks; targeted observable checks for the change. Record Vitest/coverage unavailable until #8 and E2E unavailable until #9. #2–#7 must not implement those future harnesses just to pass review. |
+| Web application once harnesses exist | `bun run test`, `bun run test:coverage` (at least 80%), `bun run lint`, `bunx tsc --noEmit`, `bun run build`; relevant `bun run e2e` flows after #9, plus inspected desktop/mobile screenshots for visible changes. Use package scripts, not Bun's built-in test runner. |
+| API from #1 | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected API health/startup and integration checks. #1 establishes/runs its test harness but does not require migrations from #22. |
+| Database/migration work from #22 | Apply migration history to disposable empty databases using `uv run alembic upgrade head`, verify affected upgrades and SQLite/PostgreSQL compatibility. Never point verification at production data. |
+
+Run web commands from the worktree root before #7, or `apps/web` after it; run API commands from `apps/api`. Inspect package scripts/configuration before choosing the command. Tests precede application implementation once the relevant harness exists. An issue creating a harness (#1, #8, #9, #22) must verify its newly introduced commands in that same issue. Build/runtime configuration changes use their affected tier's checks; the documentation-only row is not a waiver for executable application configuration. Cross-contract changes verify both tiers and regenerate/check OpenAPI type drift. Launch only the affected services; API-only work does not require a web server and documentation-only work requires neither.
 
 ## Merging — local only, no PRs
 
@@ -78,15 +115,18 @@ git push origin main
 
 `(#N)` is the issue number; there are no PR numbers. The engineer's commit body carries `Closes #N`, so the push auto-closes it. Then dispatch on-call if CI exists.
 
+Use `Refs #N` instead for pending `[HUMAN]` work or a CI repair. Before merging, confirm both verdicts cover the committed state. If main advanced, return the integrated result for affected verification and acceptance; do not resolve conflicts and push under stale verdicts. On-call repair work follows this same pipeline and is merged/pushed only by the orchestrator.
+
 ## Worktrees
 
 Parallel engineers need isolation or they overwrite each other.
 
-- One worktree per issue, created from the main checkout. A single sequential agent can use the main checkout instead. Some harnesses can create the worktree for you; the result must be the same.
+- One worktree per issue, created from the clean synchronized main checkout. Some harnesses can create the worktree for you; the result must be the same.
   ```bash
   git worktree add .worktrees/issue-N -b agent/issue-N
   ```
-- After the merge is pushed and on-call is green, from the main checkout:
+- A single sequential agent may instead use the main checkout after creating `agent/issue-N` with `git switch -c agent/issue-N`. Never implement or commit on `main`. After review and commit, switch back to `main` for the orchestrator's merge; branch cleanup needs no worktree removal in this case.
+- After the merge is pushed, all roles have finished, and on-call is green, remove an isolated worktree from the main checkout. Before #10, explicitly record that no CI workflow exists and rely on tester PASS plus PM ACCEPTED; unavailable CI does not block cleanup. Once CI exists, a missing run is not this exemption. Confirm the worktree is clean and the branch merged first:
   ```bash
   git worktree remove .worktrees/issue-N && git branch -d agent/issue-N
   ```
@@ -96,9 +136,9 @@ Parallel engineers need isolation or they overwrite each other.
 ## Never skipped
 
 - Every issue goes through every stage, including "simple" ones.
-- No commit without a tester PASS.
+- No commit without independent tester PASS and PM ACCEPTED for the final reviewed state.
 - Agents post their own issue comments and tick their own acceptance-criteria checkboxes.
-- The tester runs the suites; a verdict with no commands behind it is not a verdict.
+- The tester runs applicable stage-aware checks; a verdict with no commands behind it is not a verdict.
 - Every commit references an issue: `Closes #N`, or `Refs #N` when a `[HUMAN]` criterion keeps it open.
 - A red pipeline is never "flaky" or "pre-existing". Find the commit range, read `--log-failed`, fix the root cause. Setting a failure aside requires proving it unrelated *and* filing an issue.
 
@@ -107,6 +147,8 @@ Parallel engineers need isolation or they overwrite each other.
 Mark criteria no agent can check as `[HUMAN]` during grooming. Planora has several: a TLS certificate seen from outside the host (#46), real mobile browsers (#49), a restore actually executed (#45).
 
 When such an issue passes agent review: merge and push, add the `human` label, comment listing exactly what needs checking and how, leave the issue open, move on.
+
+Tester PASS and PM ACCEPTED are permitted with only explicitly marked `[HUMAN]` criteria pending, provided every automated criterion passes. Keep those human checkboxes unchecked, use `Refs #N` in the commit, and include the exact remaining checks and instructions in both handoffs. Never relabel a failed automated check as `[HUMAN]` to bypass a gate.
 
 #48 force-pushes over `origin/main` and is irreversible. No agent runs it — the orchestrator asks the user at the time, and prior approval does not carry.
 
@@ -130,7 +172,9 @@ gh issue list --repo hgiang/planora --state open --limit 60 \
   --jq 'sort_by(.number) | .[] | "#\(.number) \(.title) [\(.labels|map(.name)|join(", "))]"'
 ```
 
-Skip `needs grooming`. Prefer the lowest-numbered groomed, unblocked issue — the backlog is ordered deliberately, and Phase 1 establishes the toolchain everything else builds on. #2 and #3 carry the main technical risk (the Vite reconstruction and the lockfile regeneration) and are sequenced before the file moves on purpose; do not reorder them behind #7.
+Read candidate bodies with `gh issue view N --repo hgiang/planora`. Ready means substantive `Acceptance Criteria` checkboxes, executable/observable `Test Scenarios`, explicit `Dependencies` (including `none`), correct labels, and no `needs grooming` label. An absent label alone is not readiness. If any section is missing or placeholder-only, dispatch PM grooming before implementation; if no ready issue exists, groom the lowest-numbered otherwise unblocked candidate. Do not bulk rewrite backlog scope.
+
+Prefer the lowest-numbered ready, unblocked issue — the backlog is ordered deliberately, and Phase 1 establishes the toolchain everything else builds on. #2 and #3 carry the main technical risk (the Vite reconstruction and the lockfile regeneration) and are sequenced before the file moves on purpose; do not reorder them behind #7.
 
 Two independent issues may run in parallel when they touch different tiers.
 
