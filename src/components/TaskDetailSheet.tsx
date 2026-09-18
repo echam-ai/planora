@@ -2,7 +2,13 @@ import { useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +22,12 @@ import {
 import { TaskForm } from "@/components/TaskForm";
 import { MarkdownPreview } from "@/lib/markdown";
 import { formatInZone } from "@/lib/deadline";
-import { CategoryBadge, PriorityBadge, categoryLabels, priorityLabels } from "@/components/TaskBadges";
+import {
+  CategoryBadge,
+  PriorityBadge,
+  categoryLabels,
+  priorityLabels,
+} from "@/components/TaskBadges";
 import { useTaskMutations } from "@/hooks/useApi";
 import type { Task, TaskDraft, TaskStatus } from "@/types";
 

@@ -146,7 +146,10 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         )}
 
         {messages.map((m) => (
-          <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+          <div
+            key={m.id}
+            className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
+          >
             <div
               className={cn(
                 "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
@@ -215,7 +218,13 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
               }
             }}
           />
-          <Button type="submit" size="icon" className="h-11 w-11" disabled={send.isPending} aria-label="Send">
+          <Button
+            type="submit"
+            size="icon"
+            className="h-11 w-11"
+            disabled={send.isPending}
+            aria-label="Send"
+          >
             <Send className="h-4 w-4" />
           </Button>
         </div>

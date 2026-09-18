@@ -102,15 +102,7 @@ const PRIORITY_WORDS: Record<TaskPriority, string[]> = {
   medium: [],
 };
 
-const WEEKDAYS = [
-  "sunday",
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-];
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 function parseDeadline(text: string): string | null {
   const lower = text.toLowerCase();
@@ -245,7 +237,10 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
   }
 
   // Schedule request
-  if (/\b(reschedule|schedule|due|deadline|postpone)\b/.test(lower) && !/^what|^show|^list/.test(lower)) {
+  if (
+    /\b(reschedule|schedule|due|deadline|postpone)\b/.test(lower) &&
+    !/^what|^show|^list/.test(lower)
+  ) {
     const task = findTaskByPhrase(active, text);
     const newDeadline = parseDeadline(text);
     if (task && newDeadline) {
@@ -292,7 +287,9 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
 
   // Create request
   if (/\b(add|create|remind me to|new task)\b/.test(lower)) {
-    const draft = parseText(text.replace(/^(add|create)\s+(a\s+)?task\s*(to)?/i, "").trim() || text);
+    const draft = parseText(
+      text.replace(/^(add|create)\s+(a\s+)?task\s*(to)?/i, "").trim() || text,
+    );
     return {
       ...base,
       text: "I drafted this task from your message. Review and confirm to create it.",
@@ -407,7 +404,11 @@ export const mockApiClient: ApiClient = {
   async updateSettings(patch) {
     await delay();
     maybeFail("save settings");
-    const next = { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(KEYS.settings, {}), ...patch };
+    const next = {
+      ...DEFAULT_SETTINGS,
+      ...read<Partial<AppSettings>>(KEYS.settings, {}),
+      ...patch,
+    };
     write(KEYS.settings, next);
     return next;
   },

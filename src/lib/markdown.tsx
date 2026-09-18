@@ -6,10 +6,7 @@ export function MarkdownPreview({ source }: { source: string }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [{ marked }, DOMPurifyMod] = await Promise.all([
-        import("marked"),
-        import("dompurify"),
-      ]);
+      const [{ marked }, DOMPurifyMod] = await Promise.all([import("marked"), import("dompurify")]);
       const DOMPurify = DOMPurifyMod.default;
       const raw = await marked.parse(source || "", { gfm: true, breaks: true });
       const clean = DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });

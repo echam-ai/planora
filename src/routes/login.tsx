@@ -80,9 +80,7 @@ function LoginPage() {
             <Label htmlFor="username">Username</Label>
             <Input id="username" autoComplete="username" {...form.register("username")} />
             {form.formState.errors.username && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.username.message}
-              </p>
+              <p className="text-xs text-destructive">{form.formState.errors.username.message}</p>
             )}
           </div>
           <div className="space-y-2">
@@ -94,14 +92,15 @@ function LoginPage() {
               {...form.register("password")}
             />
             {form.formState.errors.password && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.password.message}
-              </p>
+              <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
             )}
           </div>
 
           {error && (
-            <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p
+              role="alert"
+              className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
               {error}
             </p>
           )}

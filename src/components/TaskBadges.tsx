@@ -55,7 +55,13 @@ const deadlineClass: Record<DeadlineState, string> = {
   overdue: "bg-destructive/15 text-destructive",
 };
 
-export function DeadlineBadge({ state, text }: { state: DeadlineState; text?: string | undefined }) {
+export function DeadlineBadge({
+  state,
+  text,
+}: {
+  state: DeadlineState;
+  text?: string | undefined;
+}) {
   const Icon = deadlineIcon[state];
   return (
     <span className={cn(chip, deadlineClass[state])}>

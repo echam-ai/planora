@@ -98,9 +98,7 @@ function Column({
           ))}
         </SortableContext>
         {tasks.length === 0 && (
-          <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            Nothing here yet.
-          </p>
+          <p className="px-2 py-6 text-center text-xs text-muted-foreground">Nothing here yet.</p>
         )}
       </div>
     </section>
@@ -201,7 +199,10 @@ function TasksPage() {
             </p>
           </div>
           {isFetching && !isLoading && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-label="Refreshing" />
+            <Loader2
+              className="h-4 w-4 animate-spin text-muted-foreground"
+              aria-label="Refreshing"
+            />
           )}
         </div>
 
@@ -219,7 +220,10 @@ function TasksPage() {
               className="pl-9"
             />
           </div>
-          <SlidersHorizontal className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden />
+          <SlidersHorizontal
+            className="hidden h-4 w-4 text-muted-foreground sm:block"
+            aria-hidden
+          />
           <Select value={category} onValueChange={(v) => setCategory(v as TaskCategory | "all")}>
             <SelectTrigger className="w-36" aria-label="Filter by category">
               <SelectValue />

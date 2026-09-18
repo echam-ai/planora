@@ -63,7 +63,11 @@ export function valuesToDraft(values: TaskFormValues): TaskDraft {
     priority: values.priority as TaskPriority,
     deadlineAt: values.deadlineLocal ? new Date(values.deadlineLocal).toISOString() : null,
     markdownNote: values.markdownNote,
-    urls: values.urls.map((u) => ({ id: u.id, url: u.url.trim(), label: u.label?.trim() || undefined })),
+    urls: values.urls.map((u) => ({
+      id: u.id,
+      url: u.url.trim(),
+      label: u.label?.trim() || undefined,
+    })),
   };
 }
 
@@ -130,7 +134,12 @@ export function TaskForm({
 
       <div className="space-y-2">
         <Label htmlFor="content">Content</Label>
-        <Textarea id="content" rows={4} {...form.register("content")} aria-invalid={!!errors.content} />
+        <Textarea
+          id="content"
+          rows={4}
+          {...form.register("content")}
+          aria-invalid={!!errors.content}
+        />
         {errors.content && <p className="text-sm text-destructive">{errors.content.message}</p>}
       </div>
 
@@ -174,7 +183,12 @@ export function TaskForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="deadline">Deadline (optional)</Label>
-          <Input id="deadline" type="datetime-local" className="min-h-11" {...form.register("deadlineLocal")} />
+          <Input
+            id="deadline"
+            type="datetime-local"
+            className="min-h-11"
+            {...form.register("deadlineLocal")}
+          />
         </div>
         {status && onStatusChange && (
           <div className="space-y-2">
