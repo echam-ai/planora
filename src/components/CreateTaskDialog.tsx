@@ -95,9 +95,7 @@ export function CreateTaskDialog({
                   placeholder={EXAMPLE}
                   aria-label="Describe the task in your own words"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Example: “{EXAMPLE}”
-                </p>
+                <p className="text-xs text-muted-foreground">Example: “{EXAMPLE}”</p>
                 {parseError && (
                   <div className="space-y-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
                     <p>{parseError}</p>

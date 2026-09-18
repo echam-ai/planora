@@ -63,7 +63,8 @@ const activeSpecs: SeedSpec[] = [
   },
   {
     title: "Draft Q4 hiring plan",
-    content: "Headcount by team, expected start dates, and the interview loop changes we agreed on.",
+    content:
+      "Headcount by team, expected start dates, and the interview loop changes we agreed on.",
     status: "todo",
     category: "work",
     priority: "medium",

@@ -48,8 +48,15 @@ export function useTaskMutations() {
     }),
     remove: useMutation({ mutationFn: (id: string) => api.deleteTask(id), onSuccess: invalidate }),
     move: useMutation({
-      mutationFn: ({ id, status, position }: { id: string; status: TaskStatus; position: number }) =>
-        api.moveTask(id, status, position),
+      mutationFn: ({
+        id,
+        status,
+        position,
+      }: {
+        id: string;
+        status: TaskStatus;
+        position: number;
+      }) => api.moveTask(id, status, position),
       onSuccess: invalidate,
     }),
     reorder: useMutation({
@@ -57,7 +64,10 @@ export function useTaskMutations() {
         api.reorderTasks(status, orderedIds),
       onSuccess: invalidate,
     }),
-    restore: useMutation({ mutationFn: (id: string) => api.restoreTask(id), onSuccess: invalidate }),
+    restore: useMutation({
+      mutationFn: (id: string) => api.restoreTask(id),
+      onSuccess: invalidate,
+    }),
     purge: useMutation({
       mutationFn: (id: string) => api.permanentlyDeleteTask(id),
       onSuccess: invalidate,
