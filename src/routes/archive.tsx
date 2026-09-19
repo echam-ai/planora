@@ -25,12 +25,12 @@ import type { Task } from "@/types";
 export const Route = createFileRoute("/archive")({
   head: () => ({
     meta: [
-      { title: "Archive — Dayweave" },
+      { title: "Archive — Planora" },
       {
         name: "description",
         content: "Search finished tasks, restore anything you still need, or clear it for good.",
       },
-      { property: "og:title", content: "Archive — Dayweave" },
+      { property: "og:title", content: "Archive — Planora" },
       {
         property: "og:description",
         content: "Search finished tasks, restore anything you still need, or clear it for good.",

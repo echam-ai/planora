@@ -1,4 +1,4 @@
-export const APP_NAME = "Dayweave";
+export const APP_NAME = "Planora";
 
 export type TaskStatus = "todo" | "in_progress" | "done";
 export type TaskCategory = "work" | "personal" | "study" | "other";

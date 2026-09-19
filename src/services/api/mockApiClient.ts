@@ -17,17 +17,17 @@ import {
 import type { ApiClient, ArchivePage } from "./ApiClient";
 
 const KEYS = {
-  tasks: "dayweave.tasks",
-  settings: "dayweave.settings",
-  session: "dayweave.session",
-  conversation: "dayweave.conversation",
-  password: "dayweave.password",
-  forceError: "dayweave.forceError",
+  tasks: "planora.tasks",
+  settings: "planora.settings",
+  session: "planora.session",
+  conversation: "planora.conversation",
+  password: "planora.password",
+  forceError: "planora.forceError",
 };
 
 const DEFAULT_SETTINGS: AppSettings = { timezone: "Asia/Singapore", modelName: "kimi-k3" };
 const DEMO_USER = "demo";
-const DEFAULT_PASSWORD = "dayweave";
+const DEFAULT_PASSWORD = "focusboard";
 
 const hasWindow = () => typeof window !== "undefined";
 

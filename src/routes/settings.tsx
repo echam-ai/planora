@@ -32,12 +32,12 @@ import { api } from "@/services/api";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — Dayweave" },
+      { title: "Settings — Planora" },
       {
         name: "description",
         content: "Set your timezone, choose the assistant model, and change your password.",
       },
-      { property: "og:title", content: "Settings — Dayweave" },
+      { property: "og:title", content: "Settings — Planora" },
       {
         property: "og:description",
         content: "Set your timezone, choose the assistant model, and change your password.",
@@ -59,7 +59,7 @@ const TIMEZONES = [
   "America/Los_Angeles",
 ];
 
-const MODELS = ["dayweave-mini", "dayweave-pro", "dayweave-reasoning"];
+const MODELS = ["planora-mini", "planora-pro", "planora-reasoning"];
 
 function SettingsPage() {
   useAuthGuard();

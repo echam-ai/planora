@@ -7,13 +7,13 @@ import { APP_NAME } from "@/types";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dayweave — Your calm AI task board" },
+      { title: "Planora — Your calm AI task board" },
       {
         name: "description",
         content:
-          "Dayweave is a private AI task manager with a drag-and-drop board, smart quick capture, and an assistant that confirms every change.",
+          "Planora is a private AI task manager with a drag-and-drop board, smart quick capture, and an assistant that confirms every change.",
       },
-      { property: "og:title", content: "Dayweave — Your calm AI task board" },
+      { property: "og:title", content: "Planora — Your calm AI task board" },
       {
         property: "og:description",
         content:
