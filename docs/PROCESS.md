@@ -101,6 +101,82 @@ Select checks from actual files/scripts and issue scope, not just issue closure.
 
 Run web commands from the worktree root before #7, or `apps/web` after it; run API commands from `apps/api`. Inspect package scripts/configuration before choosing the command. Tests precede application implementation once the relevant harness exists. An issue creating a harness (#1, #8, #9, #22) must verify its newly introduced commands in that same issue. Build/runtime configuration changes use their affected tier's checks; the documentation-only row is not a waiver for executable application configuration. Cross-contract changes verify both tiers and regenerate/check OpenAPI type drift. Launch only the affected services; API-only work does not require a web server and documentation-only work requires neither.
 
+### Agent-driven browser verification
+
+Use the official [Playwright CLI](https://github.com/microsoft/playwright-cli) by default for local browser exploration, screenshots and ad hoc verification. Its named sessions, reference-based actions, targeted snapshots and `find`, console and request inspection, screenshots and viewport emulation provide durable browser evidence with less model-context overhead than a browser MCP. This default applies before #9 as a stage-appropriate observable check; it does not require creating the future E2E harness. Once #9 exists, committed Playwright Test flows through relevant `bun run e2e` commands remain the authoritative regression gate. A successful CLI walkthrough complements that gate and never replaces it or any other check in the table above.
+
+Host tool availability and permissions still govern browser execution. Use Chrome MCP or another available browser tool only when Playwright CLI cannot exercise a capability required by the criterion after a reasonable CLI attempt. Record the required capability, attempted command and observation, chosen fallback and resulting evidence. A failed first selector or ambiguous target is not a capability limitation. If no available tool verifies the criterion, leave it unverified; a fallback never turns missing evidence into a pass.
+
+The repository evaluated `@playwright/cli` 0.1.21. Invoke it transiently through Bun; do not use npm/npx, install it globally, add it to `package.json` or change `bun.lock`. Start from the assigned worktree root so the pattern remains valid both before and after #7:
+
+```bash
+repo_root="$(git rev-parse --show-toplevel)"
+pwcli_cache="$repo_root/.tmp/playwright-cli-cache"
+pwcli_work="$repo_root/.tmp/playwright-cli/issue-N-role"
+pwcli_session="issue-N-role"
+mkdir -p "$pwcli_cache" "$pwcli_work"
+cd "$pwcli_work"
+
+pwcli() {
+  BUN_INSTALL_CACHE_DIR="$pwcli_cache" \
+    bun x --package @playwright/cli@0.1.21 playwright-cli "$@"
+}
+
+pwcli --version
+pwcli --help
+pwcli --help open
+```
+
+The version command should report `0.1.21`. Read the installed version's help before relying on syntax because the CLI is evolving. The repository-local Bun cache above, the task working directory, explicit profile and named output paths keep task-created caches and browser evidence under `.tmp/`; do not reassign `HOME` or `CODEX_HOME`. Use a unique issue/role session name so parallel agents do not share state. Open the installed stable Chrome channel and keep its profile task-local when the flow needs login state across commands:
+
+```bash
+pwcli -s="$pwcli_session" open "$url" \
+  --browser=chrome \
+  --profile="$pwcli_work/profile"
+```
+
+Use this evidence loop, adapting accessible names and refs to the page under test:
+
+```bash
+# Obtain current, bounded page state and identify the intended target.
+pwcli -s="$pwcli_session" snapshot --depth=4
+pwcli -s="$pwcli_session" find "Sign in"
+
+# Use refs from the current output for the next action only.
+pwcli -s="$pwcli_session" fill e13 "demo"
+pwcli -s="$pwcli_session" fill e15 "dayweave"
+pwcli -s="$pwcli_session" click e16
+
+# A state change invalidates old refs: locate the result and get fresh refs.
+pwcli -s="$pwcli_session" find "Active tasks"
+pwcli -s="$pwcli_session" snapshot main --depth=5
+
+# Capture both viewports to named task-local files, then visually read each PNG.
+pwcli -s="$pwcli_session" resize 1280 720
+pwcli -s="$pwcli_session" screenshot \
+  --filename="$pwcli_work/board-desktop.png"
+pwcli -s="$pwcli_session" resize 390 844
+pwcli -s="$pwcli_session" screenshot \
+  --filename="$pwcli_work/task-mobile.png"
+
+# Check browser diagnostics explicitly; silence is an observation to record.
+pwcli -s="$pwcli_session" console warning
+# Ordinary API calls and failed resources; successful static assets are omitted.
+pwcli -s="$pwcli_session" requests
+# Include successful scripts, styles, fonts and images when one is the evidence.
+pwcli -s="$pwcli_session" requests --static
+pwcli -s="$pwcli_session" request N
+
+# Always stop the named browser when the walkthrough is complete.
+pwcli -s="$pwcli_session" close
+```
+
+Use plain `requests` for ordinary API diagnostics and failures. Version 0.1.21 hides successful static resources by default, so use `requests --static` when a successful script, stylesheet, font or image is the evidence. Choose `N` from the applicable list, run `request N`, and inspect that request's status and response details. Do not substitute a long request list for checking the specific result. Read saved screenshots with the host's image viewer and record what is visibly present; creating a PNG is not visual verification.
+
+Prefer `find`, an element snapshot, or a depth-limited snapshot over repeated full-page dumps. Use current unique accessible targets, keep console/request excerpts brief, and save named evidence under the task directory. Retain enough surrounding state to establish the actual outcome. The evaluated trial confirmed named-session login, current snapshot refs, fill/click navigation, targeted `find`, desktop/mobile resizing and screenshots, zero warning/error console output, and exact static-resource request inspection with HTTP 200 responses. Its saved evidence is under `.tmp/playwright-cli-eval/`. The 0.1.21 help also exposes drag/drop, `run-code`, tracing, video, storage-state and device-emulation commands; those capabilities were not all exercised by that trial, so do not report them as trial successes.
+
+For drag and drop, refresh the snapshot and establish unique source and destination targets before acting, then verify the card's resulting column/status and reload persistence when required. The evaluation's naive drag resolved the destination back to the source and left the card in place; it is failure evidence, not a successful drag or proof that CLI lacks the capability. A precise `run-code` interaction is acceptable after checking its installed help. A visible status control may verify a status-change criterion, but it cannot prove a drag-and-drop criterion. Report exactly which behavior was exercised.
+
 ## Merging — local only, no PRs
 
 Never `gh pr create` or `gh pr merge`. The agent flow *is* the review.
