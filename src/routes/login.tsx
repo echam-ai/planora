@@ -15,10 +15,10 @@ import { APP_NAME } from "@/types";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Dayweave" },
-      { name: "description", content: "Sign in to your private Dayweave task workspace." },
-      { property: "og:title", content: "Sign in — Dayweave" },
-      { property: "og:description", content: "Sign in to your private Dayweave task workspace." },
+      { title: "Sign in — Planora" },
+      { name: "description", content: "Sign in to your private Planora task workspace." },
+      { property: "og:title", content: "Sign in — Planora" },
+      { property: "og:description", content: "Sign in to your private Planora task workspace." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -112,7 +112,7 @@ function LoginPage() {
 
           <p className="text-center text-xs text-muted-foreground">
             Demo login: <span className="font-medium">demo</span> /{" "}
-            <span className="font-medium">dayweave</span>
+            <span className="font-medium">focusboard</span>
           </p>
         </form>
       </div>

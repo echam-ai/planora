@@ -27,7 +27,7 @@ export function MarkdownPreview({ source }: { source: string }) {
 
   return (
     <div
-      className="prose-dayweave text-sm leading-relaxed"
+      className="prose-planora text-sm leading-relaxed"
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );

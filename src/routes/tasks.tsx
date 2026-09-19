@@ -40,13 +40,13 @@ import type { Task, TaskCategory, TaskPriority, TaskStatus } from "@/types";
 export const Route = createFileRoute("/tasks")({
   head: () => ({
     meta: [
-      { title: "Active tasks — Dayweave" },
+      { title: "Active tasks — Planora" },
       {
         name: "description",
         content:
           "Drag tasks across To do, In progress and Done, filter by category, priority or deadline, and keep today's plan in view.",
       },
-      { property: "og:title", content: "Active tasks — Dayweave" },
+      { property: "og:title", content: "Active tasks — Planora" },
       {
         property: "og:description",
         content: "A colourful drag-and-drop board for everything you're working on.",
