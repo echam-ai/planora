@@ -1,14 +1,5 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
+# Planora is a private, single-user application behind login (spec §3.2).
+# This file is crawler hygiene, not access control: it asks well-behaved
+# crawlers not to index anything, it does not enforce it.
 User-agent: *
-Allow: /
+Disallow: /
