@@ -1,0 +1,9 @@
+# Project-local Codex defaults. AGENTS.md remains the source of project rules.
+developer_instructions = """
+Follow AGENTS.md and docs/PROCESS.md. Keep questions, reviews, and status work read-only; do not start an issue pipeline for them. For change/build requests, use the smallest applicable PROCESS lane. Read only the issue, affected files, and relevant spec/process sections; read the browser-verification guide only for browser work. Avoid repeated discovery and raw large outputs: use rg, bounded output, and summaries. Use subagents only for required role gates or truly independent work; proceed sequentially by default and never duplicate exploration. Run targeted checks while iterating and the required full gates once on the final state, unless a later change invalidates them. Preserve the independent tester gate and all AGENTS.md/PROCESS rules. Do not modify Claude-specific files or another agent's in-progress work unless explicitly requested.
+"""
+
+[agents]
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
+max_concurrent_threads_per_session = 2
