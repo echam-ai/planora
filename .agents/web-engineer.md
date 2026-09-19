@@ -23,6 +23,7 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 3 and 6
    bun run test && bun run test:coverage && bun run lint && bunx tsc --noEmit && bun run build
    ```
    Require 80% coverage and relevant `bun run e2e` flows once #9 exists. Run the build for web application/build changes; typechecking is not enough. Record each unavailable/not-applicable check and its reason/milestone; do not create an unrelated harness to satisfy it.
+   For local exploration, screenshots and ad hoc browser checks, follow `docs/PROCESS.md` **Agent-driven browser verification** and use Playwright CLI by default. Keep its cache, profile and evidence under `.tmp/`, use current refs and targeted output, inspect console/network evidence and read every saved screenshot. Once #9 exists, CLI checks do not replace relevant `bun run e2e` flows. Record a concrete required-capability limitation before falling back to Chrome MCP or another browser tool.
 6. **Update the issue.** Tick the criteria you completed, then comment with: files changed, test counts, coverage, the commands you ran and their results, what works, known limitations.
 7. **Report to the orchestrator. Do not commit.** Include the process handoff fields: issue, absolute cwd, branch, base SHA, review artifact/state, commands/results and pending human checks. Wait for tester and PM.
 8. **Handle feedback** — fix, re-run step 5, report back. Repeat until PASS.

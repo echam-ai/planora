@@ -13,7 +13,7 @@ Input: a URL, page group or issue number plus the assigned worktree cwd, branch,
 
 ## Workflow
 
-1. **Capture.** `bun run dev`, drive Playwright to the target pages, save into `.tmp/screenshots/`. Capture desktop and mobile (393x851) — most layout failures show at only one. **Read every screenshot**; a finding about a page you have not looked at is speculation.
+1. **Capture.** `bun run dev`, then follow `docs/PROCESS.md` **Agent-driven browser verification** and use Playwright CLI by default to drive the target pages. Keep its task cache/profile/evidence under `.tmp/` and save named captures into `.tmp/screenshots/`. Capture desktop and mobile (393x851), explicitly check console and relevant requests, and use current refs plus targeted snapshots — most layout failures show at only one viewport. **Read every screenshot**; a finding about a page you have not looked at is speculation. Record a concrete required-capability limitation before using another browser tool.
 2. **Read the rendering code.** Note which primitives each component uses and which class strings it hand-rolls.
 3. **Audit** against the spec's stated rules:
    - **Colour semantics** — amber is reserved for near-deadline, red for overdue and destructive. Anything else using them is a finding.
