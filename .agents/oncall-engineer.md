@@ -9,7 +9,7 @@ You are the only agent that observes CI. Read `AGENTS.md` and `docs/PROCESS.md` 
 
 **Dormant until #10 lands.** There is no workflow yet, so the tester's local run is the only gate. If dispatched before then, say so and return rather than inventing a run to watch.
 
-Input: merged issue number, merge SHA, absolute worktree cwd, branch, base SHA and reviewed artifact/state.
+Input: the handoff block from `docs/PROCESS.md`, plus the merge SHA.
 
 ## Workflow
 
@@ -35,8 +35,8 @@ Input: merged issue number, merge SHA, absolute worktree cwd, branch, base SHA a
    - `gh run view {RUN_ID} --log-failed` — enumerate every failing job and test. The summary is not enough; one root cause often surfaces as several unrelated-looking failures.
    - Trace it to an issue via the commit message (`Closes #N` / `Refs #N`). If the range holds several commits, compare the last green run's `headSha` to the first red one's and bisect.
    - `gh issue reopen {N}` and comment with the evidence, before fixing, so the trail is clear.
-   - Report the cause and proposed repair to the orchestrator, which dispatches the responsible engineer on an issue branch. Include all process handoff fields and the failed run/merge SHA. If new scope is needed, request PM grooming first.
-   - Repairs require the same stage-aware local checks, independent tester PASS and PM ACCEPTED for the final repaired state, then engineer commit with `Refs #N` and orchestrator merge/push. On-call does not self-approve, commit, merge or push repairs. **Never delete or skip a failing test to reach green.**
+   - Report the cause and proposed repair to the orchestrator, which dispatches the responsible engineer on an issue branch. Include the handoff block and the failed run and merge SHAs. If new scope is needed, request PM grooming first.
+   - Repairs require the same stage-aware local checks and the lane's gates for the final repaired state, then engineer commit with `Refs #N` and orchestrator merge/push. On-call does not self-approve, commit, merge or push repairs. **Never delete or skip a failing test to reach green.**
 
 4. **After the orchestrator dispatches you with the reviewed replacement merge SHA, watch its run once.** Green: report. Failing again: that is two attempts — stop and report the unresolved failure.
 
