@@ -6,7 +6,19 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi"] },
+  // Build output and agent scratch, at any depth. ESLint flat config does not
+  // read .gitignore, so `.tmp/` copies of the app get linted without this.
+  {
+    ignores: [
+      "**/dist/**",
+      "**/.output/**",
+      "**/.vinxi/**",
+      "**/.nitro/**",
+      "**/.tanstack/**",
+      ".tmp/**",
+      ".worktrees/**",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
