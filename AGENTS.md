@@ -42,17 +42,11 @@ Planora — a private, single-user AI task manager. Three-column Kanban board, s
 
 ## Layout
 
-Mid-restructure. `apps/api/` exists (created by #1). The web app is **still at the repository root**; #7 moves it to `apps/web/`. Check which world you are in before writing a path:
-
-```bash
-ls apps/web/src 2>/dev/null || ls src
-```
-
-Run web commands at the root before #7 and in `apps/web` after it. Run API commands in `apps/api`.
+Monorepo. The web app lives in `apps/web/` (moved there from the repository root by #7); the API tier lives in `apps/api/` (created by #1). Run web commands in `apps/web`; run API commands in `apps/api`.
 
 ## Not usable yet
 
-`bun run dev`, `build`, `lint`, `bunx tsc --noEmit`, and — from `apps/api` — `uv run pytest` and `uv run ruff check .` all work today. These do not, because their harness is itself a backlog item. Implement that issue rather than inventing a runner.
+From `apps/web`, `bun run dev`, `build`, `lint`, `bunx tsc --noEmit`, and — from `apps/api` — `uv run pytest` and `uv run ruff check .` all work today. These do not, because their harness is itself a backlog item. Implement that issue rather than inventing a runner.
 
 | Command | Needs |
 | --- | --- |
@@ -67,6 +61,6 @@ Check the actual checkout; this table tracks milestones, not a permanent waiver.
 
 Scaffolded by an external frontend tool; separation in progress. Do not reintroduce it, and do not treat what remains as precedent.
 
-Cleared: `vite.config.ts` now configures Vite and Nitro directly (#2) · `bun.lock` resolves from public npm (#3).
+Cleared: `apps/web/vite.config.ts` now configures Vite and Nitro directly (#2) · `apps/web/bun.lock` resolves from public npm (#3).
 
 Remaining: error-boundary telemetry #4 · vendor metadata in served HTML #5 · placeholder name "Dayweave" #6 · `README.md` boilerplate #50 · vendor commit message in history #48.
