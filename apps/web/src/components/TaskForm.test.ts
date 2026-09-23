@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { dirtyDraftPatch, draftToValues, type TaskFormValues } from "@/components/TaskForm";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createElement } from "react";
+import { describe, expect, it, vi } from "vitest";
+import {
+  TaskForm,
+  dirtyDraftPatch,
+  draftToValues,
+  type TaskFormValues,
+} from "@/components/TaskForm";
 
 const values: TaskFormValues = {
   title: "  Ship it  ",
@@ -96,3 +103,61 @@ describe("draftToValues", () => {
     });
   });
 });
+
+describe("TaskForm validation", () => {
+  it("blocks whitespace-only required fields with the established messages", async () => {
+    const onSubmit = vi.fn();
+    render(
+      createElement(TaskForm, {
+        submitLabel: "Create task",
+        onSubmit,
+        onCancel: vi.fn(),
+        defaultDraft: { ...emptyTaskDraft, title: "   ", content: "   " },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create task" }));
+
+    expect(await screen.findByText("Give the task a title.")).toBeInTheDocument();
+    expect(screen.getByText("Describe what needs to happen.")).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("submits a valid draft with a null deadline and empty Markdown note", async () => {
+    const onSubmit = vi.fn();
+    render(
+      createElement(TaskForm, {
+        submitLabel: "Create task",
+        onSubmit,
+        onCancel: vi.fn(),
+        defaultDraft: emptyTaskDraft,
+      }),
+    );
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Prepare review" } });
+    fireEvent.change(screen.getByLabelText("Content"), {
+      target: { value: "Write review notes." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create task" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const [submittedDraft] = onSubmit.mock.calls[0]!;
+    expect(submittedDraft).toMatchObject({
+      title: "Prepare review",
+      content: "Write review notes.",
+      deadlineAt: null,
+      urls: [],
+      markdownNote: "",
+    });
+  });
+});
+
+const emptyTaskDraft = {
+  title: "",
+  content: "",
+  category: "work" as const,
+  priority: "medium" as const,
+  deadlineAt: null,
+  urls: [],
+  markdownNote: "",
+};

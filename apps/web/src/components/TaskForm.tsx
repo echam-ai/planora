@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,25 +16,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownPreview } from "@/lib/markdown";
 import { uid } from "@/data/seed";
+import { taskFormSchema, type TaskFormValues } from "@/shared/domain/task";
 import type { TaskCategory, TaskDraft, TaskPriority, TaskStatus } from "@/types";
 
-const schema = z.object({
-  title: z.string().trim().min(1, "Give the task a title."),
-  content: z.string().trim().min(1, "Describe what needs to happen."),
-  category: z.enum(["work", "personal", "study", "other"]),
-  priority: z.enum(["low", "medium", "high"]),
-  deadlineLocal: z.string().optional().or(z.literal("")),
-  markdownNote: z.string(),
-  urls: z.array(
-    z.object({
-      id: z.string(),
-      label: z.string().optional(),
-      url: z.string().trim().url("Enter a full URL starting with http:// or https://"),
-    }),
-  ),
-});
-
-export type TaskFormValues = z.infer<typeof schema>;
+export type { TaskFormValues } from "@/shared/domain/task";
 
 export function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -132,7 +116,7 @@ export function TaskForm({
   extraActions,
 }: Props) {
   const form = useForm<TaskFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(taskFormSchema),
     defaultValues: draftToValues(defaultDraft),
     mode: "onSubmit",
   });
