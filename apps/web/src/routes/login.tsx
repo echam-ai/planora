@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Loader2, Sparkles } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/services/api";
 import { useSession } from "@/hooks/useApi";
+import { credentialsSchema, type Credentials } from "@/shared/domain/session";
 import { APP_NAME } from "@/types";
 
 export const Route = createFileRoute("/login")({
@@ -26,12 +26,6 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const schema = z.object({
-  username: z.string().min(1, "Enter your username"),
-  password: z.string().min(1, "Enter your password"),
-});
-type Values = z.infer<typeof schema>;
-
 function LoginPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -42,12 +36,12 @@ function LoginPage() {
     if (session) navigate({ to: "/tasks", replace: true });
   }, [session, navigate]);
 
-  const form = useForm<Values>({
-    resolver: zodResolver(schema),
+  const form = useForm<Credentials>({
+    resolver: zodResolver(credentialsSchema),
     defaultValues: { username: "", password: "" },
   });
 
-  const onSubmit = async (values: Values) => {
+  const onSubmit = async (values: Credentials) => {
     setError(null);
     try {
       const s = await api.login(values.username, values.password);
