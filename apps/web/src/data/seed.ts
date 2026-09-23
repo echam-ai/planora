@@ -1,11 +1,8 @@
 import type { Task, TaskCategory, TaskPriority, TaskStatus } from "@/types";
+import { uid } from "@/lib/id";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
-
-export function uid(prefix = "id") {
-  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
-}
 
 type SeedSpec = {
   title: string;

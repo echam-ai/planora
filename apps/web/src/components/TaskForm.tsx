@@ -14,8 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { uid } from "@/lib/id";
 import { MarkdownPreview } from "@/lib/markdown";
-import { uid } from "@/data/seed";
 import { taskFormSchema, type TaskFormValues } from "@/shared/domain/task";
 import type { TaskCategory, TaskDraft, TaskPriority, TaskStatus } from "@/types";
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   TaskForm,
   dirtyDraftPatch,
@@ -105,6 +105,10 @@ describe("draftToValues", () => {
 });
 
 describe("TaskForm validation", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("blocks whitespace-only required fields with the established messages", async () => {
     const onSubmit = vi.fn();
     render(
@@ -149,6 +153,47 @@ describe("TaskForm validation", () => {
       urls: [],
       markdownNote: "",
     });
+  });
+
+  it("keeps remaining link IDs and values when an added link is removed", async () => {
+    const onSubmit = vi.fn();
+    const random = vi.spyOn(Math, "random");
+    random.mockReturnValueOnce(0.1).mockReturnValueOnce(0.2);
+    render(
+      createElement(TaskForm, {
+        submitLabel: "Create task",
+        onSubmit,
+        onCancel: vi.fn(),
+        defaultDraft: {
+          ...emptyTaskDraft,
+          title: "Prepare review",
+          content: "Write review notes.",
+          urls: [{ id: "url_existing", url: "https://existing.example", label: "Existing" }],
+        },
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
+    const urlInputs = screen.getAllByPlaceholderText("https://…");
+    const labelInputs = screen.getAllByPlaceholderText("Label (optional)");
+    fireEvent.change(urlInputs[1]!, { target: { value: "https://remove.example" } });
+    fireEvent.change(labelInputs[1]!, { target: { value: "Remove" } });
+    fireEvent.change(urlInputs[2]!, { target: { value: "https://keep.example" } });
+    fireEvent.change(labelInputs[2]!, { target: { value: "Keep" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove link" })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: "Create task" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    const [submittedDraft] = onSubmit.mock.calls[0]!;
+    expect(submittedDraft.urls).toEqual([
+      { id: "url_existing", url: "https://existing.example", label: "Existing" },
+      {
+        id: `url_${(0.2).toString(36).slice(2, 10)}`,
+        url: "https://keep.example",
+        label: "Keep",
+      },
+    ]);
   });
 });
 
