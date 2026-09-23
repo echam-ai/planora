@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarClock, CalendarOff, Clock } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarOff, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deadlineLabels } from "@/lib/deadline";
 import type { DeadlineState, TaskCategory, TaskPriority } from "@/types";
@@ -46,6 +46,7 @@ const deadlineIcon = {
   scheduled: CalendarClock,
   due_soon: Clock,
   overdue: AlertTriangle,
+  completed: CheckCircle2,
 };
 
 const deadlineClass: Record<DeadlineState, string> = {
@@ -53,6 +54,7 @@ const deadlineClass: Record<DeadlineState, string> = {
   scheduled: "bg-secondary text-secondary-foreground",
   due_soon: "bg-warning/25 text-warning-foreground",
   overdue: "bg-destructive/15 text-destructive",
+  completed: "bg-success/20 text-success-foreground",
 };
 
 export function DeadlineBadge({

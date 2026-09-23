@@ -1,10 +1,11 @@
 import type { DeadlineState, Task } from "@/types";
 
 export function getDeadlineState(task: Task, now = new Date()): DeadlineState {
+  if (task.status === "done") return "completed";
   if (!task.deadlineAt) return "none";
   const deadline = new Date(task.deadlineAt).getTime();
   const diff = deadline - now.getTime();
-  if (diff < 0) return task.status === "done" ? "scheduled" : "overdue";
+  if (diff < 0) return "overdue";
   if (diff <= 24 * 60 * 60 * 1000) return "due_soon";
   return "scheduled";
 }
@@ -14,6 +15,7 @@ export const deadlineLabels: Record<DeadlineState, string> = {
   scheduled: "Scheduled",
   due_soon: "Due soon",
   overdue: "Overdue",
+  completed: "Completed",
 };
 
 export function formatInZone(iso: string | null, timezone: string, withTime = true) {

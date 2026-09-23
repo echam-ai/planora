@@ -116,7 +116,10 @@ function TasksPage() {
   const [priority, setPriority] = useState<TaskPriority | "all">("all");
   const [deadline, setDeadline] = useState<"all" | "due_soon" | "overdue" | "none">("all");
   const [active, setActive] = useState<Task | null>(null);
-  const [selected, setSelected] = useState<Task | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Resolve the open task from the live query data so the sheet never shows a
+  // click-time snapshot once anything else writes to the task.
+  const selected = (tasks ?? []).find((t) => t.id === selectedId) ?? null;
 
   const timezone = settings?.timezone ?? "UTC";
 
@@ -297,7 +300,7 @@ function TasksPage() {
                   label={c.label}
                   tasks={byStatus(c.status)}
                   timezone={timezone}
-                  onOpen={setSelected}
+                  onOpen={(task) => setSelectedId(task.id)}
                 />
               ))}
             </div>
@@ -308,7 +311,7 @@ function TasksPage() {
         )}
       </div>
 
-      <TaskDetailSheet task={selected} timezone={timezone} onClose={() => setSelected(null)} />
+      <TaskDetailSheet task={selected} timezone={timezone} onClose={() => setSelectedId(null)} />
     </AppShell>
   );
 }
