@@ -46,12 +46,15 @@ function ArchivePage() {
   useAuthGuard();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Task | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<Task | null>(null);
 
   const { data: settings } = useSettings();
   const { data, isLoading, isError, refetch } = useArchive(search, page);
   const { restore, purge } = useTaskMutations();
+  // Resolve the open task from the live query data so the read-only view never
+  // shows a click-time snapshot once anything else writes to the task.
+  const selected = data?.items.find((t) => t.id === selectedId) ?? null;
   const timezone = settings?.timezone ?? "UTC";
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -107,7 +110,7 @@ function ArchivePage() {
               <button
                 type="button"
                 className="w-full text-left"
-                onClick={() => setSelected(task)}
+                onClick={() => setSelectedId(task.id)}
                 aria-label={`Open archived task ${task.title}`}
               >
                 <TaskCardContent task={task} timezone={timezone} />
@@ -167,7 +170,7 @@ function ArchivePage() {
         task={selected}
         timezone={timezone}
         readOnly
-        onClose={() => setSelected(null)}
+        onClose={() => setSelectedId(null)}
       />
 
       <AlertDialog open={!!purgeTarget} onOpenChange={(o) => !o && setPurgeTarget(null)}>

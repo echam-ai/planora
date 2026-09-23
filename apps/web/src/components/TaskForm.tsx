@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -71,6 +72,33 @@ export function valuesToDraft(values: TaskFormValues): TaskDraft {
   };
 }
 
+/** react-hook-form's dirty map: `true` on edited inputs, nested for link rows. */
+export type TaskFormDirty = Partial<Record<keyof TaskFormValues, unknown>>;
+
+function hasDirty(node: unknown): boolean {
+  if (!node) return false;
+  if (Array.isArray(node)) return node.some(hasDirty);
+  if (typeof node === "object") return Object.values(node).some(hasDirty);
+  return true;
+}
+
+/** The draft fields the user actually edited, as an `updateTask` patch. */
+export function dirtyDraftPatch(
+  values: TaskFormValues,
+  dirtyFields: TaskFormDirty,
+): Partial<TaskDraft> {
+  const draft = valuesToDraft(values);
+  const patch: Partial<TaskDraft> = {};
+  if (hasDirty(dirtyFields.title)) patch.title = draft.title;
+  if (hasDirty(dirtyFields.content)) patch.content = draft.content;
+  if (hasDirty(dirtyFields.category)) patch.category = draft.category;
+  if (hasDirty(dirtyFields.priority)) patch.priority = draft.priority;
+  if (hasDirty(dirtyFields.deadlineLocal)) patch.deadlineAt = draft.deadlineAt;
+  if (hasDirty(dirtyFields.markdownNote)) patch.markdownNote = draft.markdownNote;
+  if (hasDirty(dirtyFields.urls)) patch.urls = draft.urls;
+  return patch;
+}
+
 export const emptyDraft: TaskDraft = {
   title: "",
   content: "",
@@ -85,7 +113,8 @@ type Props = {
   defaultDraft?: TaskDraft;
   submitLabel: string;
   submitting?: boolean;
-  onSubmit: (draft: TaskDraft, status?: TaskStatus) => void;
+  /** `draft` carries every field (creation); `patch` only the fields the user edited. */
+  onSubmit: (draft: TaskDraft, patch: Partial<TaskDraft>) => void;
   onCancel: () => void;
   status?: TaskStatus;
   onStatusChange?: (status: TaskStatus) => void;
@@ -109,12 +138,27 @@ export function TaskForm({
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "urls" });
   const note = form.watch("markdownNote");
-  const errors = form.formState.errors;
+  // Reading formState in render subscribes to it, so these stay current.
+  const { errors, dirtyFields } = form.formState;
+
+  // The task can change underneath an open form (board drag, confirmed chat
+  // write). Track it: fields the user edited keep their values, every other
+  // field takes the new task value, and only edited fields reach Save's patch.
+  const appliedDefaults = useRef(JSON.stringify(draftToValues(defaultDraft)));
+  useEffect(() => {
+    const incoming = draftToValues(defaultDraft);
+    const serialised = JSON.stringify(incoming);
+    if (serialised === appliedDefaults.current) return;
+    appliedDefaults.current = serialised;
+    form.reset(incoming, { keepDirtyValues: true });
+  }, [defaultDraft, form]);
 
   return (
     <form
       className="space-y-5"
-      onSubmit={form.handleSubmit((values) => onSubmit(valuesToDraft(values)))}
+      onSubmit={form.handleSubmit((values) =>
+        onSubmit(valuesToDraft(values), dirtyDraftPatch(values, dirtyFields)),
+      )}
       noValidate
     >
       <div className="space-y-2">
@@ -148,7 +192,9 @@ export function TaskForm({
           <Label htmlFor="category">Category</Label>
           <Select
             value={form.watch("category")}
-            onValueChange={(v) => form.setValue("category", v as TaskCategory)}
+            onValueChange={(v) =>
+              form.setValue("category", v as TaskCategory, { shouldDirty: true })
+            }
           >
             <SelectTrigger id="category" className="min-h-11">
               <SelectValue />
@@ -166,7 +212,9 @@ export function TaskForm({
           <Label htmlFor="priority">Priority</Label>
           <Select
             value={form.watch("priority")}
-            onValueChange={(v) => form.setValue("priority", v as TaskPriority)}
+            onValueChange={(v) =>
+              form.setValue("priority", v as TaskPriority, { shouldDirty: true })
+            }
           >
             <SelectTrigger id="priority" className="min-h-11">
               <SelectValue />

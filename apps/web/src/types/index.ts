@@ -85,7 +85,7 @@ export type Conversation = {
   messages: ChatMessage[];
 };
 
-export type DeadlineState = "none" | "scheduled" | "due_soon" | "overdue";
+export type DeadlineState = "none" | "scheduled" | "due_soon" | "overdue" | "completed";
 
 export class ApiError extends Error {
   code: string;

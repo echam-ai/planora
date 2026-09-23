@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ExternalLink, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -44,13 +44,28 @@ export function TaskDetailSheet({
 }) {
   const { update, remove } = useTaskMutations();
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [status, setStatus] = useState<TaskStatus>(task?.status ?? "todo");
+  // The status the user picked in this sheet, per task. Everything else about
+  // status comes from the task itself so the control never shows stale state.
+  const [statusEdit, setStatusEdit] = useState<{ id: string; status: TaskStatus } | null>(null);
+
+  useEffect(() => {
+    if (!task) setStatusEdit(null);
+  }, [task]);
 
   if (!task) return null;
 
-  const save = (draft: TaskDraft) => {
+  const userStatus = statusEdit && statusEdit.id === task.id ? statusEdit.status : null;
+  const status = userStatus ?? task.status;
+
+  const save = (_draft: TaskDraft, patch: Partial<TaskDraft>) => {
+    const changed: Partial<TaskDraft> & { status?: TaskStatus } =
+      userStatus !== null && userStatus !== task.status ? { ...patch, status: userStatus } : patch;
+    if (Object.keys(changed).length === 0) {
+      toast.info("No changes to save");
+      return;
+    }
     update.mutate(
-      { id: task.id, patch: { ...draft, status } },
+      { id: task.id, patch: changed },
       {
         onSuccess: () => {
           toast.success("Task saved");
@@ -148,7 +163,7 @@ export function TaskDetailSheet({
                 onSubmit={save}
                 onCancel={onClose}
                 status={status}
-                onStatusChange={setStatus}
+                onStatusChange={(next) => setStatusEdit({ id: task.id, status: next })}
                 extraActions={
                   <Button
                     type="button"

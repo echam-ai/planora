@@ -40,6 +40,13 @@ describe("getDeadlineState", () => {
   it("returns overdue when the deadline has passed", () => {
     expect(getDeadlineState(taskWithDeadline("2026-01-15T11:59:59.999Z"), now)).toBe("overdue");
   });
+
+  it("returns completed for Done tasks regardless of their deadline", () => {
+    const task = taskWithDeadline("2026-01-15T11:59:59.999Z");
+    task.status = "done";
+
+    expect(getDeadlineState(task, now)).toBe("completed");
+  });
 });
 
 describe("deadline display helpers", () => {
@@ -49,6 +56,7 @@ describe("deadline display helpers", () => {
       scheduled: "Scheduled",
       due_soon: "Due soon",
       overdue: "Overdue",
+      completed: "Completed",
     });
   });
 
