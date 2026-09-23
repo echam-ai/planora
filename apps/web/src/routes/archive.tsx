@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArchiveRestore, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,9 +18,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useArchive, useSettings, useTaskMutations } from "@/hooks/useApi";
+import { useArchive, useArchivedTask, useSettings, useTaskMutations } from "@/hooks/useApi";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import type { Task } from "@/types";
+import { ApiError, type Task } from "@/types";
 
 export const Route = createFileRoute("/archive")({
   head: () => ({
@@ -51,11 +51,24 @@ function ArchivePage() {
 
   const { data: settings } = useSettings();
   const { data, isLoading, isError, refetch } = useArchive(search, page);
+  const archivedTask = useArchivedTask(selectedId);
   const { restore, purge } = useTaskMutations();
-  // Resolve the open task from the live query data so the read-only view never
-  // shows a click-time snapshot once anything else writes to the task.
-  const selected = data?.items.find((t) => t.id === selectedId) ?? null;
+  // An archive page is only a filtered, paginated view. The detail query is
+  // keyed by ID and is the authority for the open sheet.
+  const selected = archivedTask.data ?? null;
   const timezone = settings?.timezone ?? "UTC";
+
+  useEffect(() => {
+    if (
+      selectedId &&
+      archivedTask.isError &&
+      archivedTask.error instanceof ApiError &&
+      archivedTask.error.code === "NOT_FOUND"
+    ) {
+      setSelectedId(null);
+      toast.info("This task is no longer available in the archive.");
+    }
+  }, [archivedTask.error, archivedTask.isError, selectedId]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
@@ -121,7 +134,10 @@ function ArchivePage() {
                   className="min-h-11 flex-1"
                   onClick={() =>
                     restore.mutate(task.id, {
-                      onSuccess: () => toast.success("Task restored"),
+                      onSuccess: () => {
+                        if (selectedId === task.id) setSelectedId(null);
+                        toast.success("Task restored");
+                      },
                       onError: () => toast.error("Couldn't restore that task"),
                     })
                   }
@@ -171,6 +187,15 @@ function ArchivePage() {
         timezone={timezone}
         readOnly
         onClose={() => setSelectedId(null)}
+        open={selectedId !== null}
+        loading={archivedTask.isLoading && selected === null}
+        error={
+          archivedTask.isError &&
+          !(archivedTask.error instanceof ApiError && archivedTask.error.code === "NOT_FOUND")
+            ? archivedTask.error.message
+            : null
+        }
+        onRetry={() => archivedTask.refetch()}
       />
 
       <AlertDialog open={!!purgeTarget} onOpenChange={(o) => !o && setPurgeTarget(null)}>
@@ -187,7 +212,10 @@ function ArchivePage() {
               onClick={() => {
                 if (!purgeTarget) return;
                 purge.mutate(purgeTarget.id, {
-                  onSuccess: () => toast.success("Task deleted"),
+                  onSuccess: () => {
+                    if (selectedId === purgeTarget.id) setSelectedId(null);
+                    toast.success("Task deleted");
+                  },
                   onError: () => toast.error("Couldn't delete that task"),
                 });
                 setPurgeTarget(null);
