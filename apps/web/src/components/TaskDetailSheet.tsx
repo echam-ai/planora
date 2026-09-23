@@ -36,11 +36,19 @@ export function TaskDetailSheet({
   timezone,
   readOnly = false,
   onClose,
+  open = !!task,
+  loading = false,
+  error,
+  onRetry,
 }: {
   task: Task | null;
   timezone: string;
   readOnly?: boolean;
   onClose: () => void;
+  open?: boolean;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }) {
   const { update, remove } = useTaskMutations();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -52,7 +60,34 @@ export function TaskDetailSheet({
     if (!task) setStatusEdit(null);
   }, [task]);
 
-  if (!task) return null;
+  if (!task) {
+    if (!open) return null;
+    return (
+      <Sheet open onOpenChange={(value) => !value && onClose()}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle className="pr-6 text-left">Archived task</SheetTitle>
+            <SheetDescription className="text-left">Archived task (read only)</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 px-4 pb-8">
+            {loading && <p className="text-sm text-muted-foreground">Loading archived task…</p>}
+            {error && (
+              <div className="space-y-3" role="alert">
+                <p className="text-sm text-destructive">
+                  Couldn't load this archived task: {error}
+                </p>
+                {onRetry && (
+                  <Button type="button" variant="outline" className="min-h-11" onClick={onRetry}>
+                    Retry
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   const userStatus = statusEdit && statusEdit.id === task.id ? statusEdit.status : null;
   const status = userStatus ?? task.status;
@@ -87,6 +122,18 @@ export function TaskDetailSheet({
         </SheetHeader>
 
         <div className="space-y-6 px-4 pb-8">
+          {error && (
+            <div className="space-y-3" role="alert">
+              <p className="text-sm text-destructive">
+                Couldn't refresh this archived task: {error}
+              </p>
+              {onRetry && (
+                <Button type="button" variant="outline" className="min-h-11" onClick={onRetry}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
           {readOnly ? (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">

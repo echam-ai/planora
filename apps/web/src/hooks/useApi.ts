@@ -7,6 +7,7 @@ export const qk = {
   settings: ["settings"] as const,
   tasks: ["tasks"] as const,
   archive: (search: string, page: number) => ["archive", search, page] as const,
+  archivedTask: (id: string) => ["archive", "task", id] as const,
   conversation: ["conversation"] as const,
 };
 
@@ -20,6 +21,19 @@ export const useTasks = () => useQuery({ queryKey: qk.tasks, queryFn: () => api.
 
 export const useArchive = (search: string, page = 1) =>
   useQuery({ queryKey: qk.archive(search, page), queryFn: () => api.listArchive(search, page) });
+
+/**
+ * Archive pages are filtered and paginated, so they cannot be the authority
+ * for an open detail sheet. Keep the task query keyed solely by its ID while
+ * retaining the archive prefix for the normal mutation invalidation lifecycle.
+ */
+export const useArchivedTask = (id: string | null) =>
+  useQuery({
+    queryKey: qk.archivedTask(id ?? ""),
+    queryFn: () => api.getArchivedTask(id!),
+    enabled: id !== null,
+    retry: false,
+  });
 
 export const useConversation = () =>
   useQuery({ queryKey: qk.conversation, queryFn: () => api.getCurrentConversation() });

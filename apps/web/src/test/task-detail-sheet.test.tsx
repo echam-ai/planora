@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within, act } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { qk } from "@/hooks/useApi";
 import { api } from "@/services/api";
-import type { Conversation, Task, TaskDraft } from "@/types";
+import { ApiError, type Conversation, type Task, type TaskDraft } from "@/types";
 
 vi.mock("@tanstack/react-router", async () => {
   const ReactModule = await import("react");
@@ -63,6 +63,10 @@ type Store = { tasks: Task[]; pendingAction?: { taskId: string; draft: TaskDraft
 let store: Store;
 let updateTask: ReturnType<typeof vi.spyOn>;
 let deleteTask: ReturnType<typeof vi.spyOn>;
+let getArchivedTask: ReturnType<typeof vi.spyOn>;
+let listArchive: ReturnType<typeof vi.spyOn>;
+let restoreTask: ReturnType<typeof vi.spyOn>;
+let permanentlyDeleteTask: ReturnType<typeof vi.spyOn>;
 let qc: QueryClient;
 
 function installClient(seed: Task[]) {
@@ -74,17 +78,42 @@ function installClient(seed: Task[]) {
   vi.spyOn(api, "listTasks").mockImplementation(async () =>
     store.tasks.filter((t) => !t.archivedAt),
   );
-  vi.spyOn(api, "listArchive").mockImplementation(async () => ({
-    items: store.tasks.filter((t) => t.archivedAt),
-    total: store.tasks.filter((t) => t.archivedAt).length,
-    page: 1,
-    pageSize: 10,
-  }));
+  listArchive = vi.spyOn(api, "listArchive").mockImplementation(async (search = "", page = 1) => {
+    const pageSize = 10;
+    const matching = store.tasks.filter(
+      (t) => t.archivedAt && t.title.toLowerCase().includes(search.trim().toLowerCase()),
+    );
+    return {
+      items: matching.slice((page - 1) * pageSize, page * pageSize),
+      total: matching.length,
+      page,
+      pageSize,
+    };
+  });
+  getArchivedTask = vi.spyOn(api, "getArchivedTask").mockImplementation(async (id) => {
+    const task = store.tasks.find((t) => t.id === id && t.archivedAt);
+    if (!task) throw new ApiError("NOT_FOUND", "That archived task no longer exists.");
+    return task;
+  });
   updateTask = vi
     .spyOn(api, "updateTask")
     .mockImplementation(async (id, patch) => applyPatch(id, patch));
   deleteTask = vi.spyOn(api, "deleteTask").mockImplementation(async (id) => {
     store.tasks = store.tasks.filter((t) => t.id !== id);
+  });
+  restoreTask = vi.spyOn(api, "restoreTask").mockImplementation(async (id) => {
+    const restored = {
+      ...requireTask(id),
+      archivedAt: null,
+      completedAt: null,
+      status: "todo" as const,
+      updatedAt: iso(0),
+    };
+    store.tasks = store.tasks.map((task) => (task.id === id ? restored : task));
+    return restored;
+  });
+  permanentlyDeleteTask = vi.spyOn(api, "permanentlyDeleteTask").mockImplementation(async (id) => {
+    store.tasks = store.tasks.filter((task) => task.id !== id);
   });
   vi.spyOn(api, "moveTask").mockImplementation(async (id, status, position) => {
     const task = requireTask(id);
@@ -175,6 +204,22 @@ async function openSheet(title: string) {
 
 function field(scope: HTMLElement, name: string) {
   return within(scope).getByLabelText(name);
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function hiddenButton(name: string) {
+  const button = document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+  if (!button) throw new Error(`missing button: ${name}`);
+  return button;
 }
 
 beforeEach(() => {
@@ -428,7 +473,7 @@ describe("task detail sheet", () => {
     // read-only archive view follows the task too
     renderPage(ArchivePage);
     dialog = await openSheet("Archived task");
-    expect(within(dialog).getByText("Archived content")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Archived content")).toBeInTheDocument();
     await externalWrite(() => {
       store.tasks = store.tasks.map((t) =>
         t.id === "z" ? { ...t, content: "Rewritten while open" } : t,
@@ -493,5 +538,285 @@ describe("task detail sheet", () => {
     const confirmAgain = await screen.findByRole("alertdialog");
     fireEvent.click(within(confirmAgain).getByRole("button", { name: "Delete task" }));
     await waitFor(() => expect(deleteTask).toHaveBeenCalledWith("a"));
+  });
+
+  it("archive scenario 1: keeps detail open and fresh when search excludes the selected task", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Release notes",
+        content: "Original archive content",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    renderPage(ArchivePage);
+
+    fireEvent.change(await screen.findByLabelText("Search archived tasks"), {
+      target: { value: "RELEASE" },
+    });
+    const dialog = await openSheet("Release notes");
+    expect(await within(dialog).findByText("Original archive content")).toBeInTheDocument();
+
+    await externalWrite(() => {
+      store.tasks = store.tasks.map((task) =>
+        task.id === "a"
+          ? { ...task, title: "Retrospective", content: "Refreshed archive content" }
+          : task,
+      );
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /Open archived task Retrospective/ }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Retrospective" })).toBe(dialog);
+      expect(within(dialog).getByText("Refreshed archive content")).toBeInTheDocument();
+    });
+    expect(getArchivedTask).toHaveBeenCalledWith("a");
+  });
+
+  it("archive scenario 2: keeps detail open when the active page changes", async () => {
+    const archived = Array.from({ length: 11 }, (_, index) =>
+      makeTask({
+        id: `archived-${index}`,
+        title: `Archived ${index}`,
+        status: "done",
+        completedAt: iso(-(index + 2) * DAY),
+        archivedAt: iso(-(index + 1) * DAY),
+      }),
+    );
+    installClient(archived);
+    renderPage(ArchivePage);
+
+    const dialog = await openSheet("Archived 0");
+    expect(await screen.findByRole("dialog", { name: "Archived 0" })).toBe(dialog);
+    // The sheet is modal; the route still retains selection when a page-key
+    // change arrives underneath it.
+    fireEvent.click(screen.getByText("Next", { selector: "button" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Open archived task Archived 0" }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "Archived 0" })).toBe(dialog);
+    });
+  });
+
+  it("archive scenario 3: list failures and empty pages do not dismiss an open detail", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    renderPage(ArchivePage);
+    const dialog = await openSheet("Archived A");
+    expect(await screen.findByRole("dialog", { name: "Archived A" })).toBe(dialog);
+
+    listArchive.mockRejectedValueOnce(new ApiError("NETWORK", "Archive unavailable"));
+    await qc.invalidateQueries({ queryKey: qk.archive("", 1) });
+    await waitFor(() =>
+      expect(screen.getByText("We couldn't load the archive.")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
+
+    listArchive.mockResolvedValueOnce({ items: [], total: 0, page: 1, pageSize: 10 });
+    await qc.invalidateQueries({ queryKey: qk.archive("", 1) });
+    await waitFor(() => expect(screen.getByText("Nothing archived yet.")).toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
+  });
+
+  it("archive scenarios 4–5: holds selection through loading, errors, and retry", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        content: "Current content",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    const initial = deferred<Task>();
+    getArchivedTask.mockImplementationOnce(() => initial.promise);
+    renderPage(ArchivePage);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    const dialog = await screen.findByRole("dialog", { name: "Archived task" });
+    expect(within(dialog).getByText("Loading archived task…")).toBeInTheDocument();
+
+    await act(async () => initial.resolve(requireTask("a")));
+    expect(await screen.findByRole("dialog", { name: "Archived A" })).toBe(dialog);
+
+    getArchivedTask.mockRejectedValueOnce(new ApiError("NETWORK", "Connection lost"));
+    await externalWrite(() => undefined);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Connection lost");
+    expect(within(dialog).getByText("Current content")).toBeInTheDocument();
+
+    store.tasks = store.tasks.map((task) =>
+      task.id === "a" ? { ...task, content: "Recovered content" } : task,
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+      expect(within(dialog).getByText("Recovered content")).toBeInTheDocument();
+    });
+  });
+
+  it("archive scenarios 6–7: only NOT_FOUND dismisses, and a closed sheet stays closed", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    const pending = deferred<Task>();
+    getArchivedTask.mockImplementationOnce(() => pending.promise);
+    renderPage(ArchivePage);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await act(async () => pending.resolve(requireTask("a")));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await openSheet("Archived A");
+    await externalWrite(() => {
+      store.tasks = store.tasks.map((task) =>
+        task.id === "a" ? { ...task, archivedAt: null } : task,
+      );
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("archive scenario 7: a late response for A cannot replace a newer selection B", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        content: "A content",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+      makeTask({
+        id: "b",
+        title: "Archived B",
+        content: "B content",
+        status: "done",
+        completedAt: iso(-3 * DAY),
+        archivedAt: iso(-2 * DAY),
+      }),
+    ]);
+    const delayedA = deferred<Task>();
+    getArchivedTask.mockImplementation((id: string) =>
+      id === "a" ? delayedA.promise : Promise.resolve(requireTask(id)),
+    );
+    renderPage(ArchivePage);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    await screen.findByRole("dialog", { name: "Archived task" });
+    fireEvent.click(hiddenButton("Open archived task Archived B"));
+    const dialog = await screen.findByRole("dialog", { name: "Archived B" });
+    expect(within(dialog).getByText("B content")).toBeInTheDocument();
+
+    await act(async () => delayedA.resolve(requireTask("a")));
+    await waitFor(() => {
+      expect(screen.getByRole("dialog", { name: "Archived B" })).toBe(dialog);
+      expect(within(dialog).getByText("B content")).toBeInTheDocument();
+      expect(within(dialog).queryByText("A content")).not.toBeInTheDocument();
+    });
+  });
+
+  it("archive scenario 7: closing after an error prevents later refetches from reopening", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    getArchivedTask.mockRejectedValueOnce(new ApiError("NETWORK", "Connection lost"));
+    renderPage(ArchivePage);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    const dialog = await screen.findByRole("dialog", { name: "Archived task" });
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Connection lost");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await qc.refetchQueries({ queryKey: qk.archivedTask("a") });
+    await qc.invalidateQueries({ queryKey: ["archive"] });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("archive scenario 6: restore failures retain the selected sheet; success dismisses it", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    renderPage(ArchivePage);
+    const dialog = await openSheet("Archived A");
+    expect(await screen.findByRole("dialog", { name: "Archived A" })).toBe(dialog);
+
+    restoreTask.mockRejectedValueOnce(new ApiError("NETWORK", "Restore failed"));
+    fireEvent.click(screen.getByText("Restore", { selector: "button" }));
+    await waitFor(() => expect(restoreTask).toHaveBeenCalledWith("a"));
+    expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
+    expect(requireTask("a").archivedAt).not.toBeNull();
+
+    fireEvent.click(screen.getByText("Restore", { selector: "button" }));
+    await waitFor(() => expect(restoreTask).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(requireTask("a").archivedAt).toBeNull();
+  });
+
+  it("archive scenario 6: permanent-delete failures retain the selected sheet; success dismisses it", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Archived A",
+        status: "done",
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    renderPage(ArchivePage);
+    const dialog = await openSheet("Archived A");
+    expect(await screen.findByRole("dialog", { name: "Archived A" })).toBe(dialog);
+
+    permanentlyDeleteTask.mockRejectedValueOnce(new ApiError("NETWORK", "Delete failed"));
+    fireEvent.click(hiddenButton("Delete Archived A permanently"));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitFor(() => expect(permanentlyDeleteTask).toHaveBeenCalledWith("a"));
+    expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
+    expect(requireTask("a")).toBeDefined();
+
+    fireEvent.click(hiddenButton("Delete Archived A permanently"));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+    );
+    await waitFor(() => expect(permanentlyDeleteTask).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(store.tasks.find((task) => task.id === "a")).toBeUndefined();
   });
 });
