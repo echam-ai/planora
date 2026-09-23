@@ -1,5 +1,6 @@
-import { createSeedTasks, uid } from "@/data/seed";
+import { createSeedTasks } from "@/data/seed";
 import { getDeadlineState } from "@/lib/deadline";
+import { uid } from "@/lib/id";
 import {
   ApiError,
   type AppSettings,
