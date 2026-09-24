@@ -16,7 +16,7 @@ Project instructions live in `AGENTS.md` and role policy in `.agents/`, both har
 
 ### What the permissions enforce
 
-Denied outright, matching `AGENTS.md` and `docs/PROCESS.md`: `gh pr create` and `gh pr merge` (the agent flow is the review), `npm install`, `npx` and `pip install` (binding rule 8), edits to `routeTree.gen.ts` and `schema.gen.ts` (binding rule 4), `git push --force` and `git reset --hard`.
+Denied outright, matching `AGENTS.md` and `docs/PROCESS.md`: `gh pr create` and `gh pr merge` (the agent flow is the review), `npm install`, `npx` and `pip install` (binding rule 8), edits to `routeTree.gen.ts` and `schema.gen.ts` (binding rule 4), `git push --force`, `git reset --hard`, and `git stash` (the stash stack is shared across worktrees and sessions).
 
 Prompting rather than silent: `git push`, `git merge`, `git worktree remove`, branch deletion — all orchestrator-owned steps that deserve a look.
 
@@ -28,11 +28,13 @@ A command that still prompts unexpectedly is usually a wrapper the rules do not 
 
 | Role | Model | Why |
 | --- | --- | --- |
-| `product-manager`, `designer` | `opus` | Misreading the spec or missing an accessibility rule is expensive and surfaces late |
+| `product-manager`, `designer` | `opus` | Misreading the spec or missing an accessibility rule is expensive and surfaces late. Full lane only, so a refactor never pays for them |
 | `web-engineer`, `api-engineer`, `tester`, `oncall-engineer` | `sonnet` | Implementation, suite runs and CI triage are bounded by criteria that already exist |
 
 Tool restrictions come from `.claude/settings.json`, which applies to every agent, rather than per-role frontmatter. The read-only roles state their own limits in their bodies (`designer` reports and never implements; `tester` hands work back instead of fixing it).
 
 ### Keeping sessions fast
+
+Continue an agent with `SendMessage` rather than spawning a new one for the same role and issue: a FAIL goes back to the engineer who wrote the code. The orchestrator commits reviewed work itself, so no agent is started just to run `git commit`. Before dispatching the tester, name the rung of the browser evidence ladder (`docs/PROCESS.md`) the issue needs. Screenshots are the costliest evidence and only an appearance change needs them.
 
 Read only what the lane needs. Full-lane application work needs `AGENTS.md`, `docs/PROCESS.md` and one role file; `docs/BROWSER-VERIFICATION.md` is for issues that actually drive a browser, and the spec is read by section, not whole. Hand reviewers a base SHA and let them run `git diff` — never copy a worktree into `.tmp/`.

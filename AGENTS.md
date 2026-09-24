@@ -44,18 +44,11 @@ Planora — a private, single-user AI task manager. Three-column Kanban board, s
 
 Monorepo. The web app lives in `apps/web/` (moved there from the repository root by #7); the API tier lives in `apps/api/` (created by #1). Run web commands in `apps/web`; run API commands in `apps/api`.
 
-## Not usable yet
+## Commands
 
-From `apps/web`, `bun run dev`, `build`, `lint`, `bunx tsc --noEmit`, and — from `apps/api` — `uv run pytest` and `uv run ruff check .` all work today. These do not, because their harness is itself a backlog item. Implement that issue rather than inventing a runner.
+From `apps/web`: `bun run verify` is the whole unit gate: every Vitest test with coverage at 80% or more, then lint, typecheck and build. `bun run e2e` runs the Playwright flows on desktop and mobile. `bun run test -- <path>` is for iterating. From `apps/api`: `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`. `uv run alembic upgrade head` needs #22, so implement that issue rather than inventing a runner.
 
-| Command | Needs |
-| --- | --- |
-| `bun run test`, `bun run test:coverage` (Vitest scripts) | #8 |
-| `bun run e2e` | #9 |
-| `uv run alembic upgrade head` | #22 |
-| `gh run watch` | #10 |
-
-Check the actual checkout; this table tracks milestones, not a permanent waiver. Harness-creation issues must run the checks they introduce.
+`bun` lives in `~/.bun/bin`, which a non-interactive agent shell may not have on `PATH`. If `bun` is not found, prefix the command with `PATH="$HOME/.bun/bin:$PATH"` rather than hunting for it. A fresh worktree needs `bun install` in `apps/web` before its first check.
 
 ## Vendor residue, being removed
 

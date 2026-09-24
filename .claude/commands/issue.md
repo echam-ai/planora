@@ -11,8 +11,8 @@ Run the pipeline for issue #$1. You are the orchestrator: you dispatch, relay an
 
 `gh issue view $1 --repo hgiang/planora`. Pick the lane (Lanes table). State it out loud before dispatching — it decides how many agents run.
 
-- **Full** — application code. Needs PM grooming, then engineer, tester, PM acceptance.
-- **Light** — docs, roles, harness or process config. You write the acceptance criteria onto the issue yourself, then engineer and tester only.
+- **Full** — anything the user could observe, plus the contract, data, security, deployment. Needs PM grooming, then engineer, tester, PM acceptance.
+- **Light** — behavior-preserving refactors covered by existing suites; docs, roles, harness or process config. You write three to six acceptance criteria onto the issue yourself, then engineer and tester only.
 - **Direct** — a typo or dead link. Do it yourself, commit, merge, stop.
 
 ## 2. Isolation
@@ -40,11 +40,11 @@ pending:  <[HUMAN] criteria, or none>
 
 Handoffs are git state. Never ask for, accept, or create a copied worktree, `node_modules`, `.venv` or tarball as a review artifact.
 
-Sequence: engineer → tester → (full lane) product-manager. Route a FAIL or REJECTED back to the engineer, then re-run the gates it invalidated. A verdict for an earlier state is not approval of a later one.
+Sequence: engineer → tester → (full lane) product-manager. Route a FAIL or REJECTED back to the **same** engineer with `SendMessage` — it still holds the context — then re-run the gates it invalidated. Tell the tester which rung of the browser evidence ladder applies (`docs/PROCESS.md`), so no screenshots are taken for a change nobody can see. A verdict for an earlier state is not approval of a later one.
 
 ## 4. Commit and merge
 
-The engineer commits on `agent/issue-$1` once the lane's gates cover the final state — `Closes #$1`, or `Refs #$1` if a `[HUMAN]` criterion keeps it open. No attribution trailers (binding rule 11).
+You commit on `agent/issue-$1` once the lane's gates cover the final state, using the engineer's proposed subject — `Closes #$1`, or `Refs #$1` if a `[HUMAN]` criterion keeps it open. Check `git diff --cached --stat` against the reviewed state first. No attribution trailers (binding rule 11).
 
 Then merge with `/ship $1`.
 

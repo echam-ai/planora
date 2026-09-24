@@ -8,7 +8,6 @@ Run the verification that this project's current stage actually supports, and re
 
 ```bash
 git rev-parse --show-toplevel && git branch --show-current
-ls apps/web/src 2>/dev/null || ls src     # web root: repo root before #7, apps/web after
 git status --short --untracked-files=all
 ```
 
@@ -17,12 +16,11 @@ git status --short --untracked-files=all
 From `docs/PROCESS.md` → **Verification by project stage**. Match the row to what actually changed, not to the issue title.
 
 - Documentation / agent configuration only → diffs, links and paths, role frontmatter, symlink targets, and a walkthrough of each affected workflow. No application launch, no coverage.
-- Web, before #8/#9 → `bun run lint`, `bunx tsc --noEmit`, `bun run build`, plus targeted observable checks. Vitest is unavailable until #8, E2E until #9 — say so, do not build them.
-- Web, once harnesses exist → `bun run test`, `bun run test:coverage` (≥80%), `bun run lint`, `bunx tsc --noEmit`, `bun run build`, relevant `bun run e2e`.
+- Web → `bun run verify` (coverage run of every test at ≥80%, lint, typecheck, build), plus `bun run e2e` when UI code changed.
 - API (from `apps/api`) → `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`.
 - Migrations, from #22 → `uv run alembic upgrade head` against disposable empty databases, on SQLite and PostgreSQL.
 
-A visible change also needs desktop and mobile screenshots — follow `docs/BROWSER-VERIFICATION.md` and **read each PNG**. Creating a file is not looking at it.
+Browser evidence follows the ladder in `docs/PROCESS.md`: specs first, then text snapshots, and screenshots only when appearance itself changed. If you take one, read the PNG; creating a file is not looking at it.
 
 ## 3. Report
 

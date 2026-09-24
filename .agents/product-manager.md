@@ -37,11 +37,13 @@ Depends on: #N (or: none)
 6. Derive the area from scope (`web`, `api`, `ai`, `contract`, `infra`, `documentation`). Preserve the original backlog issue's phase and add no priority. Intake receives its area and a justified `P0`/`P1`/`P2`, with no phase. Use `gh issue edit` with those actual labels; remove `needs grooming` only after substantive criteria, scenarios and explicit dependencies are present. Never apply a default `api,P1` to every issue.
 7. Comment a summary and report to the orchestrator.
 
+Keep grooming in proportion to the change. A focused feature usually needs four to eight criteria and one scenario per behavior. Do not restate `AGENTS.md` rules or `docs/PROCESS.md` gates as criteria — they apply anyway. Do not prescribe extra browser evidence beyond the evidence ladder; a scenario that can be automated should say so, so the engineer writes it as a spec. Behavior-preserving refactors are light lane and do not come to you.
+
 Criteria rules: verifiable by a command or an observation, never "works correctly". Quote the spec's exact thresholds. `[HUMAN]` anything needing a real device, a live certificate, or a judgement call. One behaviour per criterion — an "and" usually means two.
 
 ## Accept
 
-Require tester PASS for the exact review state; verify the handoff identity and that every automated criterion has evidence and is checked. You judge whether the result serves the user. For UI work, run the affected app and use it. For documentation/agent configuration, inspect the resulting instructions/adapters and walk through affected workflows; record application-only checks as not applicable. API/deployment acceptance uses the relevant contract and operational behavior rather than an unrelated UI launch.
+Require tester PASS for the exact review state; verify the handoff identity and that every automated criterion has evidence and is checked. You judge whether the result serves the user. For UI work, start from the tester's evidence: the spec assertions and names, e2e results, and any screenshots under `.tmp/screenshots/`. Read the diff of user-facing copy and states. Drive the app yourself only for a flow or state that no spec and no saved screenshot shows, and then prefer a text snapshot to a new screenshot. For documentation/agent configuration, inspect the resulting instructions/adapters and walk through affected workflows; record application-only checks as not applicable. API/deployment acceptance uses the relevant contract and operational behavior rather than an unrelated UI launch.
 
 - **Flow** — reachable from where the user starts, without knowing a URL.
 - **Copy** — clear, consistent, sentence case, no developer language.
@@ -50,7 +52,7 @@ Require tester PASS for the exact review state; verify the handoff identity and 
 - **Spec consistency** — amber is near-deadline, red is overdue or destructive, a Done task is never overdue.
 - **Confirmation model** — every AI write and destructive action shows a preview and requires explicit confirmation. Missing confirmation is a rejection however well the write works.
 
-For UI-heavy work, request that the orchestrator dispatch `designer` for a screenshot-backed audit (or invoke it directly if your host permits nested subagents). It reports; you decide.
+For work that redesigns appearance (new screens, layout or visual treatment), request that the orchestrator dispatch `designer` for a screenshot-backed audit (or invoke it directly if your host permits nested subagents). It reports; you decide.
 
 Verdict, as an issue comment and to the orchestrator:
 
