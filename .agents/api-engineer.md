@@ -5,7 +5,7 @@ description: Implements API-tier and deployment issues. Writes code and tests; c
 
 # API Engineer
 
-You implement one API-tier issue. You do NOT commit until the lane's gates cover the final reviewed state: tester PASS on the light lane, tester PASS **and** PM ACCEPTED on the full lane.
+You implement one API-tier issue. You do NOT commit; the orchestrator commits your reviewed work once the lane's gates cover it: tester PASS on the light lane, tester PASS **and** PM ACCEPTED on the full lane.
 
 Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 4 and 5 govern this tier. Read `docs/PROCESS.md` for the lanes and the pipeline. Read spec sections by number, not the whole spec. Input: an issue number and the orchestrator's handoff block.
 
@@ -30,19 +30,12 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 4 and 5
    ```
    For database/migration work from #22, run `uv run alembic upgrade head` against disposable empty databases and check relevant upgrades on SQLite and PostgreSQL. #1 is not blocked on #22. Record unavailable/not-applicable checks and their reason/milestone. If you touched schemas, regenerate the web tier's types and check for drift — a schema change that breaks the committed types is acceptance criterion 21 failing.
 5. **Update the issue.** Tick completed criteria, then comment with: files changed, migrations added, test counts, coverage, the commands you ran and their results, what works, known limitations.
-6. **Report to the orchestrator. Do not commit.** Send the handoff block from `docs/PROCESS.md`: issue and lane, absolute cwd, branch, base and head SHA, commands with results, pending `[HUMAN]` criteria. That is git state — never copy a worktree, `.venv` or tarball into `.tmp/` as an artifact. Wait for the lane's reviewers.
-7. **Handle feedback** — fix, re-run step 4, report back. Repeat until PASS.
-8. **Commit, only after the lane's gates pass**, on `agent/issue-N` — no push, no merge. Confirm staged content matches the verdicts; any later edit invalidates affected reviews and requires renewed verification:
-   ```bash
-   git commit -m "feat: short imperative subject
-
-   Closes #N"
-   ```
-   Use `Refs #N` instead if a `[HUMAN]` criterion keeps the issue open.
+6. **Report to the orchestrator. Do not commit.** Send the handoff block from `docs/PROCESS.md`: issue and lane, absolute cwd, branch, base and head SHA, commands with results, pending `[HUMAN]` criteria, and a proposed `<type>: <subject>` commit line. That is git state — never copy a worktree, `.venv` or tarball into `.tmp/` as an artifact. Wait for the lane's reviewers.
+7. **Handle feedback** — fix, re-run the affected checks, report back. Repeat until PASS. The orchestrator commits the reviewed state with your proposed subject (`Closes #N`, or `Refs #N` while a `[HUMAN]` criterion is pending); you do not commit.
 
 ## Rules
 
-- No commit before the lane's gates pass; only the orchestrator pushes.
+- Never commit, merge or push; the orchestrator does, after the lane's gates pass.
 - Tests first for application changes; use the process's explicit bootstrap/documentation checks where applicable.
 - Read narrowly. The issue, this file, `AGENTS.md`, `docs/PROCESS.md`, and the spec sections the issue cites. Nothing else unless the work needs it.
 - Never skip a migration for a model change.

@@ -12,13 +12,13 @@ Not every issue earns the same ceremony. Pick the lane from what the issue touch
 
 | Lane | Applies to | Pipeline |
 | --- | --- | --- |
-| **Full** | Application code — `src/`, `apps/web/`, `apps/api/`, migrations, the contract, deployment | PM grooms → engineer → tester → PM accepts → orchestrator merges |
-| **Light** | Documentation, agent/role definitions, harness and process configuration, CI config, lint/format config | Orchestrator writes criteria on the issue → engineer → tester → orchestrator merges |
+| **Full** | A change the user can observe — features, bug fixes, copy, layout, deadline or other business rules — plus the API contract, persisted data/migrations, security and deployment | PM grooms → engineer → tester → PM accepts → orchestrator commits and merges |
+| **Light** | Behavior-preserving refactors (moves, splits, renames, extractions) proven by the existing suites; documentation, agent/role definitions, harness, process, CI, lint/format config | Orchestrator writes criteria on the issue → engineer → tester → orchestrator commits and merges |
 | **Direct** | A typo, a dead link, a stale sentence in a doc — no behavior, no configuration | Orchestrator edits, commits, merges. No dispatch. |
 
-Light lane skips PM grooming and PM acceptance; the tester gate is never skipped. If light-lane work turns out to change behavior or configuration an application depends on, stop and re-run it as full lane.
+The lane follows **what the user could notice**, not which directory changes. A refactor qualifies for the light lane only when it changes no observable behavior, weakens or deletes no test assertion, and the existing unit and e2e suites cover the moved code. A PM acceptance review of an unchanged screen checks nothing, so it is skipped. The tester gate is never skipped.
 
-Escalate a lane when in doubt. Never quietly downgrade one to save time.
+If light-lane work turns out to change behavior, copy, the contract or configuration an application depends on, stop and re-run it as full lane. Escalate when in doubt; never quietly downgrade — state the lane and the reason in the first handoff.
 
 ## Lifecycle
 
@@ -32,7 +32,7 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 3. **Engineer implements** — code and tests, locally, no commit.
 4. **Tester** runs the applicable checks below and verifies every automated criterion. PASS or FAIL.
 5. **PM accepts** (full lane) from the user's perspective: flow, copy, empty/loading/error states, accessibility, spec consistency.
-6. **Engineer commits** on the issue branch, only after the lane's gates cover the final reviewed state; the orchestrator merges and pushes.
+6. **Orchestrator commits** the reviewed state on the issue branch, using the subject the engineer proposed in its handoff, only after the lane's gates cover that exact state; then it merges and pushes. Re-dispatching an engineer only to run `git commit` costs a cold agent start and adds no review.
 7. **On-call** observes CI. Dormant until #10 creates the workflow.
 
 ## Agents
@@ -77,9 +77,9 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 
 ## Orchestrator
 
-- It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
+- It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, commits reviewed states, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
 - File intake immediately, with a concrete reproduction or quoted context. Do not wait for the user to ask.
-- Launch agents non-blocking unless the result blocks the next action.
+- Launch agents non-blocking unless the result blocks the next action. Continue an agent that still holds the context (Claude `SendMessage`, a Codex follow-up) instead of spawning a fresh one for the same role and issue — for example, return a FAIL to the engineer who wrote the code.
 - Cap three active agents; two when more than one will run a suite.
 - Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
 - Respect dependencies: API issues need #1, `apps/web/` paths need #7, database writes need #21 and #22, LLM calls need #37.
@@ -96,6 +96,7 @@ branch:   agent/issue-N
 base:     <base SHA>    head: <HEAD SHA, or "uncommitted">
 commands: <each command, cwd, result, test count, coverage>
 pending:  <[HUMAN] criteria, or none>
+commit:   <proposed "<type>: <subject>" — engineer handoffs only>
 ```
 
 Reviewers reproduce the state from that, in the given cwd:
@@ -120,21 +121,39 @@ Select checks from actual files, scripts and issue scope. Record each command, c
 
 | Work | Required verification |
 | --- | --- |
-| Documentation and agent configuration only | Diff/whitespace checks, links and paths, role frontmatter and symlink targets, discovery where supported, and a walkthrough of each affected workflow. No application launch, coverage, or new harness. Record discovery limitations and verify explicit role dispatch. |
-| Web bootstrap before #8/#9 | Existing lint, TypeScript and build checks; targeted observable checks for the change. Vitest/coverage unavailable until #8, E2E until #9. #2–#7 must not build those harnesses early to pass review. |
-| Web application once harnesses exist | `bun run test`, `bun run test:coverage` (≥80%), `bun run lint`, `bunx tsc --noEmit`, `bun run build`; relevant `bun run e2e` after #9, plus inspected desktop and mobile screenshots for visible changes. Use package scripts, not Bun's built-in test runner. |
-| API from #1 | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected health/startup and integration checks. #1 establishes and runs its harness but does not require migrations from #22. |
+| Documentation and agent configuration only | Diff/whitespace checks, links and paths, role frontmatter and symlink targets, discovery where supported, and a walkthrough of each affected workflow. No application launch, coverage, or new harness. |
+| Web application | `bun run verify` from `apps/web` — coverage run (it runs every Vitest test and enforces ≥80%), lint, typecheck and build in one command. `bun run e2e` whenever routes, components, hooks, the API client or browser flows change. Browser evidence beyond that follows the evidence ladder below. Use package scripts, not Bun's built-in test runner. |
+| API | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected health/startup and integration checks. |
 | Database/migration work from #22 | Apply the history to disposable empty databases with `uv run alembic upgrade head`; verify affected upgrades and SQLite/PostgreSQL compatibility. Never point verification at production data. |
 
-Run web commands from the worktree root before #7 or `apps/web` after it; API commands from `apps/api`. Inspect package scripts before choosing a command. Tests precede implementation once the relevant harness exists. An issue creating a harness (#1, #8, #9, #22) verifies its new commands in that same issue. Build/runtime configuration changes use their tier's checks — the documentation row is not a waiver for executable configuration. Cross-contract changes verify both tiers and check OpenAPI type drift. Launch only the affected services.
+Run web commands from `apps/web` and API commands from `apps/api`. Tests precede implementation for application changes. An issue creating a harness (#22) verifies its new commands in that same issue. Build/runtime configuration changes use their tier's checks — the documentation row is not a waiver for executable configuration. Cross-contract changes verify both tiers and check OpenAPI type drift. Launch only the affected services.
 
-For screenshots, visual audits and ad hoc browser checks, follow **`docs/BROWSER-VERIFICATION.md`**. Read it only when the issue actually needs a browser.
+**Run each gate once per role, on the final state.** While iterating, run targeted tests (`bun run test -- path`, `uv run pytest tests/x`). The engineer runs the full gate once before handing off and the tester runs it once independently. Re-run only what a later edit invalidates. A second run of an identical state is not more evidence.
+
+**Comparing against the base** — to show a warning or failure pre-exists, run the same command in the main checkout, which sits at the base SHA. Never `git stash` in a worktree: the stash stack is shared by every worktree and session.
+
+### Browser evidence ladder
+
+Screenshots are the most expensive evidence an agent can collect. Each image costs thousands of tokens to read, and capturing one needs a running server, a browser session and waits for loading. Climb only as high as the change requires:
+
+1. **Committed Playwright specs are the evidence.** `bun run e2e` runs every flow on desktop (`chromium`) and mobile (`mobile-chromium`). For new or changed visible behavior, add or extend a spec that asserts roles, labels and visible text. Those assertions cover the deadline text and icons, the confirmation dialogs and empty states. The spec then keeps covering that behavior as a regression test.
+2. **Text snapshots for anything a spec cannot express.** An accessibility snapshot (`expect(locator).toMatchAriaSnapshot()` in a spec, or `snapshot`/`find` in the CLI) records structure, names and copy as a few hundred tokens of text.
+3. **Screenshots only when appearance is the point.** Capture them when the issue changes layout, color, spacing or responsive behavior, or when a spec fails and its failure screenshot needs reading. Capture only the screens that changed, one per viewport. Only the tester captures and reads them. The PM and designer reuse the tester's files under `.tmp/screenshots/` instead of recapturing.
+
+A behavior-preserving refactor, API work, or documentation stops at step 1 and needs no ad hoc browser session. For steps 2 and 3 outside a spec, follow **`docs/BROWSER-VERIFICATION.md`**. Read it only when you actually reach those steps.
 
 ## Merging — local only, no PRs
 
 Never `gh pr create` or `gh pr merge`. The agent flow *is* the review. (Both are denied in `.claude/settings.json` so the rule is enforced, not merely stated.)
 
-After the engineer commits on `agent/issue-N`, from the main checkout:
+Commit the reviewed state in the issue worktree, with the engineer's proposed subject and no attribution trailer (binding rule 11):
+
+```bash
+git -C .worktrees/issue-N add -A && git -C .worktrees/issue-N diff --cached --stat   # matches the reviewed state
+git -C .worktrees/issue-N commit -m "<type>: <subject>" -m "Closes #N"
+```
+
+Then, from the main checkout:
 
 ```bash
 git fetch origin && git status          # clean, and HEAD == origin/main
@@ -142,7 +161,7 @@ git merge --no-ff agent/issue-N -m "Merge agent/issue-N: <subject> (#N)"
 git push origin main
 ```
 
-`(#N)` is the issue number; there are no PR numbers. The engineer's commit body carries `Closes #N`, so the push auto-closes it. Use `Refs #N` instead for pending `[HUMAN]` work or a CI repair. Then dispatch on-call if CI exists.
+`(#N)` is the issue number; there are no PR numbers. The commit body carries `Closes #N`, so the push auto-closes it. Use `Refs #N` instead for pending `[HUMAN]` work or a CI repair. Then dispatch on-call if CI exists.
 
 Before merging, confirm the lane's verdicts cover the committed state. If main advanced, return the integrated result for affected verification and acceptance; do not resolve conflicts and push under stale verdicts. On-call repairs follow this same pipeline and are merged and pushed only by the orchestrator.
 

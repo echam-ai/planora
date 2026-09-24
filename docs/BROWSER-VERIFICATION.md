@@ -1,10 +1,12 @@
 # Agent-Driven Browser Verification
 
-Read this only when an issue needs a browser: UI screenshots, a visual audit, or an observable check that nothing else can make. API, database, deployment and documentation work never needs it.
+Read this only when an issue reaches step 2 or 3 of the **browser evidence ladder** in `docs/PROCESS.md`, meaning it needs a text snapshot or a screenshot that the committed Playwright specs cannot provide. A refactor, API, database, deployment or documentation change never needs it.
 
-Playwright CLI is the default tool for local browser exploration. Named sessions, reference-based actions and targeted snapshots give durable evidence at far less context cost than a browser MCP. Once #9 exists, committed Playwright Test flows through `bun run e2e` remain the authoritative regression gate; a CLI walkthrough complements it and never replaces it.
+**Prefer a spec over a session.** If a check is worth making, it is usually worth keeping. Add it to `apps/web/e2e/` as a Playwright Test assertion (`getByRole`, `toHaveText`, `toMatchAriaSnapshot`) and run it with `bun run e2e -- <file>`. That path uses Playwright's bundled Chromium, which is installed and works on this host. It checks desktop and mobile in one run and leaves a regression test behind. Delete a throwaway spec before handoff if it should not be committed.
 
-Host tool availability and permissions still govern execution. Use Chrome MCP or another browser tool only when Playwright CLI cannot exercise a capability the criterion requires, after a real CLI attempt. Record the required capability, the attempted command, the observation, the chosen fallback and the resulting evidence. A failed first selector or an ambiguous target is not a capability limitation. If no tool verifies a criterion, leave it unverified — a fallback never turns missing evidence into a pass.
+**Known host limitation (checked 2026-09-24).** `@playwright/cli` 0.1.21 cannot start a browser here. Its default `chrome` channel is not installed (`/opt/google/chrome/chrome` is missing). A `chromium` config fails because the CLI expects a different Chromium build from the one Playwright Test installed. Do not spend a verification run debugging this. Use a spec. Retry the CLI only if a newer version is adopted through its own issue.
+
+When you do use the CLI or a browser tool, the rule still holds: record the required capability, the attempted command, what you saw and the evidence it produced. A failed first selector is not a capability limitation. If no tool verifies a criterion, leave it unverified — a fallback never turns missing evidence into a pass.
 
 ## Setup
 
@@ -55,7 +57,7 @@ For a flow that needs login state across commands, open the installed stable Chr
 .tmp/pwcli find "Active tasks"
 .tmp/pwcli snapshot main --depth=5
 
-# Capture both viewports to named files, then read each PNG.
+# Only when appearance is the point (ladder step 3): capture both viewports, then read each PNG.
 .tmp/pwcli resize 1280 720
 .tmp/pwcli screenshot --filename="$work/board-desktop.png"
 .tmp/pwcli resize 390 844
@@ -72,7 +74,7 @@ For a flow that needs login state across commands, open the installed stable Chr
 
 Choose `N` from the applicable list and inspect that specific request. A long request list is not a substitute for checking the one result that matters.
 
-Prefer `find`, an element snapshot or a depth-limited snapshot over repeated full-page dumps. Keep console and request excerpts brief. **Read every saved screenshot with the host's image viewer** and record what is visibly present — creating a PNG is not visual verification.
+Prefer `find`, an element snapshot or a depth-limited snapshot over repeated full-page dumps. Keep console and request excerpts brief. Capture a screenshot only for ladder step 3, and only of the changed screen. Read every screenshot you save and record what is visibly present — creating a PNG is not visual verification. Wait for the loaded state first; the mock API adds 250–600 ms of latency, and a skeleton capture has to be taken again.
 
 ## Drag and drop
 
