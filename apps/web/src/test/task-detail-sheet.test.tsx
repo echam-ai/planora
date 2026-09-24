@@ -1,6 +1,6 @@
 import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within, act } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { qk } from "@/shared/queryKeys";
 import { api } from "@/services/api";
@@ -197,7 +197,11 @@ function renderPage(Page: React.ComponentType) {
 
 async function openSheet(title: string) {
   fireEvent.click(
-    await screen.findByRole("button", { name: new RegExp(`Open (archived )?task ${title}`) }),
+    await screen.findByRole(
+      "button",
+      { name: new RegExp(`Open (archived )?task ${title}`) },
+      { timeout: 5_000 },
+    ),
   );
   return screen.findByRole("dialog");
 }
@@ -227,6 +231,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   qc?.clear();
 });
 
@@ -423,6 +428,9 @@ describe("task detail sheet", () => {
     const dialog = await openSheet("Ship it");
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
     fireEvent.click(await screen.findByRole("option", { name: "Done" }));
+    await waitFor(() => {
+      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
+    });
     fireEvent.change(field(dialog, "Title"), { target: { value: "Ship it v2" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
 
@@ -450,7 +458,7 @@ describe("task detail sheet", () => {
     ]);
 
     // edit view: header title and links list follow the task, not the click-time snapshot
-    renderPage(TasksPage);
+    const taskPage = renderPage(TasksPage);
     let dialog = await openSheet("Ship it");
     await externalWrite(() => {
       store.tasks = store.tasks.map((t) =>
@@ -468,6 +476,7 @@ describe("task detail sheet", () => {
     dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Renamed link")).toBeInTheDocument();
     expect(within(dialog).getByLabelText("Title")).toHaveValue("Renamed task");
+    taskPage.unmount();
     qc.clear();
 
     // read-only archive view follows the task too

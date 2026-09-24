@@ -13,7 +13,7 @@ test("signs in and shows the three board columns", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Done" })).toBeVisible();
 });
 
-test("filters the board through its accessible controls", async ({ page }) => {
+test("combines multi-select board filters and clears them by keyboard", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Username").fill("demo");
   await page.getByLabel("Password").fill("focusboard");
@@ -26,16 +26,37 @@ test("filters the board through its accessible controls", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeHidden();
   await page.getByLabel("Search tasks").fill("");
 
-  await choose(page, "Filter by category", "Personal");
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open task Draft Q4 hiring plan" })).toBeHidden();
-  await choose(page, "Filter by priority", "High");
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeVisible();
-  await choose(page, "Filter by deadline", "Due within 24h");
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeVisible();
-});
+  const work = page.getByRole("button", { name: "Work" });
+  const personal = page.getByRole("button", { name: "Personal" });
+  await expect(page.getByRole("group", { name: "Category" })).toBeVisible();
+  await work.focus();
+  await page.keyboard.press("Space");
+  await personal.press("Enter");
+  await page.getByRole("button", { name: "High" }).click();
+  await page.getByRole("button", { name: "Low" }).click();
+  await page.getByRole("button", { name: "Scheduled" }).click();
+  await page.getByRole("button", { name: "Overdue" }).click();
 
-async function choose(page: import("@playwright/test").Page, label: string, option: string) {
-  await page.getByRole("combobox", { name: label }).press("Space");
-  await page.getByRole("option", { name: option }).press("Enter");
-}
+  await expect(work).toHaveAttribute("aria-pressed", "true");
+  await expect(personal).toHaveAttribute("aria-pressed", "true");
+  await expect(work.locator("svg")).toBeVisible();
+  await expect(personal.locator("svg")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open task Ship the search-quality review deck" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Open task Write the weekly status update" }),
+  ).toBeHidden();
+
+  await page.getByRole("button", { name: "Overdue" }).press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Open task Ship the search-quality review deck" }),
+  ).toBeHidden();
+  await page.getByRole("button", { name: "Clear all filters" }).press("Enter");
+  await expect(page.getByLabel("Search tasks")).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open task Write the weekly status update" }),
+  ).toBeVisible();
+});

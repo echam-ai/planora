@@ -16,13 +16,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BoardColumn } from "@/features/tasks/components/BoardColumn";
-import { BoardFilters, type BoardDeadlineFilter } from "@/features/tasks/components/BoardFilters";
+import { BoardFilters } from "@/features/tasks/components/BoardFilters";
+import {
+  emptyBoardFilters,
+  filterTasks,
+  type BoardFiltersState,
+} from "@/features/tasks/boardFilters";
 import { TaskCardContent } from "@/features/tasks/components/TaskCard";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
-import { getDeadlineState } from "@/features/tasks/deadline";
 import { useTaskMutations, useTasks } from "@/features/tasks/hooks";
 import { useSettings } from "@/features/settings/hooks";
-import type { Task, TaskCategory, TaskPriority, TaskStatus } from "@/types";
+import type { Task, TaskStatus } from "@/types";
 
 const columns: { status: TaskStatus; label: string }[] = [
   { status: "todo", label: "To do" },
@@ -35,24 +39,14 @@ export function Board() {
   const { data: tasks, isLoading, isError, refetch, isFetching } = useTasks();
   const { move, reorder } = useTaskMutations();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState<TaskCategory | "all">("all");
-  const [priority, setPriority] = useState<TaskPriority | "all">("all");
-  const [deadline, setDeadline] = useState<BoardDeadlineFilter>("all");
+  const [filters, setFilters] = useState<BoardFiltersState>(emptyBoardFilters);
   const [active, setActive] = useState<Task | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = (tasks ?? []).find((task) => task.id === selectedId) ?? null;
   const timezone = settings?.timezone ?? "UTC";
   const filtered = useMemo(
-    () =>
-      (tasks ?? []).filter((task) => {
-        if (search && !`${task.title} ${task.content}`.toLowerCase().includes(search.toLowerCase()))
-          return false;
-        if (category !== "all" && task.category !== category) return false;
-        if (priority !== "all" && task.priority !== priority) return false;
-        if (deadline !== "all" && getDeadlineState(task) !== deadline) return false;
-        return true;
-      }),
-    [tasks, search, category, priority, deadline],
+    () => filterTasks(tasks ?? [], search, filters),
+    [tasks, search, filters],
   );
   const byStatus = (status: TaskStatus) =>
     filtered.filter((task) => task.status === status).sort((a, b) => a.position - b.position);
@@ -122,13 +116,9 @@ export function Board() {
         </div>
         <BoardFilters
           search={search}
-          category={category}
-          priority={priority}
-          deadline={deadline}
+          filters={filters}
           onSearchChange={setSearch}
-          onCategoryChange={setCategory}
-          onPriorityChange={setPriority}
-          onDeadlineChange={setDeadline}
+          onFiltersChange={setFilters}
         />
         {isLoading && (
           <div className="grid gap-4 md:grid-cols-3">
