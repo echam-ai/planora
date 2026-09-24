@@ -242,9 +242,8 @@ describe("mock API client characterization", () => {
     if (!scheduleAction) throw new Error("Expected a schedule proposal");
     expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBeNull();
     await resolve(mockApiClient.confirmChatAction(scheduleAction.id));
-    expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBe(
-      "2026-09-25T07:00:00.000Z",
-    );
+    const expectedLocalDeadline = new Date("2026-09-25T15:00:00").toISOString();
+    expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBe(expectedLocalDeadline);
 
     const update = await resolve(
       mockApiClient.sendChatMessage("make it high 'Tidy the garage shelves'"),
