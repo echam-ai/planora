@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useChatMutations, useConversation } from "@/hooks/useApi";
+import { useChatMutations, useConversation } from "@/features/chat/hooks";
 import type { ChatAction } from "@/types";
 import { cn } from "@/lib/utils";
 

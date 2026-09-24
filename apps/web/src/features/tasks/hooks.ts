@@ -1,21 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
-import type { AppSettings, TaskDraft, TaskStatus } from "@/types";
-
-export const qk = {
-  session: ["session"] as const,
-  settings: ["settings"] as const,
-  tasks: ["tasks"] as const,
-  archive: (search: string, page: number) => ["archive", search, page] as const,
-  archivedTask: (id: string) => ["archive", "task", id] as const,
-  conversation: ["conversation"] as const,
-};
-
-export const useSession = () =>
-  useQuery({ queryKey: qk.session, queryFn: () => api.getSession(), staleTime: 60_000 });
-
-export const useSettings = () =>
-  useQuery({ queryKey: qk.settings, queryFn: () => api.getSettings() });
+import { qk } from "@/shared/queryKeys";
+import type { TaskDraft, TaskStatus } from "@/types";
 
 export const useTasks = () => useQuery({ queryKey: qk.tasks, queryFn: () => api.listTasks() });
 
@@ -34,9 +20,6 @@ export const useArchivedTask = (id: string | null) =>
     enabled: id !== null,
     retry: false,
   });
-
-export const useConversation = () =>
-  useQuery({ queryKey: qk.conversation, queryFn: () => api.getCurrentConversation() });
 
 export function useTaskMutations() {
   const qc = useQueryClient();
@@ -85,40 +68,6 @@ export function useTaskMutations() {
     purge: useMutation({
       mutationFn: (id: string) => api.permanentlyDeleteTask(id),
       onSuccess: invalidate,
-    }),
-  };
-}
-
-export function useSettingsMutations() {
-  const qc = useQueryClient();
-  return {
-    save: useMutation({
-      mutationFn: (patch: Partial<AppSettings>) => api.updateSettings(patch),
-      onSuccess: (s) => qc.setQueryData(qk.settings, s),
-    }),
-    changePassword: useMutation({
-      mutationFn: ({ current, next }: { current: string; next: string }) =>
-        api.changePassword(current, next),
-    }),
-  };
-}
-
-export function useChatMutations() {
-  const qc = useQueryClient();
-  const sync = (conv: unknown) => {
-    qc.setQueryData(qk.conversation, conv);
-    qc.invalidateQueries({ queryKey: qk.tasks });
-  };
-  return {
-    send: useMutation({ mutationFn: (text: string) => api.sendChatMessage(text), onSuccess: sync }),
-    reset: useMutation({ mutationFn: () => api.startNewConversation(), onSuccess: sync }),
-    confirm: useMutation({
-      mutationFn: (actionId: string) => api.confirmChatAction(actionId),
-      onSuccess: sync,
-    }),
-    reject: useMutation({
-      mutationFn: (actionId: string) => api.rejectChatAction(actionId),
-      onSuccess: sync,
     }),
   };
 }

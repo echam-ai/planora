@@ -1,4 +1,4 @@
-import { getDeadlineState } from "@/lib/deadline";
+import { getDeadlineState } from "@/features/tasks/deadline";
 import { uid } from "@/lib/id";
 import {
   ApiError,

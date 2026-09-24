@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
-import { useSession } from "@/hooks/useApi";
+import { useSession } from "@/features/auth/hooks";
 import { APP_NAME } from "@/types";
 
 export const Route = createFileRoute("/")({

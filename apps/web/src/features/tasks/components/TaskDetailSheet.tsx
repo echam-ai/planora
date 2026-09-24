@@ -19,16 +19,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { TaskForm } from "@/components/TaskForm";
+import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { MarkdownPreview } from "@/lib/markdown";
-import { formatInZone } from "@/lib/deadline";
+import { formatInZone } from "@/features/tasks/deadline";
 import {
   CategoryBadge,
   PriorityBadge,
   categoryLabels,
   priorityLabels,
-} from "@/components/TaskBadges";
-import { useTaskMutations } from "@/hooks/useApi";
+} from "@/features/tasks/components/TaskBadges";
+import { useTaskMutations } from "@/features/tasks/hooks";
 import type { Task, TaskDraft, TaskStatus } from "@/types";
 
 export function TaskDetailSheet({
