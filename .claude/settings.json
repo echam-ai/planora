@@ -13,6 +13,10 @@
       "Bash(git add*)",
       "Bash(git commit*)",
       "Bash(git fetch*)",
+      "Bash(git -C * status*)",
+      "Bash(git -C * diff*)",
+      "Bash(git -C * add*)",
+      "Bash(git -C * commit*)",
       "Bash(git worktree list*)",
       "Bash(git worktree add*)",
       "Bash(gh issue view*)",
@@ -33,6 +37,9 @@
       "Bash(bun run format*)",
       "Bash(bun install*)",
       "Bash(bunx tsc*)",
+      "Bash(bun x tsc*)",
+      "Bash(bun run typecheck*)",
+      "Bash(bun run verify*)",
       "Bash(bun x --package @playwright/cli*)",
       "Bash(.tmp/pwcli*)",
       "Bash(uv run pytest*)",
@@ -60,7 +67,8 @@
       "Bash(git push -f*)",
       "Bash(git reset --hard*)",
       "Edit(**/routeTree.gen.ts)",
-      "Edit(**/schema.gen.ts)"
+      "Edit(**/schema.gen.ts)",
+      "Bash(git stash*)"
     ]
   }
 }

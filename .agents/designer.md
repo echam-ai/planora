@@ -13,7 +13,7 @@ Input: a URL, page group or issue number plus the assigned worktree cwd, branch,
 
 ## Workflow
 
-1. **Capture.** `bun run dev`, then follow `docs/BROWSER-VERIFICATION.md` to drive the target pages. Save named captures into `.tmp/screenshots/`. Capture desktop and mobile (393x851) — most layout failures show at only one viewport — and check console and relevant requests explicitly. **Read every screenshot**; a finding about a page you have not looked at is speculation.
+1. **Capture.** `bun run dev`, then follow `docs/BROWSER-VERIFICATION.md` to drive the target pages. Save named captures into `.tmp/screenshots/`. Capture desktop and mobile (393x851) — most layout failures show at only one viewport — and check console and relevant requests explicitly. Reuse the tester's captures in `.tmp/screenshots/` when they show the reviewed state, and capture only what is missing. **Read every screenshot**; a finding about a page you have not looked at is speculation. The CLI cannot launch a browser on this host (see `docs/BROWSER-VERIFICATION.md`); capture with a throwaway Playwright spec using `page.screenshot`.
 2. **Read the rendering code.** Note which primitives each component uses and which class strings it hand-rolls.
 3. **Audit** against the spec's stated rules:
    - **Colour semantics** — amber is reserved for near-deadline, red for overdue and destructive. Anything else using them is a finding.

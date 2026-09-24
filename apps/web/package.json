@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "verify": "vitest run --coverage && eslint . && tsc --noEmit && vite build",
     "e2e": "playwright test",
     "format": "prettier --write ."
   },

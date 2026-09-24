@@ -7,9 +7,16 @@ Merge issue #$1. Orchestrator-only — no agent runs this.
 
 ## 1. Confirm the gates cover the committed state
 
-The lane decides which verdicts are required: full lane needs tester PASS **and** PM ACCEPTED; light lane needs tester PASS. Both must cite the commit you are about to merge, not an earlier state. If anything was edited after a verdict, stop and return it for re-verification.
+The lane decides which verdicts are required: full lane needs tester PASS **and** PM ACCEPTED; light lane needs tester PASS. Both must cover the exact state you are about to commit and merge, not an earlier one. If anything was edited after a verdict, stop and return it for re-verification.
 
-## 2. Merge from the main checkout
+## 2. Commit, then merge from the main checkout
+
+Commit the reviewed state in the worktree with the engineer's proposed subject, if not yet committed:
+
+```bash
+git -C .worktrees/issue-$1 add -A && git -C .worktrees/issue-$1 diff --cached --stat
+git -C .worktrees/issue-$1 commit -m "<type>: <subject>" -m "Closes #$1"
+```
 
 ```bash
 git fetch origin && git status          # clean, and HEAD == origin/main
