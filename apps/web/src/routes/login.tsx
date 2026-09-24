@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/services/api";
-import { useSession } from "@/hooks/useApi";
+import { useSession } from "@/features/auth/hooks";
 import { credentialsSchema, type Credentials } from "@/shared/domain/session";
 import { APP_NAME } from "@/types";
 

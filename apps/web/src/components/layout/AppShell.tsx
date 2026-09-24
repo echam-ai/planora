@@ -10,8 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChatPanel } from "@/components/ChatPanel";
-import { CreateTaskDialog } from "@/components/CreateTaskDialog";
+import { ChatPanel } from "@/features/chat/components/ChatPanel";
+import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { api } from "@/services/api";
 import { APP_NAME } from "@/types";
 import { cn } from "@/lib/utils";

@@ -19,9 +19,9 @@ import {
 import { useDroppable } from "@dnd-kit/core";
 import { Loader2, Search, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
-import { SortableTaskCard, TaskCardContent } from "@/components/TaskCard";
-import { TaskDetailSheet } from "@/components/TaskDetailSheet";
+import { AppShell } from "@/components/layout/AppShell";
+import { SortableTaskCard, TaskCardContent } from "@/features/tasks/components/TaskCard";
+import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,8 +33,9 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { useSettings, useTasks, useTaskMutations } from "@/hooks/useApi";
-import { getDeadlineState } from "@/lib/deadline";
+import { useSettings } from "@/features/settings/hooks";
+import { useTasks, useTaskMutations } from "@/features/tasks/hooks";
+import { getDeadlineState } from "@/features/tasks/deadline";
 import type { Task, TaskCategory, TaskPriority, TaskStatus } from "@/types";
 
 export const Route = createFileRoute("/tasks")({

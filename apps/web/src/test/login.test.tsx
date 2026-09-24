@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-router", async () => {
   return { ...actual, useNavigate: () => navigate };
 });
 
-vi.mock("@/hooks/useApi", () => ({
+vi.mock("@/features/auth/hooks", () => ({
   useSession: () => ({ data: null }),
 }));
 

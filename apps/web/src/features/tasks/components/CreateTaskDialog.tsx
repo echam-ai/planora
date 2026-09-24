@@ -11,8 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TaskForm, emptyDraft } from "@/components/TaskForm";
-import { useTaskMutations } from "@/hooks/useApi";
+import { TaskForm, emptyDraft } from "@/features/tasks/components/TaskForm";
+import { useTaskMutations } from "@/features/tasks/hooks";
 import { api } from "@/services/api";
 import type { TaskDraft } from "@/types";
 

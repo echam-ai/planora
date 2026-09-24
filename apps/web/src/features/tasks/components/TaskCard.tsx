@@ -2,8 +2,12 @@ import { GripVertical, Link2, StickyNote } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
-import { formatInZone, getDeadlineState } from "@/lib/deadline";
-import { CategoryBadge, DeadlineBadge, PriorityBadge } from "@/components/TaskBadges";
+import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
+import {
+  CategoryBadge,
+  DeadlineBadge,
+  PriorityBadge,
+} from "@/features/tasks/components/TaskBadges";
 import type { Task } from "@/types";
 
 export function TaskCardContent({

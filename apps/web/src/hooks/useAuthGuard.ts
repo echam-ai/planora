@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useSession } from "./useApi";
+import { useSession } from "@/features/auth/hooks";
 
 export function useAuthGuard() {
   const navigate = useNavigate();

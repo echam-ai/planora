@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { RotateCcw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { AppShell } from "@/components/AppShell";
+import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useSettings, useSettingsMutations } from "@/hooks/useApi";
+import { useSettings, useSettingsMutations } from "@/features/settings/hooks";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { api } from "@/services/api";
 

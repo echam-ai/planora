@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ArchiveRestore, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { AppShell } from "@/components/AppShell";
-import { TaskCardContent } from "@/components/TaskCard";
-import { TaskDetailSheet } from "@/components/TaskDetailSheet";
+import { AppShell } from "@/components/layout/AppShell";
+import { TaskCardContent } from "@/features/tasks/components/TaskCard";
+import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useArchive, useArchivedTask, useSettings, useTaskMutations } from "@/hooks/useApi";
+import { useArchive, useArchivedTask, useTaskMutations } from "@/features/tasks/hooks";
+import { useSettings } from "@/features/settings/hooks";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { ApiError, type Task } from "@/types";
 

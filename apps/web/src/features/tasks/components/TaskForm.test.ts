@@ -6,7 +6,7 @@ import {
   dirtyDraftPatch,
   draftToValues,
   type TaskFormValues,
-} from "@/components/TaskForm";
+} from "@/features/tasks/components/TaskForm";
 
 const values: TaskFormValues = {
   title: "  Ship it  ",

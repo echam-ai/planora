@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarClock, CalendarOff, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { deadlineLabels } from "@/lib/deadline";
+import { deadlineLabels } from "@/features/tasks/deadline";
 import type { DeadlineState, TaskCategory, TaskPriority } from "@/types";
 
 const categoryClass: Record<TaskCategory, string> = {

@@ -2,7 +2,7 @@ import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { qk } from "@/hooks/useApi";
+import { qk } from "@/shared/queryKeys";
 import { api } from "@/services/api";
 import { ApiError, type Conversation, type Task, type TaskDraft } from "@/types";
 
