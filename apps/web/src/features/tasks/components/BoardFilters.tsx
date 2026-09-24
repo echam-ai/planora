@@ -1,37 +1,76 @@
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Check, Search, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  emptyBoardFilters,
+  type BoardDeadlineFilter,
+  type BoardFiltersState,
+} from "@/features/tasks/boardFilters";
 import type { TaskCategory, TaskPriority } from "@/types";
 
-export type BoardDeadlineFilter = "all" | "due_soon" | "overdue" | "none";
+export type { BoardDeadlineFilter, BoardFiltersState } from "@/features/tasks/boardFilters";
 
 type Props = {
   search: string;
-  category: TaskCategory | "all";
-  priority: TaskPriority | "all";
-  deadline: BoardDeadlineFilter;
+  filters: BoardFiltersState;
   onSearchChange: (value: string) => void;
-  onCategoryChange: (value: TaskCategory | "all") => void;
-  onPriorityChange: (value: TaskPriority | "all") => void;
-  onDeadlineChange: (value: BoardDeadlineFilter) => void;
+  onFiltersChange: (value: BoardFiltersState) => void;
 };
 
-export function BoardFilters({
-  search,
-  category,
-  priority,
-  deadline,
-  onSearchChange,
-  onCategoryChange,
-  onPriorityChange,
-  onDeadlineChange,
-}: Props) {
+const categoryOptions: { value: TaskCategory; label: string }[] = [
+  { value: "work", label: "Work" },
+  { value: "personal", label: "Personal" },
+  { value: "study", label: "Study" },
+  { value: "other", label: "Other" },
+];
+const priorityOptions: { value: TaskPriority; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+const deadlineOptions: { value: BoardDeadlineFilter; label: string }[] = [
+  { value: "none", label: "No deadline" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "due_soon", label: "Near deadline" },
+  { value: "overdue", label: "Overdue" },
+];
+
+function toggle<T>(values: T[], value: T): T[] {
+  return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];
+}
+
+function FilterGroup<T extends string>({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: { value: T; label: string }[];
+  selected: T[];
+  onToggle: (value: T) => void;
+}) {
+  return (
+    <fieldset className="flex flex-wrap items-center gap-1.5">
+      <legend className="sr-only">{label}</legend>
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          type="button"
+          variant={selected.includes(option.value) ? "default" : "outline"}
+          size="sm"
+          aria-pressed={selected.includes(option.value)}
+          onClick={() => onToggle(option.value)}
+        >
+          {selected.includes(option.value) && <Check className="size-3.5" aria-hidden />}
+          {option.label}
+        </Button>
+      ))}
+    </fieldset>
+  );
+}
+
+export function BoardFilters({ search, filters, onSearchChange, onFiltersChange }: Props) {
   return (
     <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-card">
       <div className="relative min-w-52 flex-1">
@@ -48,49 +87,41 @@ export function BoardFilters({
         />
       </div>
       <SlidersHorizontal className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden />
-      <Select
-        value={category}
-        onValueChange={(value) => onCategoryChange(value as TaskCategory | "all")}
+      <FilterGroup
+        label="Category"
+        options={categoryOptions}
+        selected={filters.categories}
+        onToggle={(value) =>
+          onFiltersChange({ ...filters, categories: toggle(filters.categories, value) })
+        }
+      />
+      <FilterGroup
+        label="Priority"
+        options={priorityOptions}
+        selected={filters.priorities}
+        onToggle={(value) =>
+          onFiltersChange({ ...filters, priorities: toggle(filters.priorities, value) })
+        }
+      />
+      <FilterGroup
+        label="Deadline"
+        options={deadlineOptions}
+        selected={filters.deadlines}
+        onToggle={(value) =>
+          onFiltersChange({ ...filters, deadlines: toggle(filters.deadlines, value) })
+        }
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          onSearchChange("");
+          onFiltersChange(emptyBoardFilters);
+        }}
       >
-        <SelectTrigger className="w-36" aria-label="Filter by category">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All categories</SelectItem>
-          <SelectItem value="work">Work</SelectItem>
-          <SelectItem value="personal">Personal</SelectItem>
-          <SelectItem value="study">Study</SelectItem>
-          <SelectItem value="other">Other</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
-        value={priority}
-        onValueChange={(value) => onPriorityChange(value as TaskPriority | "all")}
-      >
-        <SelectTrigger className="w-36" aria-label="Filter by priority">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All priorities</SelectItem>
-          <SelectItem value="high">High</SelectItem>
-          <SelectItem value="medium">Medium</SelectItem>
-          <SelectItem value="low">Low</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
-        value={deadline}
-        onValueChange={(value) => onDeadlineChange(value as BoardDeadlineFilter)}
-      >
-        <SelectTrigger className="w-36" aria-label="Filter by deadline">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Any deadline</SelectItem>
-          <SelectItem value="due_soon">Due within 24h</SelectItem>
-          <SelectItem value="overdue">Overdue</SelectItem>
-          <SelectItem value="none">No deadline</SelectItem>
-        </SelectContent>
-      </Select>
+        Clear all filters
+      </Button>
     </div>
   );
 }
