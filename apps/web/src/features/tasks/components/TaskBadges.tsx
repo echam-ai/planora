@@ -66,7 +66,10 @@ export function DeadlineBadge({
 }) {
   const Icon = deadlineIcon[state];
   return (
-    <span className={cn(chip, deadlineClass[state])}>
+    <span
+      className={cn(chip, deadlineClass[state])}
+      aria-label={`Deadline state: ${deadlineLabels[state]}`}
+    >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       {deadlineLabels[state]}
       {text ? <span className="font-normal opacity-80">· {text}</span> : null}

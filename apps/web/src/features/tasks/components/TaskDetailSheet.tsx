@@ -21,9 +21,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { MarkdownPreview } from "@/lib/markdown";
-import { formatInZone } from "@/features/tasks/deadline";
+import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
 import {
   CategoryBadge,
+  DeadlineBadge,
   PriorityBadge,
   categoryLabels,
   priorityLabels,
@@ -139,6 +140,7 @@ export function TaskDetailSheet({
               <div className="flex flex-wrap gap-2">
                 <CategoryBadge category={task.category} />
                 <PriorityBadge priority={task.priority} />
+                <DeadlineBadge state={getDeadlineState(task)} />
               </div>
               <p className="whitespace-pre-wrap text-sm">{task.content}</p>
               <dl className="grid gap-2 text-sm">
@@ -185,6 +187,7 @@ export function TaskDetailSheet({
             </div>
           ) : (
             <>
+              <DeadlineBadge state={getDeadlineState(task)} />
               {task.urls.length > 0 && (
                 <ul className="space-y-1 text-sm">
                   {task.urls.map((u) => (

@@ -483,6 +483,7 @@ describe("task detail sheet", () => {
     renderPage(ArchivePage);
     dialog = await openSheet("Archived task");
     expect(await within(dialog).findByText("Archived content")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
     await externalWrite(() => {
       store.tasks = store.tasks.map((t) =>
         t.id === "z" ? { ...t, content: "Rewritten while open" } : t,
@@ -510,7 +511,9 @@ describe("task detail sheet", () => {
     await waitFor(() => {
       expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
     });
-    expect(within(dialog).getByText("Completed")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
+    expect(field(dialog, "Deadline (optional)")).not.toHaveValue("");
+    expect(within(dialog).getByText("Completed", { selector: "dt" })).toBeInTheDocument();
 
     fireEvent.change(field(dialog, "Content"), { target: { value: "Edited content" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
@@ -526,6 +529,34 @@ describe("task detail sheet", () => {
     // the card renders the Completed state, not a timing-based deadline state
     const card = await screen.findByRole("button", { name: "Open task Weekly status update" });
     expect(within(card).getByText("Completed")).toBeInTheDocument();
+  });
+
+  it("returns a saved Done task with a past deadline to To do as overdue", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Recover the overdue task",
+        status: "done",
+        deadlineAt: iso(-DAY),
+        completedAt: iso(-2 * DAY),
+      }),
+    ]);
+    renderPage(TasksPage);
+
+    let dialog = await openSheet("Recover the overdue task");
+    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Todo" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith("a", { status: "todo" }));
+    expect(requireTask("a")).toMatchObject({ status: "todo", completedAt: null });
+    const card = await screen.findByRole("button", { name: "Open task Recover the overdue task" });
+    expect(within(card).getByText("Overdue")).toBeInTheDocument();
+
+    dialog = await openSheet("Recover the overdue task");
+    expect(within(dialog).getByLabelText("Deadline state: Overdue")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Completed", { selector: "dt" })).not.toBeInTheDocument();
   });
 
   it("AC 12: Delete acts only on explicit confirmation", async () => {

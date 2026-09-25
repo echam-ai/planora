@@ -26,3 +26,20 @@ test("scenario 7: the board reproduction at 390×844", async ({ page }) => {
   const reopened = await openTaskSheet(page, RENAMED);
   await expect(reopened.getByRole("combobox", { name: "Status" })).toHaveText(/In Progress/);
 });
+
+test("scenario 8: a Done task remains visibly completed at 390×844", async ({ page }) => {
+  const DONE_TASK = "Write the weekly status update";
+  await signIn(page);
+
+  const doneCard = column(page, "Done").getByRole("button", {
+    name: `Open task ${DONE_TASK}`,
+    exact: true,
+  });
+  await expect(doneCard).toContainText("Completed");
+
+  const dialog = await openTaskSheet(page, DONE_TASK);
+  await expect(statusControl(page)).toHaveText(/Done/);
+  await expect(dialog.getByLabel("Deadline (optional)")).not.toHaveValue("");
+  await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
+  await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
+});
