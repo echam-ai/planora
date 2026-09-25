@@ -1,11 +1,12 @@
 import asyncio
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from planora_api.main import create_app
 
 
-def test_health_returns_ok():
+def test_health_returns_ok(valid_env: pytest.MonkeyPatch):
     async def request_health():
         async with AsyncClient(
             transport=ASGITransport(app=create_app()), base_url="http://test"
