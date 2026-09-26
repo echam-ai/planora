@@ -18,9 +18,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME
+from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import Response
 
 from planora_api.api.deps import get_current_time
 from planora_api.security import password as password_security
@@ -34,8 +34,7 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
 
 
 async def _login_from(app: FastAPI, host: str, password: str) -> Response:
-    transport = ASGITransport(app=app, client=(host, 12345))
-    async with AsyncClient(transport=transport, base_url="https://test") as client:
+    async with make_client(app, client=(host, 12345)) as client:
         return await client.post(
             "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": password}
         )

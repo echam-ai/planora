@@ -13,9 +13,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME
+from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
 from fastapi import APIRouter, Depends, FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import AsyncClient, Response
 
 from planora_api.api.deps import get_current_time, require_session
 from planora_api.db.models import AuthSession
@@ -38,7 +38,7 @@ def test_session_read_with_valid_cookie_matches_login_response(
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             login_response = await _login(client)
             session_response = await client.get("/api/v1/auth/session")
             return login_response, session_response
@@ -68,7 +68,7 @@ def test_session_read_returns_null_when_the_account_no_longer_exists(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             client.cookies.set("planora_session", token)
             return await client.get("/api/v1/auth/session")
 
@@ -91,7 +91,7 @@ def test_session_read_returns_null_for_missing_or_garbage_cookie(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             client.cookies.update(cookies)
             return await client.get("/api/v1/auth/session")
 
@@ -115,9 +115,7 @@ def test_session_read_returns_null_for_a_cookie_minted_under_a_different_secret(
     app_before_rotation = app_factory()
 
     async def login_and_capture_token() -> str:
-        async with AsyncClient(
-            transport=ASGITransport(app=app_before_rotation), base_url="https://test"
-        ) as client:
+        async with make_client(app_before_rotation) as client:
             login_response = await _login(client)
             assert login_response.status_code == 200
             token = client.cookies.get("planora_session")
@@ -130,9 +128,7 @@ def test_session_read_returns_null_for_a_cookie_minted_under_a_different_secret(
     app_after_rotation = app_factory()
 
     async def read_with_old_cookie() -> Response:
-        async with AsyncClient(
-            transport=ASGITransport(app=app_after_rotation), base_url="https://test"
-        ) as client:
+        async with make_client(app_after_rotation) as client:
             client.cookies.set("planora_session", token)
             return await client.get("/api/v1/auth/session")
 
@@ -150,7 +146,7 @@ def test_expired_session_reads_as_signed_out_even_with_cookie_still_sent(
     app.dependency_overrides[get_current_time] = lambda: login_time
 
     async def login_and_capture() -> str:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             await _login(client)
             token = client.cookies.get("planora_session")
             assert token is not None
@@ -163,7 +159,7 @@ def test_expired_session_reads_as_signed_out_even_with_cookie_still_sent(
     app.dependency_overrides[get_current_time] = lambda: past_expiry
 
     async def read_after_expiry() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             client.cookies.set("planora_session", token)
             return await client.get("/api/v1/auth/session")
 
@@ -179,7 +175,7 @@ def test_logout_with_valid_cookie_clears_session_and_cookie(
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             await _login(client)
             logout_response = await client.post("/api/v1/auth/logout")
             session_after = await client.get("/api/v1/auth/session")
@@ -203,7 +199,7 @@ def test_logout_is_idempotent_with_no_cookie_and_with_an_already_logged_out_cook
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             no_cookie_response = await client.post("/api/v1/auth/logout")
 
             await _login(client)
@@ -236,7 +232,7 @@ def test_require_session_rejects_missing_invalid_and_expired_cookies_and_passes_
     app.include_router(_test_router)
 
     async def scenario() -> tuple[Response, Response, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             missing = await client.get("/api/v1/__test_only/protected")
 
             client.cookies.set("planora_session", "garbage")
@@ -269,7 +265,7 @@ def test_require_session_rejects_an_expired_cookie(
     app.dependency_overrides[get_current_time] = lambda: login_time
 
     async def login_and_capture() -> str:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             await _login(client)
             token = client.cookies.get("planora_session")
             assert token is not None
@@ -280,7 +276,7 @@ def test_require_session_rejects_an_expired_cookie(
     app.dependency_overrides[get_current_time] = lambda: login_time + timedelta(days=15)
 
     async def call_protected() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             client.cookies.set("planora_session", token)
             return await client.get("/api/v1/__test_only/protected")
 

@@ -19,6 +19,19 @@ uv run uvicorn planora_api.main:create_app --factory --host 127.0.0.1 --port 800
 `{"status":"ok"}` once configuration is valid. The web application runs
 independently.
 
+### `APP_ORIGIN`
+
+Set this to exactly the origin your browser shows in its address bar —
+scheme, host and port, no path. Every state-changing request (any method
+except `GET`, `HEAD` and `OPTIONS`) is rejected with `403
+CSRF_ORIGIN_MISMATCH` unless its `Origin` header matches this value (see
+`security/csrf.py`). In local development that's the web dev server's
+printed Local URL, normally `http://localhost:5173`; in production it's the public
+`https://` origin the browser actually loads, e.g.
+`https://planora.example`. `localhost` and `127.0.0.1` are different
+origins to a browser, so pick the one you actually type into the address
+bar — the other one will be rejected.
+
 ## Database
 
 SQLAlchemy models live in `src/planora_api/db/`; Alembic migrations live in

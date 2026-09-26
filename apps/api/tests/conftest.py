@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from alembic.config import Config
 from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
@@ -45,6 +46,44 @@ VALID_ENV: dict[str, str] = {
     "APP_ORIGIN": "https://planora.example",
     "DEFAULT_TIMEZONE": "Europe/Paris",
 }
+
+# --- Shared test client (#26) -----------------------------------------------
+#
+# Issue #26's CSRF middleware rejects every non-GET/HEAD/OPTIONS request
+# whose `Origin` header doesn't match `APP_ORIGIN`. `VALID_ENV["APP_ORIGIN"]`
+# above is the origin every test using `valid_env` actually runs under, so
+# `make_client` sends it as the default `Origin` header on every request —
+# no test needs to set it by hand, and none disables the middleware to get
+# green.
+
+DEFAULT_ORIGIN = VALID_ENV["APP_ORIGIN"]
+
+
+def make_client(
+    app: FastAPI,
+    *,
+    origin: str | None = DEFAULT_ORIGIN,
+    base_url: str = "https://test",
+    client: tuple[str, int] | None = None,
+    raise_app_exceptions: bool = True,
+) -> AsyncClient:
+    """An `httpx.AsyncClient` against `app`, sending `origin` as the
+    `Origin` header by default on every request it makes.
+
+    A test exercising the CSRF middleware itself passes `origin=None` (no
+    header at all) or an explicit foreign value; every other test gets a
+    client whose unsafe-method requests pass the check for free. `client`
+    is forwarded to `ASGITransport` to simulate a request from a given
+    source IP (see `tests/integration/test_auth_rate_limit.py`);
+    `raise_app_exceptions=False` is for a test that needs to inspect an
+    unhandled-exception response instead of letting it propagate.
+    """
+    transport_kwargs: dict[str, object] = {"raise_app_exceptions": raise_app_exceptions}
+    if client is not None:
+        transport_kwargs["client"] = client
+    transport = ASGITransport(app=app, **transport_kwargs)
+    headers = {"Origin": origin} if origin is not None else None
+    return AsyncClient(transport=transport, base_url=base_url, headers=headers)
 
 
 @pytest.fixture
