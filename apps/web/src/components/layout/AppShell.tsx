@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <Button onClick={() => setCreateOpen(true)} className="min-h-11">
+            <Button onClick={() => setCreateOpen(true)} className="min-h-11" aria-label="Add task">
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Add task</span>
             </Button>

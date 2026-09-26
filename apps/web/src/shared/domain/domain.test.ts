@@ -124,25 +124,51 @@ describe("shared form schemas", () => {
     expect(
       taskFormSchema.parse({
         ...draft,
-        deadlineLocal: "",
+        deadlineDate: "",
+        deadlineTime: "",
         urls: [{ id: "url_1", url: "https://example.com", label: "" }],
-      }).deadlineLocal,
+      }).deadlineDate,
     ).toBe("");
     expect(
-      taskFormSchema.safeParse({ ...draft, title: "   ", deadlineLocal: "" }).error?.issues[0]
-        ?.message,
+      taskFormSchema.safeParse({
+        ...draft,
+        title: "   ",
+        deadlineDate: "",
+        deadlineTime: "",
+      }).error?.issues[0]?.message,
     ).toBe("Give the task a title.");
     expect(
-      taskFormSchema.safeParse({ ...draft, content: "   ", deadlineLocal: "" }).error?.issues[0]
-        ?.message,
+      taskFormSchema.safeParse({
+        ...draft,
+        content: "   ",
+        deadlineDate: "",
+        deadlineTime: "",
+      }).error?.issues[0]?.message,
     ).toBe("Describe what needs to happen.");
     expect(
       taskFormSchema.safeParse({
         ...draft,
-        deadlineLocal: "",
+        deadlineDate: "",
+        deadlineTime: "",
         urls: [{ id: "url_1", url: "not a URL" }],
       }).error?.issues[0]?.message,
     ).toBe("Enter a full URL starting with http:// or https://");
+  });
+
+  it("rejects a deadline with only a date or only a time", () => {
+    const base = { ...draft, urls: [] as never[] };
+    expect(
+      taskFormSchema.safeParse({ ...base, deadlineDate: "2026-09-25", deadlineTime: "" }).error
+        ?.issues[0]?.message,
+    ).toBe("Enter both a date and a time, or leave both empty.");
+    expect(
+      taskFormSchema.safeParse({ ...base, deadlineDate: "", deadlineTime: "17:00" }).error
+        ?.issues[0]?.message,
+    ).toBe("Enter both a date and a time, or leave both empty.");
+    expect(
+      taskFormSchema.safeParse({ ...base, deadlineDate: "2026-09-25", deadlineTime: "17:00" })
+        .success,
+    ).toBe(true);
   });
 
   it("keeps login messages and forwards surrounding spaces unchanged", () => {

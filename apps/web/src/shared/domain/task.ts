@@ -30,19 +30,32 @@ export const taskSchema = taskDraftSchema.extend({
   archivedAt: z.string().nullable(),
 });
 
-export const taskFormSchema = z.object({
-  title: z.string().trim().min(1, "Give the task a title."),
-  content: z.string().trim().min(1, "Describe what needs to happen."),
-  category: taskCategorySchema,
-  priority: taskPrioritySchema,
-  deadlineLocal: z.string().optional().or(z.literal("")),
-  markdownNote: z.string(),
-  urls: z.array(
-    taskUrlSchema.extend({
-      url: z.string().trim().url("Enter a full URL starting with http:// or https://"),
-    }),
-  ),
-});
+export const taskFormSchema = z
+  .object({
+    title: z.string().trim().min(1, "Give the task a title."),
+    content: z.string().trim().min(1, "Describe what needs to happen."),
+    category: taskCategorySchema,
+    priority: taskPrioritySchema,
+    /** Wall-clock date and time as entered; converted to `deadlineAt` with the
+     * Settings timezone (never the browser's) by `valuesToDraft`. */
+    deadlineDate: z.string().optional().or(z.literal("")),
+    deadlineTime: z.string().optional().or(z.literal("")),
+    markdownNote: z.string(),
+    urls: z.array(
+      taskUrlSchema.extend({
+        url: z.string().trim().url("Enter a full URL starting with http:// or https://"),
+      }),
+    ),
+  })
+  .superRefine((values, ctx) => {
+    if (!!values.deadlineDate !== !!values.deadlineTime) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["deadlineTime"],
+        message: "Enter both a date and a time, or leave both empty.",
+      });
+    }
+  });
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 export type TaskCategory = z.infer<typeof taskCategorySchema>;

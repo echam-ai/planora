@@ -57,7 +57,8 @@ test("scenario 6: a Done task with a past deadline stays Done and completed (spe
 
   dialog = await openTaskSheet(page, DONE_TASK);
   await expect(statusControl(page)).toHaveText(/Done/);
-  await expect(dialog.getByLabel("Deadline (optional)")).not.toHaveValue("");
+  await expect(dialog.getByLabel("Date")).not.toHaveText("Pick a date");
+  await expect(dialog.getByLabel("Time")).not.toHaveValue("");
   await expect(dialog.getByLabel("Content")).toHaveValue("Edited content for the weekly update");
   await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
   expect(await readCompletedAt(page, DONE_TASK)).toBe(completedBefore);
@@ -111,7 +112,8 @@ test("scenario 8: a Done task without a deadline remains completed", async ({ pa
 
   const dialog = await openTaskSheet(page, DONE_TASK);
   await expect(statusControl(page)).toHaveText(/Done/);
-  await expect(dialog.getByLabel("Deadline (optional)")).toHaveValue("");
+  await expect(dialog.getByLabel("Date")).toHaveText("Pick a date");
+  await expect(dialog.getByLabel("Time")).toHaveValue("");
   await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
   await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
 });

@@ -440,6 +440,23 @@ describe("task detail sheet", () => {
     expect(Object.keys(patch).sort()).toEqual(["status", "title"]);
   });
 
+  it("issue #19 rework: clears an existing deadline through the Clear deadline button and shows no deadline on the card", async () => {
+    installClient([makeTask({ id: "a", title: "Ship it", deadlineAt: iso(3 * DAY) })]);
+    renderPage(TasksPage);
+
+    const dialog = await openSheet("Ship it");
+    const clearButton = await within(dialog).findByRole("button", { name: "Clear deadline" });
+    fireEvent.click(clearButton);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
+    expect(updateTask).toHaveBeenCalledWith("a", { deadlineAt: null });
+    expect(requireTask("a").deadlineAt).toBeNull();
+
+    const card = await screen.findByRole("button", { name: "Open task Ship it" });
+    expect(within(card).getByText("No deadline")).toBeInTheDocument();
+  });
+
   it("AC 3: sheet chrome and the read-only archive view track the current task", async () => {
     installClient([
       makeTask({
@@ -512,7 +529,10 @@ describe("task detail sheet", () => {
       expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
     });
     expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
-    expect(field(dialog, "Deadline (optional)")).not.toHaveValue("");
+    expect(within(dialog).getByRole("button", { name: /^Date/ })).not.toHaveTextContent(
+      "Pick a date",
+    );
+    expect(within(dialog).getByLabelText("Time")).not.toHaveValue("");
     expect(within(dialog).getByText("Completed", { selector: "dt" })).toBeInTheDocument();
 
     fireEvent.change(field(dialog, "Content"), { target: { value: "Edited content" } });
