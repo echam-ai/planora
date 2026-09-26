@@ -1,10 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Trash2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import { CalendarIcon, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -14,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useSettings } from "@/features/settings/hooks";
 import { uid } from "@/lib/id";
 import { MarkdownPreview } from "@/lib/markdown";
 import { taskFormSchema, type TaskFormValues } from "@/shared/domain/task";
@@ -21,32 +26,53 @@ import type { TaskCategory, TaskDraft, TaskPriority, TaskStatus } from "@/types"
 
 export type { TaskFormValues } from "@/shared/domain/task";
 
-export function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const DATE_KEY = "yyyy-MM-dd";
+
+/** The deadline's wall-clock date and time in `timezone`, for form prefill.
+ * Never derived from the browser's local zone. */
+export function toZonedDateTime(
+  iso: string | null,
+  timezone: string,
+): { date: string; time: string } {
+  if (!iso) return { date: "", time: "" };
+  return {
+    date: formatInTimeZone(iso, timezone, DATE_KEY),
+    time: formatInTimeZone(iso, timezone, "HH:mm"),
+  };
 }
 
-export function draftToValues(draft: TaskDraft): TaskFormValues {
+/** A wall-clock date and time, interpreted in `timezone`, as the UTC instant
+ * it represents. `null` when either half is missing. */
+export function zonedDateTimeToIso(
+  date: string | undefined,
+  time: string | undefined,
+  timezone: string,
+): string | null {
+  if (!date || !time) return null;
+  return fromZonedTime(`${date}T${time}:00`, timezone).toISOString();
+}
+
+export function draftToValues(draft: TaskDraft, timezone: string): TaskFormValues {
+  const { date, time } = toZonedDateTime(draft.deadlineAt, timezone);
   return {
     title: draft.title,
     content: draft.content,
     category: draft.category,
     priority: draft.priority,
-    deadlineLocal: toLocalInput(draft.deadlineAt),
+    deadlineDate: date,
+    deadlineTime: time,
     markdownNote: draft.markdownNote,
     urls: draft.urls.map((u) => ({ id: u.id, url: u.url, label: u.label ?? "" })),
   };
 }
 
-export function valuesToDraft(values: TaskFormValues): TaskDraft {
+export function valuesToDraft(values: TaskFormValues, timezone: string): TaskDraft {
   return {
     title: values.title.trim(),
     content: values.content.trim(),
     category: values.category as TaskCategory,
     priority: values.priority as TaskPriority,
-    deadlineAt: values.deadlineLocal ? new Date(values.deadlineLocal).toISOString() : null,
+    deadlineAt: zonedDateTimeToIso(values.deadlineDate, values.deadlineTime, timezone),
     markdownNote: values.markdownNote,
     urls: values.urls.map((u) => ({
       id: u.id,
@@ -70,14 +96,17 @@ function hasDirty(node: unknown): boolean {
 export function dirtyDraftPatch(
   values: TaskFormValues,
   dirtyFields: TaskFormDirty,
+  timezone: string,
 ): Partial<TaskDraft> {
-  const draft = valuesToDraft(values);
+  const draft = valuesToDraft(values, timezone);
   const patch: Partial<TaskDraft> = {};
   if (hasDirty(dirtyFields.title)) patch.title = draft.title;
   if (hasDirty(dirtyFields.content)) patch.content = draft.content;
   if (hasDirty(dirtyFields.category)) patch.category = draft.category;
   if (hasDirty(dirtyFields.priority)) patch.priority = draft.priority;
-  if (hasDirty(dirtyFields.deadlineLocal)) patch.deadlineAt = draft.deadlineAt;
+  if (hasDirty(dirtyFields.deadlineDate) || hasDirty(dirtyFields.deadlineTime)) {
+    patch.deadlineAt = draft.deadlineAt;
+  }
   if (hasDirty(dirtyFields.markdownNote)) patch.markdownNote = draft.markdownNote;
   if (hasDirty(dirtyFields.urls)) patch.urls = draft.urls;
   return patch;
@@ -105,7 +134,48 @@ type Props = {
   extraActions?: React.ReactNode;
 };
 
-export function TaskForm({
+/**
+ * The deadline field converts wall-clock entry with the Settings timezone,
+ * never the browser's — so nothing renders until that timezone is known, and
+ * a failed load never falls back to the browser zone or a hard-coded "UTC".
+ * `useSettings()` is the `ApiClient` seam; it is never read from the mock
+ * module directly, so the later HTTP swap (#35) changes nothing here.
+ */
+export function TaskForm(props: Props) {
+  const { data: settings, isError, refetch } = useSettings();
+  if (isError) {
+    return (
+      <div className="space-y-5">
+        <p role="alert" className="text-sm text-destructive">
+          Couldn't load your timezone. Deadlines can't be entered until it loads.
+        </p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={props.onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!settings) {
+    return (
+      <div className="space-y-5" aria-busy="true">
+        <p className="text-sm text-muted-foreground">Loading your timezone…</p>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="outline" onClick={props.onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  return <TaskFormFields {...props} timezone={settings.timezone} />;
+}
+
+function TaskFormFields({
   defaultDraft = emptyDraft,
   submitLabel,
   submitting,
@@ -114,34 +184,51 @@ export function TaskForm({
   status,
   onStatusChange,
   extraActions,
-}: Props) {
+  timezone,
+}: Props & { timezone: string }) {
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskFormSchema),
-    defaultValues: draftToValues(defaultDraft),
+    defaultValues: draftToValues(defaultDraft, timezone),
     mode: "onSubmit",
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "urls" });
   const note = form.watch("markdownNote");
+  const deadlineDate = form.watch("deadlineDate");
+  const deadlineTime = form.watch("deadlineTime");
+  const [dateOpen, setDateOpen] = useState(false);
+  const dateTriggerRef = useRef<HTMLButtonElement>(null);
   // Reading formState in render subscribes to it, so these stay current.
   const { errors, dirtyFields } = form.formState;
+  const hasDeadline = !!deadlineDate || !!deadlineTime;
+  const deadlineDescribedBy = ["deadline-timezone", errors.deadlineTime ? "deadline-error" : null]
+    .filter(Boolean)
+    .join(" ");
+  const clearDeadline = () => {
+    form.setValue("deadlineDate", "", { shouldDirty: true, shouldValidate: true });
+    form.setValue("deadlineTime", "", { shouldDirty: true, shouldValidate: true });
+    // Clearing unmounts the button the user just activated; without this the
+    // dialog container is left holding focus and Tab order restarts.
+    dateTriggerRef.current?.focus();
+  };
 
   // The task can change underneath an open form (board drag, confirmed chat
-  // write). Track it: fields the user edited keep their values, every other
-  // field takes the new task value, and only edited fields reach Save's patch.
-  const appliedDefaults = useRef(JSON.stringify(draftToValues(defaultDraft)));
+  // write, a Settings timezone change). Track it: fields the user edited keep
+  // their values, every other field takes the new task/timezone value, and
+  // only edited fields reach Save's patch.
+  const appliedDefaults = useRef(JSON.stringify(draftToValues(defaultDraft, timezone)));
   useEffect(() => {
-    const incoming = draftToValues(defaultDraft);
+    const incoming = draftToValues(defaultDraft, timezone);
     const serialised = JSON.stringify(incoming);
     if (serialised === appliedDefaults.current) return;
     appliedDefaults.current = serialised;
     form.reset(incoming, { keepDirtyValues: true });
-  }, [defaultDraft, form]);
+  }, [defaultDraft, timezone, form]);
 
   return (
     <form
       className="space-y-5"
       onSubmit={form.handleSubmit((values) =>
-        onSubmit(valuesToDraft(values), dirtyDraftPatch(values, dirtyFields)),
+        onSubmit(valuesToDraft(values, timezone), dirtyDraftPatch(values, dirtyFields, timezone)),
       )}
       noValidate
     >
@@ -213,15 +300,102 @@ export function TaskForm({
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="deadline">Deadline (optional)</Label>
-          <Input
-            id="deadline"
-            type="datetime-local"
-            className="min-h-11"
-            {...form.register("deadlineLocal")}
-          />
-        </div>
+        <fieldset className="m-0 min-w-0 space-y-2 border-0 p-0 sm:col-span-2">
+          <legend className="text-sm font-medium leading-none">Deadline (optional)</legend>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <Label
+                id="deadline-date-label"
+                htmlFor="deadline-date"
+                className="text-xs font-normal text-muted-foreground"
+              >
+                Date
+              </Label>
+              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="deadline-date"
+                    ref={dateTriggerRef}
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 w-[9.5rem] justify-start gap-2 font-normal"
+                    aria-labelledby="deadline-date-label deadline-date-value"
+                    aria-invalid={!!errors.deadlineTime}
+                    aria-describedby={deadlineDescribedBy}
+                  >
+                    <CalendarIcon className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+                    <span id="deadline-date-value">
+                      {deadlineDate ? format(parseISO(deadlineDate), "d MMM yyyy") : "Pick a date"}
+                    </span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0"
+                  align="start"
+                  onOpenAutoFocus={(e) => {
+                    // Radix would otherwise focus the popover's first tabbable
+                    // element (a month-nav button); focus the calendar's
+                    // roving-tabindex day instead, so arrow keys work at once.
+                    e.preventDefault();
+                    (e.currentTarget as HTMLElement)
+                      .querySelector<HTMLButtonElement>(
+                        '[data-slot="calendar"] button[tabindex="0"]',
+                      )
+                      ?.focus();
+                  }}
+                >
+                  <Calendar
+                    mode="single"
+                    autoFocus
+                    selected={deadlineDate ? parseISO(deadlineDate) : undefined}
+                    onSelect={(day) => {
+                      form.setValue("deadlineDate", day ? format(day, "yyyy-MM-dd") : "", {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                      // Move focus back to the trigger before the popover
+                      // unmounts the calendar, so keyboard focus never lands
+                      // on <body> and Tab keeps flowing to the time field.
+                      dateTriggerRef.current?.focus();
+                      setDateOpen(false);
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="deadline-time" className="text-xs font-normal text-muted-foreground">
+                Time
+              </Label>
+              <Input
+                id="deadline-time"
+                type="time"
+                className="min-h-11 w-28"
+                aria-invalid={!!errors.deadlineTime}
+                aria-describedby={deadlineDescribedBy}
+                {...form.register("deadlineTime")}
+              />
+            </div>
+            {hasDeadline && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-11 gap-1 px-2 text-muted-foreground hover:text-destructive"
+                onClick={clearDeadline}
+              >
+                <X className="h-4 w-4" aria-hidden /> Clear deadline
+              </Button>
+            )}
+          </div>
+          <p id="deadline-timezone" className="text-xs text-muted-foreground">
+            Interpreted in {timezone}
+          </p>
+          {errors.deadlineTime && (
+            <p id="deadline-error" className="text-sm text-destructive">
+              {errors.deadlineTime.message}
+            </p>
+          )}
+        </fieldset>
         {status && onStatusChange && (
           <div className="space-y-2">
             <Label htmlFor="status">Status</Label>
