@@ -15,7 +15,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/features/tasks/deadline.ts"],
+      include: ["src/features/tasks/deadline.ts", "src/lib/markdown.tsx"],
       thresholds: {
         perFile: true,
         branches: 80,
