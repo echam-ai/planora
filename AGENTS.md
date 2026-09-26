@@ -46,7 +46,7 @@ Monorepo. The web app lives in `apps/web/` (moved there from the repository root
 
 ## Commands
 
-From `apps/web`: `bun run verify` is the whole unit gate: every Vitest test with coverage at 80% or more, then lint, typecheck and build. `bun run e2e` runs the Playwright flows on desktop and mobile. `bun run test -- <path>` is for iterating. From `apps/api`: `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`. `uv run alembic upgrade head` needs #22, so implement that issue rather than inventing a runner.
+From `apps/web`: `bun run verify` is the whole unit gate: every Vitest test with coverage enforced by the ratchet in `vitest.config.ts` (raised toward 80% by follow-up issues, not yet at 80% tier-wide), then lint, typecheck and build. `bun run e2e` runs the Playwright flows on desktop and mobile. `bun run test -- <path>` is for iterating. From `apps/api`: `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`. `uv run alembic upgrade head` needs #22, so implement that issue rather than inventing a runner.
 
 `bun` lives in `~/.bun/bin`, which a non-interactive agent shell may not have on `PATH`. If `bun` is not found, prefix the command with `PATH="$HOME/.bun/bin:$PATH"` rather than hunting for it. A fresh worktree needs `bun install` in `apps/web` before its first check.
 
