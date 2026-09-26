@@ -21,10 +21,38 @@ const navItems = [
   { to: "/archive", label: "Archive", icon: Archive },
 ] as const;
 
+// Tailwind `lg` — the breakpoint the aside/Sheet split below already uses.
+const DESKTOP_CHAT_BREAKPOINT = 1024;
+
+/**
+ * Whether the viewport is wide enough for the docked side panel.
+ *
+ * The mobile/tablet drawer must not mount its Radix dialog at this width: the
+ * dialog's overlay and focus-hiding side effects apply to the whole page
+ * regardless of which of the drawer's own elements are visually hidden by
+ * CSS, so the only way to keep them off the desktop layout is to not mount
+ * the Sheet there at all (see AppShell below).
+ */
+function useIsDesktopChat() {
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== "undefined" && window.innerWidth >= DESKTOP_CHAT_BREAKPOINT,
+  );
+
+  useEffect(() => {
+    const onResize = () => setIsDesktop(window.innerWidth >= DESKTOP_CHAT_BREAKPOINT);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  return isDesktop;
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [online, setOnline] = useState(true);
+  const isDesktopChat = useIsDesktopChat();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -124,7 +152,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           aria-hidden={!chatOpen}
         >
-          {chatOpen && (
+          {chatOpen && isDesktopChat && (
             <div className="sticky top-[65px] h-[calc(100vh-65px)]">
               <ChatPanel onClose={() => setChatOpen(false)} />
             </div>
@@ -132,13 +160,31 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
       </div>
 
-      {/* Mobile / tablet assistant drawer */}
-      <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-        <SheetContent side="right" className="w-full p-0 sm:max-w-md lg:hidden">
-          <SheetTitle className="sr-only">AI Assistant</SheetTitle>
-          <ChatPanel onClose={() => setChatOpen(false)} />
-        </SheetContent>
-      </Sheet>
+      {/* Mobile / tablet assistant drawer — mounted only below the desktop
+          breakpoint, so its Radix dialog (overlay, aria-hidden-the-rest-of-
+          the-page) never exists at desktop widths. */}
+      {!isDesktopChat && (
+        <Sheet open={chatOpen} onOpenChange={setChatOpen}>
+          <SheetContent
+            side="right"
+            // `w-[85%]`, not `w-full`: below the `sm` breakpoint this always
+            // leaves a strip of the overlay exposed so a real outside click
+            // has somewhere to land (criterion 6) while staying usable for
+            // chat even at 360px (~306px of panel width).
+            className="w-[85%] p-0 sm:max-w-md"
+            onCloseAutoFocus={(event) => {
+              // Radix only restores focus to a SheetTrigger; the header AI
+              // Assistant button toggles `chatOpen` directly instead (#57
+              // owns that button, so it is not wrapped in one here).
+              event.preventDefault();
+              document.querySelector<HTMLButtonElement>("header button[aria-pressed]")?.focus();
+            }}
+          >
+            <SheetTitle className="sr-only">AI Assistant</SheetTitle>
+            <ChatPanel onClose={() => setChatOpen(false)} />
+          </SheetContent>
+        </Sheet>
+      )}
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 flex border-t border-border bg-background md:hidden"
