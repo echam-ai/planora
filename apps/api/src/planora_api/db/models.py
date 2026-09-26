@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON as _JSON
-from sqlalchemy import Enum, Float, Text
+from sqlalchemy import CheckConstraint, Enum, Float, Integer, Text
 from sqlalchemy import Uuid as _Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -121,3 +121,62 @@ class Task(Base):
     archived_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime, nullable=True, default=None
     )
+
+
+class AppUser(Base):
+    """The single account row (issue #25, spec §3.1).
+
+    `CHECK (id = 1)` enforces exactly one account at the database layer, not
+    just in application code — a second row can never be inserted, on
+    SQLite or PostgreSQL. The table is named `app_user`, not `user`, because
+    `user` is a reserved word in PostgreSQL.
+
+    #25 creates this table but never inserts into it: #33's command calls
+    `db.auth_repository.upsert_app_user` to create the account on first run
+    and reset it later.
+    """
+
+    __tablename__ = "app_user"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_app_user_single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    username: Mapped[str] = mapped_column(Text, nullable=False)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class AuthSession(Base):
+    """A server-side session (issue #25).
+
+    `token_digest` stores only `HMAC-SHA256(SESSION_SECRET, token)` — never
+    the raw cookie token — so a database read alone cannot produce a working
+    cookie, and rotating `SESSION_SECRET` invalidates every session.
+    """
+
+    __tablename__ = "auth_session"
+
+    token_digest: Mapped[str] = mapped_column(Text, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now
+    )
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+
+
+class LoginFailure(Base):
+    """One failed login attempt, keyed by client IP (issue #25).
+
+    Rows outside the 15-minute rate-limit window are pruned on write by
+    `security/rate_limit.py`; this table is the only state behind the
+    limit, so it survives a process restart.
+    """
+
+    __tablename__ = "login_failure"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_ip: Mapped[str] = mapped_column(Text, nullable=False)
+    failed_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
