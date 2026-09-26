@@ -5,7 +5,10 @@ Uses the HTTPX `AsyncClient` against the real ASGI app, exactly like
 (via `seeded_user`) applies the Alembic migration to a disposable SQLite
 file under the repo's `.tmp/`, and `app_factory()` (see `conftest.py`)
 builds a fresh app per test against that same database through
-`DATABASE_URL`, disposing its engine at teardown.
+`DATABASE_URL`, disposing its engine at teardown. `make_client` (also
+`conftest.py`) sends the configured `APP_ORIGIN` as `Origin` by default —
+required since issue #26's CSRF middleware rejects any unsafe request
+without it.
 """
 
 from __future__ import annotations
@@ -15,9 +18,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME
+from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import AsyncClient, Response
 from sqlalchemy.orm import Session, sessionmaker
 
 from planora_api.security import password as password_security
@@ -41,7 +44,7 @@ def test_correct_credentials_return_200_with_cookie_and_body(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await _post_login(client, AUTH_USERNAME, AUTH_PASSWORD)
 
     response = _run(scenario)
@@ -78,7 +81,10 @@ def test_cookie_secure_flag_follows_app_origin(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        # `APP_ORIGIN` was just overridden above — send that same origin,
+        # not `make_client`'s `https://planora.example` default, or issue
+        # #26's CSRF middleware would reject this as a foreign origin.
+        async with make_client(app, origin=app_origin) as client:
             return await _post_login(client, AUTH_USERNAME, AUTH_PASSWORD)
 
     response = _run(scenario)
@@ -94,7 +100,7 @@ def test_wrong_password_returns_401_invalid_credentials_and_sets_no_cookie(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await _post_login(client, AUTH_USERNAME, "definitely-wrong")
 
     response = _run(scenario)
@@ -111,7 +117,7 @@ def test_unknown_username_returns_a_byte_identical_401_response(
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             wrong_password = await _post_login(client, AUTH_USERNAME, "definitely-wrong")
             unknown_user = await _post_login(client, "nobody", "whatever")
             return wrong_password, unknown_user
@@ -133,7 +139,7 @@ def test_login_with_no_app_user_returns_invalid_credentials(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await _post_login(client, "anyone", "anything")
 
     response = _run(scenario)
@@ -155,7 +161,7 @@ def test_each_login_outcome_calls_argon2_verify_exactly_once(
         return real_verify(password_hash, password)
 
     async def scenario() -> None:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             password_security.verify_password = counting_verify
             try:
                 call_count["n"] = 0
@@ -182,7 +188,7 @@ def test_session_fixation_login_rotates_the_token(
     app = app_factory()
 
     async def scenario() -> tuple[str, str, Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             await _post_login(client, AUTH_USERNAME, AUTH_PASSWORD)
             first_cookie = client.cookies.get("planora_session")
             assert first_cookie is not None
@@ -228,7 +234,7 @@ def test_a_successful_login_upgrades_a_hash_that_needs_rehashing(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await _post_login(client, AUTH_USERNAME, AUTH_PASSWORD)
 
     response = _run(scenario)

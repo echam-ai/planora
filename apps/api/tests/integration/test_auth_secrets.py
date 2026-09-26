@@ -12,9 +12,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from conftest import AUTH_USERNAME
+from conftest import AUTH_USERNAME, make_client
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import AsyncClient, Response
 
 SENTINEL = "SENTINEL-7f3a-do-not-log"
 
@@ -37,7 +37,7 @@ def test_no_response_ever_contains_password_hash_or_argon2_marker(
     app = app_factory()
 
     async def scenario() -> list[Response]:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             responses = [
                 await client.post(
                     "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": SENTINEL}
@@ -60,7 +60,7 @@ def test_422_with_missing_username_does_not_echo_the_sentinel_password(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             # `username` missing entirely; FastAPI's default 422 body would
             # otherwise include an `input` key holding this whole dict,
             # sentinel password included.
@@ -82,7 +82,7 @@ def test_422_with_malformed_body_does_not_echo_the_sentinel_password(
     app = app_factory()
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             # `password` present but the wrong type — still must not echo it.
             return await client.post(
                 "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": [SENTINEL]}
@@ -117,7 +117,7 @@ def test_login_attempts_leave_no_sentinel_or_token_in_captured_logs(
     caplog.set_level(logging.DEBUG)
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await make_request(client)
 
     _run(scenario)
@@ -140,7 +140,7 @@ def test_rate_limited_login_leaves_no_sentinel_or_token_in_captured_logs(
     caplog.set_level(logging.DEBUG)
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             for _ in range(5):
                 await client.post(
                     "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": SENTINEL}
@@ -172,7 +172,7 @@ def test_a_successful_login_never_logs_the_issued_session_token(
     caplog.set_level(logging.DEBUG)
 
     async def scenario() -> str:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             await client.post(
                 "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
             )

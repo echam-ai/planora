@@ -31,9 +31,9 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME
+from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
 from fastapi import APIRouter, Depends, FastAPI
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -78,7 +78,7 @@ def test_get_db_rolls_back_a_write_when_the_route_raises_api_error(
     app.include_router(_test_router)
 
     async def scenario() -> Response:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="https://test") as client:
+        async with make_client(app) as client:
             return await client.post("/api/v1/__test_only/write_then_error")
 
     response = _run(scenario)
@@ -118,8 +118,7 @@ def test_a_failing_commit_returns_an_error_status_not_2xx(
         # response we want to inspect — Starlette's own error middleware
         # still sends that response before re-raising for a caller that
         # wants the traceback, which is what the default `True` is for.
-        transport = ASGITransport(app=app, raise_app_exceptions=False)
-        async with AsyncClient(transport=transport, base_url="https://test") as client:
+        async with make_client(app, raise_app_exceptions=False) as client:
             return await client.post("/api/v1/__test_only/write_normally")
 
     response = _run(scenario)
@@ -159,8 +158,7 @@ def test_login_sends_no_set_cookie_when_its_final_commit_fails(
     async def scenario() -> Response:
         # See the sibling test above for why `raise_app_exceptions=False`
         # is needed here too.
-        transport = ASGITransport(app=app, raise_app_exceptions=False)
-        async with AsyncClient(transport=transport, base_url="https://test") as client:
+        async with make_client(app, raise_app_exceptions=False) as client:
             return await client.post(
                 "/api/v1/auth/login",
                 json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
