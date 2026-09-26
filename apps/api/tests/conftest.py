@@ -9,16 +9,18 @@ it and break those imports. One conftest, at `tests/`.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from alembic.config import Config
+from fastapi import FastAPI
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from planora_api.config import load_settings
 from planora_api.db.session import create_session_factory
+from planora_api.main import create_app
 
 # The seven variable names fixed by #21; #22, #25, #26, #37 and #43 rely on
 # these exact names.
@@ -126,3 +128,68 @@ def migrated_session_factory(
         # `create_session_factory` builds its own engine; dispose it here so
         # the test run doesn't leak pooled SQLite connections.
         session_factory.kw["bind"].dispose()
+
+
+# --- Auth fixtures (#25) -----------------------------------------------------
+
+AUTH_USERNAME = "owner"
+AUTH_PASSWORD = "correct horse battery staple"
+
+
+def seed_app_user(
+    session_factory: sessionmaker[Session],
+    *,
+    username: str = AUTH_USERNAME,
+    password: str = AUTH_PASSWORD,
+    now: object | None = None,
+) -> None:
+    """Create the single `app_user` row directly through the repository
+    function #25 provides for #33, so auth tests don't need a real signup
+    endpoint (there isn't one — #25 creates no user, see the issue)."""
+    from datetime import UTC, datetime
+
+    from planora_api.db import auth_repository
+    from planora_api.security.password import hash_password
+
+    if now is None:
+        now = datetime.now(UTC)
+    with session_factory() as session:
+        auth_repository.upsert_app_user(
+            session, username=username, password_hash=hash_password(password), now=now
+        )
+        session.commit()
+
+
+@pytest.fixture
+def seeded_user(
+    migrated_session_factory: sessionmaker[Session],
+) -> tuple[str, str]:
+    """The single account, seeded with `AUTH_USERNAME`/`AUTH_PASSWORD`."""
+    seed_app_user(migrated_session_factory)
+    return AUTH_USERNAME, AUTH_PASSWORD
+
+
+@pytest.fixture
+def app_factory() -> Iterator[Callable[[], FastAPI]]:
+    """A `create_app()` wrapper that disposes each built app's database
+    engine at teardown.
+
+    `create_app()` builds its own SQLAlchemy engine per call (via
+    `db.session.create_session_factory`), and nothing else disposes it —
+    unlike `migrated_session_factory` above, which explicitly disposes in
+    its own teardown. The auth integration tests call `create_app()` many
+    times each; without this, every pooled sqlite3 connection is only
+    closed whenever the garbage collector happens to run, which pytest
+    reports as a `ResourceWarning: unclosed database`.
+    """
+    built_apps: list[FastAPI] = []
+
+    def make_app() -> FastAPI:
+        app = create_app()
+        built_apps.append(app)
+        return app
+
+    yield make_app
+
+    for app in built_apps:
+        app.state.session_factory.kw["bind"].dispose()
