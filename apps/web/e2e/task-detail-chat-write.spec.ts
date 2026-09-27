@@ -26,7 +26,7 @@ const RENAMED = "Ship the review deck (v2)";
 test("scenario 8: a confirmed chat write is shown and not reverted by Save", async ({ page }) => {
   await signIn(page);
 
-  await page.locator("header button[aria-pressed]").click();
+  await page.getByRole("banner").getByRole("button", { name: "AI Assistant", exact: true }).click();
   const chat = page.getByRole("dialog", { name: "AI Assistant" });
   await expect(chat).toBeVisible();
   await chat.locator("textarea").fill(`Set priority low for "${TASK}"`);
