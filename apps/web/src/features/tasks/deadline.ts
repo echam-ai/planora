@@ -13,7 +13,7 @@ export function getDeadlineState(task: Task, now = new Date()): DeadlineState {
 export const deadlineLabels: Record<DeadlineState, string> = {
   none: "No deadline",
   scheduled: "Scheduled",
-  due_soon: "Due soon",
+  due_soon: "Near deadline",
   overdue: "Overdue",
   completed: "Completed",
 };

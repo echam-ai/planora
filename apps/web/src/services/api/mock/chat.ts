@@ -224,7 +224,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
         : "Nothing is overdue right now. Nice.",
     };
   }
-  if (lower.includes("due soon") || lower.includes("today")) {
+  if (lower.includes("due soon") || lower.includes("near deadline") || lower.includes("today")) {
     const hits = active.filter((task) => getDeadlineState(task) === "due_soon");
     return {
       ...base,

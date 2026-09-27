@@ -256,6 +256,18 @@ describe("mock API client characterization", () => {
     expect((await resolve(mockApiClient.getTask(task.id))).priority).toBe("high");
   });
 
+  it("answers 'near deadline' and 'due soon' questions with the same due-within-24-hours reply", async () => {
+    const nearDeadline = await resolve(mockApiClient.sendChatMessage("What is near deadline?"));
+    const nearDeadlineReply = nearDeadline.messages.at(-1)?.text;
+    expect(nearDeadlineReply).toMatch(/^Due within 24 hours:/);
+    expect(nearDeadlineReply).toContain("Renew passport");
+    expect(nearDeadlineReply).toContain("Fix flaky checkout integration test");
+    expect(nearDeadlineReply).toContain("Replace the kitchen tap washer");
+
+    const dueSoon = await resolve(mockApiClient.sendChatMessage("What is due soon?"));
+    expect(dueSoon.messages.at(-1)?.text).toBe(nearDeadlineReply);
+  });
+
   it("retains a pending proposed action when its confirmed mutation fails", async () => {
     const conversation = await resolve(mockApiClient.sendChatMessage("create task to buy oranges"));
     const action = conversation.messages.at(-1)?.action;

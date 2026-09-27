@@ -54,7 +54,7 @@ describe("deadline display helpers", () => {
     expect(deadlineLabels).toEqual({
       none: "No deadline",
       scheduled: "Scheduled",
-      due_soon: "Due soon",
+      due_soon: "Near deadline",
       overdue: "Overdue",
       completed: "Completed",
     });
