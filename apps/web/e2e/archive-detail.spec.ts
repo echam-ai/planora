@@ -16,6 +16,12 @@ test("archive detail is read-only and archive actions retain their confirmation 
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Archived task (read only)");
   await expect(dialog.getByLabel("Title")).toHaveCount(0);
+
+  // #68: the read-only view's deadline badge names itself only through
+  // rendered text — no "Deadline state:" accessible name.
+  await expect(dialog.locator('span:text-is("Completed")')).toMatchAriaSnapshot(
+    `- text: Completed`,
+  );
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
