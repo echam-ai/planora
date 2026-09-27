@@ -7,6 +7,7 @@ import uuid
 from fastapi import FastAPI, Request, Response
 
 from planora_api.api.v1.auth import router as auth_router
+from planora_api.api.v1.tasks import router as tasks_router
 from planora_api.config import load_settings
 from planora_api.db.session import create_session_factory
 from planora_api.errors import (
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
         auth_router,
         responses={422: VALIDATION_RESPONSE, 401: ERROR_RESPONSE, 429: ERROR_RESPONSE},
     )
+    app.include_router(tasks_router)
 
     @app.middleware("http")
     async def request_logging(request: Request, call_next: object) -> Response:
