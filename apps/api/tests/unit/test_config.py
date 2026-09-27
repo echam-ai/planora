@@ -191,6 +191,37 @@ def test_missing_dotenv_file_does_not_fail(valid_env: pytest.MonkeyPatch) -> Non
     assert settings.session_secret == VALID_ENV["SESSION_SECRET"]
 
 
+def test_log_level_defaults_to_info_when_unset(valid_env: pytest.MonkeyPatch) -> None:
+    valid_env.delenv("LOG_LEVEL", raising=False)
+
+    settings = load_settings()
+
+    assert settings.log_level == "INFO"
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "INFO", "WARNING", "ERROR", "debug", "Warning"])
+def test_log_level_accepts_the_four_supported_values_case_insensitively(
+    valid_env: pytest.MonkeyPatch, level: str
+) -> None:
+    valid_env.setenv("LOG_LEVEL", level)
+
+    settings = load_settings()
+
+    assert settings.log_level == level.upper()
+
+
+@pytest.mark.parametrize("level", ["TRACE", "CRITICAL", "verbose", "", "not-a-level"])
+def test_invalid_log_level_fails_startup_naming_it(
+    valid_env: pytest.MonkeyPatch, level: str
+) -> None:
+    valid_env.setenv("LOG_LEVEL", level)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_settings()
+
+    assert "LOG_LEVEL" in str(exc_info.value)
+
+
 def test_unedited_env_example_fails_naming_all_three_required_values(
     tmp_path: Path, clean_env: pytest.MonkeyPatch
 ) -> None:

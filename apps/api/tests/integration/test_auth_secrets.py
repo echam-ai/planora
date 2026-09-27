@@ -71,7 +71,7 @@ def test_422_with_missing_username_does_not_echo_the_sentinel_password(
     assert response.status_code == 422
     _assert_no_secret_leak(response)
     body = response.json()
-    assert set(body.keys()) <= {"code", "message", "field"}
+    assert set(body.keys()) <= {"code", "message", "details"}
     assert "input" not in body
 
 
