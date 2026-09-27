@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { card, openTaskSheet, signIn } from "./helpers";
 
 test("signs in and shows the three board columns", async ({ page }) => {
   await page.goto("/");
@@ -59,4 +60,32 @@ test("combines multi-select board filters and clears them by keyboard", async ({
   await expect(
     page.getByRole("button", { name: "Open task Write the weekly status update" }),
   ).toBeVisible();
+});
+
+test("labels the near-deadline state 'Near deadline' on the card, in the sheet, and in the filter (#73)", async ({
+  page,
+}) => {
+  await signIn(page);
+
+  await expect(card(page, "Renew passport")).toContainText("Near deadline");
+  await expect(page.getByText("Due soon")).toHaveCount(0);
+
+  const dialog = await openTaskSheet(page, "Renew passport");
+  await expect(dialog.getByText("Near deadline")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  const nearDeadline = page.getByRole("button", { name: "Near deadline" });
+  await nearDeadline.click();
+  await expect(nearDeadline).toHaveAttribute("aria-pressed", "true");
+
+  await expect(card(page, "Renew passport")).toBeVisible();
+  await expect(card(page, "Fix flaky checkout integration test")).toBeVisible();
+  await expect(card(page, "Replace the kitchen tap washer")).toBeVisible();
+  await expect(card(page, "Ship the search-quality review deck")).toBeHidden();
+
+  const visibleCards = page.getByRole("button", { name: /^Open task / });
+  for (const button of await visibleCards.all()) {
+    await expect(button).toContainText("Near deadline");
+  }
 });

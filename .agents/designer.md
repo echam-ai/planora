@@ -40,7 +40,7 @@ Two sentences.
 1. **{Element} — {what is wrong}**
    - Where: `src/features/tasks/components/TaskCard.tsx:42`
    - Now: amber background, no accompanying text
-   - Expected: amber accent plus a "Due soon" label (spec 7.3)
+   - Expected: amber accent plus a "Near deadline" label (spec 7.3)
    - Viewport: both
 
 ### Recommended class diffs

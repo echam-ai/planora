@@ -3,6 +3,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { BoardFilters } from "@/features/tasks/components/BoardFilters";
 import { emptyBoardFilters } from "@/features/tasks/boardFilters";
+import { deadlineLabels } from "@/features/tasks/deadline";
 
 describe("BoardFilters", () => {
   it("allows multiple accessible selections in each dimension and clears every filter", () => {
@@ -59,5 +60,29 @@ describe("BoardFilters", () => {
       priorities: [],
       deadlines: [],
     });
+  });
+
+  it("names the Deadline filter options from deadlineLabels so they cannot drift from the badge", () => {
+    render(
+      <BoardFilters
+        search=""
+        filters={emptyBoardFilters}
+        onSearchChange={vi.fn()}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    const group = screen.getByRole("group", { name: "Deadline" });
+    const optionNames = screen
+      .getAllByRole("button", { name: /.*/ })
+      .filter((button) => group.contains(button))
+      .map((button) => button.textContent);
+
+    expect(optionNames).toEqual([
+      deadlineLabels.none,
+      deadlineLabels.scheduled,
+      deadlineLabels.due_soon,
+      deadlineLabels.overdue,
+    ]);
   });
 });

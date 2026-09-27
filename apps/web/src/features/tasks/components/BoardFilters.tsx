@@ -6,6 +6,7 @@ import {
   type BoardDeadlineFilter,
   type BoardFiltersState,
 } from "@/features/tasks/boardFilters";
+import { deadlineLabels } from "@/features/tasks/deadline";
 import type { TaskCategory, TaskPriority } from "@/types";
 
 export type { BoardDeadlineFilter, BoardFiltersState } from "@/features/tasks/boardFilters";
@@ -29,10 +30,10 @@ const priorityOptions: { value: TaskPriority; label: string }[] = [
   { value: "high", label: "High" },
 ];
 const deadlineOptions: { value: BoardDeadlineFilter; label: string }[] = [
-  { value: "none", label: "No deadline" },
-  { value: "scheduled", label: "Scheduled" },
-  { value: "due_soon", label: "Near deadline" },
-  { value: "overdue", label: "Overdue" },
+  { value: "none", label: deadlineLabels.none },
+  { value: "scheduled", label: deadlineLabels.scheduled },
+  { value: "due_soon", label: deadlineLabels.due_soon },
+  { value: "overdue", label: deadlineLabels.overdue },
 ];
 
 function toggle<T>(values: T[], value: T): T[] {
