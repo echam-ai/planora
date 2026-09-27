@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-2">
             <Button onClick={() => setCreateOpen(true)} className="min-h-11" aria-label="Add task">
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">Add task</span>
             </Button>
             <Button
@@ -113,8 +113,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               className="min-h-11"
               onClick={() => setChatOpen((v) => !v)}
               aria-pressed={chatOpen}
+              aria-label="AI Assistant"
             >
-              <Sparkles className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">AI Assistant</span>
             </Button>
             <Link

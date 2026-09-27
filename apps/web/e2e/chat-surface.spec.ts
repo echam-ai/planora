@@ -20,7 +20,8 @@ import { openTaskSheet, signIn } from "./helpers";
  * `aria-hidden`/`inert` state, never to dispatch a click.
  */
 
-const chatButton = (page: Page) => page.locator("header button[aria-pressed]");
+const chatButton = (page: Page) =>
+  page.getByRole("banner").getByRole("button", { name: "AI Assistant", exact: true });
 const chatDialog = (page: Page) => page.getByRole("dialog", { name: "AI Assistant" });
 
 /** Whether `main` or any of its ancestors is `aria-hidden` or `inert`. */
