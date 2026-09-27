@@ -446,6 +446,7 @@ capabilities must include:
 | Read/update settings | `/settings` |
 | Change password | `/settings/password` |
 | List/create/read/update tasks | `/tasks` and `/tasks/{id}` |
+| Delete active task | `/tasks/{id}` (DELETE) |
 | Reorder or change status | `/tasks/reorder` or `/tasks/{id}/move` |
 | Parse free text | `/ai/parse-task` |
 | List/search archive | `/archive` |
