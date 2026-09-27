@@ -61,25 +61,33 @@ def get_db(request: Request) -> Iterator[Session]:
     recorded failure) uses its own short transaction via
     `get_session_factory` instead of piggybacking on this one.
 
-    **Every `Depends(get_db)` must pass `scope="function"`.** In the
-    FastAPI version pinned here (0.141.1), a `yield` dependency defaults to
-    request scope, whose post-yield code runs *after* the response has
-    already been sent over the wire — so a failing commit there cannot
-    turn into an error response; the client already received a 2xx body
-    (and, for login, a `Set-Cookie` for a session that was never actually
-    saved). `scope="function"` runs the post-yield code — this commit —
-    before the response is produced, so a failed commit becomes a real
-    error response and no `Set-Cookie` (or any other header/body already
-    staged on the response object) reaches the client. Every dependency
-    that resolves `get_db` transitively (`get_current_session`,
-    `require_session`) inherits this correctly as long as the one edge
-    that actually depends on `get_db` — inside `get_current_session` — uses
-    `scope="function"`; neither of those two is itself a generator, so
-    they carry no scope of their own. Mixing scoped and unscoped
-    `Depends(get_db)` in the same app is worse than using the wrong one
-    consistently: FastAPI caches a dependency by `(call, scope)`, so the
-    two variants are cached separately and would open two *separate*
-    sessions/transactions for what should be one request.
+    **Every dependant on this must pass `scope="function"` — use the
+    `DbSession` alias below rather than writing `Depends(get_db)` again.**
+    In the FastAPI version pinned here (0.141.1), a `yield` dependency
+    defaults to request scope, whose post-yield code runs *after* the
+    response has already been sent over the wire — so a failing commit
+    there cannot turn into an error response; the client already received
+    a 2xx body (and, for login, a `Set-Cookie` for a session that was
+    never actually saved). `scope="function"` runs the post-yield code —
+    this commit — before the response is produced, so a failed commit
+    becomes a real error response and no `Set-Cookie` (or any other
+    header/body already staged on the response object) reaches the
+    client. Every dependency that resolves `get_db` transitively
+    (`get_current_session`, `require_session`) inherits this correctly as
+    long as the one edge that actually depends on `get_db` — inside
+    `get_current_session`, via `DbSession` — uses `scope="function"`;
+    neither of those two is itself a generator, so they carry no scope of
+    their own. Mixing scoped and unscoped `Depends(get_db)` in the same
+    app is worse than using the wrong one consistently: FastAPI caches a
+    dependency by `(call, scope)`, so the two variants are cached
+    separately and would open two *separate* sessions/transactions for
+    what should be one request.
+
+    `tests/unit/test_db_dependency_scope.py` and
+    `tests/integration/test_db_dependency_scope.py` (issue #80) enforce
+    this mechanically — a bare `Depends(get_db)` anywhere in `src/`, or a
+    route that reaches `get_db` with any scope but `"function"`, fails the
+    suite.
     """
     session_factory = request.app.state.session_factory
     db = session_factory()
@@ -94,6 +102,15 @@ def get_db(request: Request) -> Iterator[Session]:
         db.close()
 
 
+# The only supported way to depend on the database (issue #80). Every call
+# site — routers and other dependencies alike — takes `db: DbSession`
+# instead of writing `Depends(get_db, ...)` again; a bare `Depends(get_db)`
+# would default to request scope (see `get_db`'s docstring above) and is
+# guarded against mechanically by `tests/unit/test_db_dependency_scope.py`
+# and `tests/integration/test_db_dependency_scope.py`.
+DbSession = Annotated[Session, Depends(get_db, scope="function")]
+
+
 def get_current_time() -> datetime:
     """The current instant. Overridden in tests to simulate the passage of
     time (session expiry, the rate-limit window) without waiting for it."""
@@ -102,7 +119,7 @@ def get_current_time() -> datetime:
 
 def get_current_session(
     request: Request,
-    db: Annotated[Session, Depends(get_db, scope="function")],
+    db: DbSession,
     settings: Annotated[Settings, Depends(get_settings)],
     now: Annotated[datetime, Depends(get_current_time)],
 ) -> AuthSession | None:

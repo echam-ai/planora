@@ -19,9 +19,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 from planora_api.api.deps import (
+    DbSession,
     get_current_session,
     get_current_time,
-    get_db,
     get_session_factory,
     get_settings,
 )
@@ -79,7 +79,7 @@ def login(
     body: LoginRequest,
     request: Request,
     response: Response,
-    db: Annotated[Session, Depends(get_db, scope="function")],
+    db: DbSession,
     settings: Annotated[Settings, Depends(get_settings)],
     now: Annotated[datetime, Depends(get_current_time)],
     session_factory: Annotated[sessionmaker[Session], Depends(get_session_factory)],
@@ -139,7 +139,7 @@ def login(
 @router.post("/logout", status_code=204)
 def logout(
     request: Request,
-    db: Annotated[Session, Depends(get_db, scope="function")],
+    db: DbSession,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
     session_security.delete_session(
@@ -153,7 +153,7 @@ def logout(
 @router.get("/session", response_model=SessionResponse | None)
 def read_session(
     session: Annotated[AuthSession | None, Depends(get_current_session)],
-    db: Annotated[Session, Depends(get_db, scope="function")],
+    db: DbSession,
 ) -> SessionResponse | None:
     if session is None:
         return None
