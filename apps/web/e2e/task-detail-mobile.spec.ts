@@ -41,6 +41,6 @@ test("scenario 8: a Done task remains visibly completed at 390×844", async ({ p
   await expect(statusControl(page)).toHaveText(/Done/);
   await expect(dialog.getByLabel("Date")).not.toHaveText("Pick a date");
   await expect(dialog.getByLabel("Time")).not.toHaveValue("");
-  await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
+  await expect(dialog.locator('span:text-is("Completed")')).toBeVisible();
   await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
 });

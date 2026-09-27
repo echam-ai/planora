@@ -500,7 +500,7 @@ describe("task detail sheet", () => {
     renderPage(ArchivePage);
     dialog = await openSheet("Archived task");
     expect(await within(dialog).findByText("Archived content")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
+    expect(within(dialog).getByText("Completed", { selector: "span" })).toBeInTheDocument();
     await externalWrite(() => {
       store.tasks = store.tasks.map((t) =>
         t.id === "z" ? { ...t, content: "Rewritten while open" } : t,
@@ -528,7 +528,7 @@ describe("task detail sheet", () => {
     await waitFor(() => {
       expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
     });
-    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
+    expect(within(dialog).getByText("Completed", { selector: "span" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /^Date/ })).not.toHaveTextContent(
       "Pick a date",
     );
@@ -564,7 +564,7 @@ describe("task detail sheet", () => {
     renderPage(TasksPage);
 
     let dialog = await openSheet("Recover the overdue task");
-    expect(within(dialog).getByLabelText("Deadline state: Completed")).toBeInTheDocument();
+    expect(within(dialog).getByText("Completed", { selector: "span" })).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
     fireEvent.click(await screen.findByRole("option", { name: "Todo" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
@@ -575,7 +575,7 @@ describe("task detail sheet", () => {
     expect(within(card).getByText("Overdue")).toBeInTheDocument();
 
     dialog = await openSheet("Recover the overdue task");
-    expect(within(dialog).getByLabelText("Deadline state: Overdue")).toBeInTheDocument();
+    expect(within(dialog).getByText("Overdue", { selector: "span" })).toBeInTheDocument();
     expect(within(dialog).queryByText("Completed", { selector: "dt" })).not.toBeInTheDocument();
   });
 

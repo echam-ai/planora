@@ -19,6 +19,10 @@ test("scenario 5: drag, open the sheet, edit, save — the drag is not undone", 
   const dialog = await openTaskSheet(page, DRAGGED);
   await expect(statusControl(page)).toHaveText(/In Progress/);
 
+  // #68: the deadline badge names itself only through rendered text — no
+  // "Deadline state:" accessible name.
+  await expect(dialog.locator('span:text-is("Overdue")')).toMatchAriaSnapshot(`- text: Overdue`);
+
   await dialog.getByLabel("Title").fill(RENAMED);
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
@@ -39,7 +43,7 @@ test("scenario 6: a Done task with a past deadline stays Done and completed (spe
 
   let dialog = await openTaskSheet(page, DONE_TASK);
   await expect(statusControl(page)).toHaveText(/Done/);
-  await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
+  await expect(dialog.locator('span:text-is("Completed")')).toBeVisible();
   const completedBefore = await readCompletedAt(page, DONE_TASK);
   expect(completedBefore).toBeTruthy();
 
@@ -71,7 +75,7 @@ test("scenario 7: saving a Done task back to To do restores its overdue state", 
   await signIn(page);
 
   let dialog = await openTaskSheet(page, DONE_TASK);
-  await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
+  await expect(dialog.locator('span:text-is("Completed")')).toBeVisible();
   await statusControl(page).click();
   await page.getByRole("option", { name: "Todo" }).click();
   await dialog.getByRole("button", { name: "Save changes" }).click();
@@ -85,7 +89,7 @@ test("scenario 7: saving a Done task back to To do restores its overdue state", 
 
   dialog = await openTaskSheet(page, DONE_TASK);
   await expect(statusControl(page)).toHaveText(/Todo/);
-  await expect(dialog.getByLabel("Deadline state: Overdue")).toBeVisible();
+  await expect(dialog.locator('span:text-is("Overdue")')).toBeVisible();
   await expect(dialog.locator('dt:has-text("Completed")')).toHaveCount(0);
 });
 
@@ -114,6 +118,6 @@ test("scenario 8: a Done task without a deadline remains completed", async ({ pa
   await expect(statusControl(page)).toHaveText(/Done/);
   await expect(dialog.getByLabel("Date")).toHaveText("Pick a date");
   await expect(dialog.getByLabel("Time")).toHaveValue("");
-  await expect(dialog.getByLabel("Deadline state: Completed")).toBeVisible();
+  await expect(dialog.locator('span:text-is("Completed")')).toBeVisible();
   await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
 });
