@@ -29,6 +29,7 @@ _ENV_VAR_NAMES: dict[str, str] = {
     "llm_model": "LLM_MODEL",
     "app_origin": "APP_ORIGIN",
     "default_timezone": "DEFAULT_TIMEZONE",
+    "log_level": "LOG_LEVEL",
 }
 
 # Field names whose values must never appear in a repr()/str() of Settings.
@@ -64,6 +65,7 @@ class Settings(BaseSettings):
     llm_model: str = "kimi-k3"
     app_origin: str
     default_timezone: str = "Asia/Singapore"
+    log_level: str = "INFO"
 
     @field_validator("session_secret", "llm_api_key")
     @classmethod
@@ -100,6 +102,14 @@ class Settings(BaseSettings):
                 "must be a bare http(s) origin with no path, query or fragment"
             )
         return value
+
+    @field_validator("log_level")
+    @classmethod
+    def _log_level_is_supported(cls, value: str) -> str:
+        normalized = value.upper()
+        if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
+            raise ValueError("must be DEBUG, INFO, WARNING, or ERROR")
+        return normalized
 
     def __repr__(self) -> str:
         data = self.model_dump()

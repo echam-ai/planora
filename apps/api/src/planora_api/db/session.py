@@ -19,7 +19,7 @@ from planora_api.config import Settings
 
 def create_engine(settings: Settings) -> Engine:
     """Build the SQLAlchemy engine for `settings.database_url`."""
-    return _sa_create_engine(settings.database_url)
+    return _sa_create_engine(settings.database_url, hide_parameters=True)
 
 
 def create_session_factory(settings: Settings) -> sessionmaker[Session]:

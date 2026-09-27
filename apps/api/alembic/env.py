@@ -12,8 +12,18 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
+#
+# `disable_existing_loggers=False` (fileConfig's default is True) is
+# required here: this module runs inside the same process as the API
+# whenever a migration is applied programmatically (the test suite's
+# `migrated_db_path`/`seeded_user` fixtures, and any future in-process
+# migration runner). `fileConfig`'s default would otherwise permanently
+# disable every logger already created at that point that alembic.ini
+# doesn't itself declare — including every `planora_api.*` logger (issue
+# #27's structured logging) — for the rest of the process, silently
+# dropping all of its log output with no error.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Autogenerate support: compare the models against this metadata.
 target_metadata = Base.metadata
