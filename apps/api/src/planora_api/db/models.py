@@ -150,6 +150,29 @@ class AppUser(Base):
     )
 
 
+class AppSettings(Base):
+    """The single settings-overrides row (issue #31, spec §11).
+
+    `CHECK (id = 1)` enforces exactly one row, like `AppUser`. Both
+    columns are nullable *overrides*: `NULL` (or no row at all) means
+    "follow the deployment value" — `Settings.default_timezone` /
+    `Settings.llm_model` from `config.py` — rather than storing a copy of
+    that default here. No row exists until the first successful `PATCH
+    /api/v1/settings`; `db.settings_repository.get_effective_settings`
+    resolves override-vs-deployment-default for every reader.
+    """
+
+    __tablename__ = "app_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_app_settings_single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    timezone: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    model_name: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
 class AuthSession(Base):
     """A server-side session (issue #25).
 

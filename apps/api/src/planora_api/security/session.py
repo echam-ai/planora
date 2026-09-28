@@ -85,6 +85,16 @@ def delete_session(db: Session, token: str | None, secret: str) -> None:
     )
 
 
+def delete_other_sessions(db: Session, keep_token_digest: str) -> None:
+    """Delete every session except the one whose digest is
+    `keep_token_digest` (issue #31: a successful password change revokes
+    every *other* session, but the session that made the change stays
+    valid and gets no new cookie)."""
+    db.execute(
+        delete(AuthSession).where(AuthSession.token_digest != keep_token_digest)
+    )
+
+
 def cookie_is_secure(app_origin: str) -> bool:
     """Whether the session cookie should carry `Secure`.
 
