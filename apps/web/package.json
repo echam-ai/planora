@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "vitest run --coverage && eslint . && tsc --noEmit && vite build",
     "e2e": "bun e2e/run.ts",
+    "gen:api-types": "openapi-typescript ../api/openapi.json -o src/shared/api/schema.gen.ts",
     "format": "prettier --write ."
   },
   "overrides": {
@@ -90,6 +91,7 @@
     "globals": "^15.15.0",
     "jsdom": "^28.1.0",
     "nitro": "3.0.260603-beta",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
