@@ -3,9 +3,13 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request, Response
 
+from planora_api.ai.client import HttpLLMClient, register_llm_error_handler
 from planora_api.api.v1.archive import router as archive_router
 from planora_api.api.v1.auth import router as auth_router
 from planora_api.api.v1.settings import router as settings_router
@@ -30,7 +34,23 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         secrets=(settings.session_secret, settings.llm_api_key, settings.database_url),
     )
 
-    app = FastAPI(title="Planora API", debug=False)
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # One shared httpx.AsyncClient for the app's whole lifetime (issue
+        # #37): opened here, closed on shutdown, never built per-request.
+        # No test exercises this real client for an actual request — every
+        # AI test overrides `ai.deps.get_llm_client` instead (see
+        # `ai/deps.py`).
+        http_client = httpx.AsyncClient()
+        app.state.llm_client = HttpLLMClient(
+            http_client, base_url=settings.llm_base_url, api_key=settings.llm_api_key
+        )
+        try:
+            yield
+        finally:
+            await http_client.aclose()
+
+    app = FastAPI(title="Planora API", debug=False, lifespan=_lifespan)
     app.state.settings = settings
     app.state.session_factory = create_session_factory(settings)
 
@@ -43,6 +63,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     )
 
     register_error_handlers(app)
+    register_llm_error_handler(app)
     # No blanket `responses=` here (unlike #34's earlier draft): login,
     # logout and session read can each return a different status set —
     # `auth_router`'s own route decorators document each one precisely.
