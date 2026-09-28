@@ -13,13 +13,16 @@ vi.mock("@tanstack/react-router", async () => {
   return { ...actual, useNavigate: () => navigate };
 });
 
+type SessionData = { username: string; signedInAt: string } | null;
+const useSessionMock = vi.fn<() => { data: SessionData }>(() => ({ data: null }));
 vi.mock("@/features/auth/hooks", () => ({
-  useSession: () => ({ data: null }),
+  useSession: () => useSessionMock(),
 }));
 
 afterEach(() => {
   vi.restoreAllMocks();
   navigate.mockClear();
+  useSessionMock.mockReturnValue({ data: null });
 });
 
 function renderLogin() {
@@ -69,5 +72,41 @@ describe("LoginPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "That username or password isn't right.",
     );
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("shows a generic message when the rejection isn't an Error", async () => {
+    vi.spyOn(api, "login").mockRejectedValue("offline");
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "demo" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Sign in failed");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("sends an already-authenticated visitor on to the board", async () => {
+    useSessionMock.mockReturnValue({
+      data: { username: "demo", signedInAt: "2026-09-23T00:00:00.000Z" },
+    });
+    renderLogin();
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/tasks", replace: true }));
+  });
+
+  it("stays put and calls no navigation when no session is present", () => {
+    renderLogin();
+
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("sets the sign-in page title", () => {
+    expect(
+      (Route.options.head as (() => { meta: Array<Record<string, string>> }) | undefined)?.(),
+    ).toMatchObject({
+      meta: expect.arrayContaining([{ title: "Sign in — Planora" }]),
+    });
   });
 });
