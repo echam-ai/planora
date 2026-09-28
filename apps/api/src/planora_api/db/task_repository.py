@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from planora_api.db.models import Task, TaskStatus
@@ -77,3 +77,62 @@ def delete_task(db: Session, task: Task) -> None:
     float positions need no renumbering after a removal)."""
     db.delete(task)
     db.flush()
+
+
+# --- Archive (spec §9.2, issue #30) -----------------------------------------
+
+
+def _escape_like(term: str) -> str:
+    """Escape a user-supplied substring for a `LIKE`/`ILIKE` pattern so `%`
+    and `_` match themselves literally rather than acting as wildcards.
+
+    The backslash is escaped first — otherwise a term already containing one
+    would have its escaping doubled by the two replacements that follow.
+    Pure string manipulation, no I/O; the caller wraps the result in `%...%`
+    and passes `escape="\\"` to `ilike`.
+    """
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def get_archived_task(db: Session, task_id: uuid.UUID) -> Task | None:
+    """The task with `task_id`, or `None` if it does not exist or is not
+    archived — an active task's id is 404 here; `db.task_repository.
+    get_active_task` owns `/tasks/{id}`."""
+    stmt = select(Task).where(Task.id == task_id, Task.archived_at.is_not(None))
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def list_archived_tasks(
+    db: Session, *, search: str | None, page: int, page_size: int
+) -> tuple[list[Task], int]:
+    """Archived tasks matching `search` (title only, case-insensitive,
+    literal `%`/`_`, trimmed; blank or `None` means no filter), newest
+    completion first, ties broken by `archived_at` then `id` descending/
+    ascending as documented on `TaskResponse` ordering (spec §9.2).
+
+    Returns `(page_items, total_matching)` — `total_matching` counts every
+    archived task matching `search`, not just the requested page, so the
+    caller can report an accurate `total` alongside a possibly-empty page
+    past the last one.
+    """
+    base_filter = Task.archived_at.is_not(None)
+    term = (search or "").strip()
+
+    stmt = select(Task).where(base_filter)
+    count_stmt = select(func.count()).select_from(Task).where(base_filter)
+    if term:
+        condition = Task.title.ilike(f"%{_escape_like(term)}%", escape="\\")
+        stmt = stmt.where(condition)
+        count_stmt = count_stmt.where(condition)
+
+    total = db.execute(count_stmt).scalar_one()
+
+    stmt = (
+        stmt.order_by(
+            Task.completed_at.desc(), Task.archived_at.desc(), Task.id.asc()
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = list(db.execute(stmt).scalars().all())
+    return items, total
