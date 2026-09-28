@@ -54,6 +54,20 @@ def list_active_tasks_by_status(
     return list(db.execute(stmt).scalars().all())
 
 
+def list_done_unarchived_tasks(db: Session) -> list[Task]:
+    """Every Done, unarchived task — the candidate set for issue #32's
+    archive job.
+
+    Deliberately not filtered further by `completed_at` here: that would
+    be a second copy of the seven-day window outside `domain/` (binding
+    rule 5). The job checks every candidate this returns against
+    `domain.archive_policy.is_eligible_for_archive`, which owns the rule
+    exclusively.
+    """
+    stmt = select(Task).where(Task.archived_at.is_(None), Task.status == TaskStatus.DONE)
+    return list(db.execute(stmt).scalars().all())
+
+
 def get_active_task(db: Session, task_id: uuid.UUID) -> Task | None:
     """The task with `task_id`, or `None` if it does not exist or is
     archived — an archived task is 404 here; #30 owns `/archive/{id}`."""

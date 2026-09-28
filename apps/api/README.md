@@ -45,3 +45,51 @@ uv run alembic revision --autogenerate -m "describe the change"
 # review and correct the generated revision (it is a candidate, not final)
 uv run alembic upgrade head
 ```
+
+## Background jobs
+
+Two standalone commands under `src/planora_api/jobs/` — never imported by
+`planora_api.main` or anything under `planora_api/api/`, and never run
+inside an API worker process (in-process scheduling would double-fire the
+archive job the moment more than one worker runs). Both call the domain
+and data layers directly, never the HTTP API, so they need no `Origin`
+header past #26's CSRF check. Standard library only (`argparse`, `signal`,
+`time`) — no scheduler dependency (`apscheduler`, `celery`, `schedule`,
+cron) is added.
+
+Both need the **same environment as the `api` service** — `load_settings()`
+requires `SESSION_SECRET`, `LLM_API_KEY` and `APP_ORIGIN` even though
+neither job uses them — and a database that already has migrations applied
+(`uv run alembic upgrade head`; neither job runs it itself). Neither
+publishes a port or exposes an HTTP health endpoint.
+
+### Archive Done tasks once
+
+```sh
+uv run python -m planora_api.jobs.archive_done_tasks
+```
+
+Archives every Done task whose seven-day window (spec §9.1) has elapsed,
+then exits. For manual runs and cron-less testing.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Success, including when zero tasks were eligible. |
+| `1` | The run itself failed (e.g. migrations were never applied). Logged as `archive_job_failed`; never a traceback with task content or a secret. |
+| `2` | Invalid configuration (the missing/invalid variable is printed to stderr) or an unrecognized argument. |
+
+### Run the archive job hourly
+
+```sh
+uv run python -m planora_api.jobs.scheduler
+```
+
+Runs the same job immediately, then again at most 3600 seconds after the
+previous run *started* — never skipped, never overlapping within this
+process. A failing run is logged (`archive_job_failed`) and the loop
+continues on schedule. `SIGTERM`/`SIGINT` stop the loop promptly (well
+within `docker stop`'s default 10-second grace) and exit `0`; invalid
+configuration exits `2`, the same convention as the run-once command.
+
+This is what #43's Compose `scheduler` service runs from the API image —
+Compose wiring itself belongs to that issue, not this one.
