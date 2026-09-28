@@ -62,6 +62,54 @@ describe("BoardFilters", () => {
     });
   });
 
+  it("selects and deselects options in the Priority and Deadline groups independently of Category", () => {
+    const onFiltersChange = vi.fn();
+
+    function Filters() {
+      const [filters, setFilters] = useState(emptyBoardFilters);
+      return (
+        <BoardFilters
+          search=""
+          filters={filters}
+          onSearchChange={vi.fn()}
+          onFiltersChange={(value) => {
+            onFiltersChange(value);
+            setFilters(value);
+          }}
+        />
+      );
+    }
+
+    render(<Filters />);
+
+    const high = screen.getByRole("button", { name: "High" });
+    fireEvent.click(high);
+    expect(onFiltersChange).toHaveBeenLastCalledWith({
+      categories: [],
+      priorities: ["high"],
+      deadlines: [],
+    });
+    expect(high).toHaveAttribute("aria-pressed", "true");
+
+    const overdue = screen.getByRole("button", { name: deadlineLabels.overdue });
+    fireEvent.click(overdue);
+    expect(onFiltersChange).toHaveBeenLastCalledWith({
+      categories: [],
+      priorities: ["high"],
+      deadlines: ["overdue"],
+    });
+
+    // clicking a selected option again removes just that option
+    fireEvent.click(high);
+    expect(onFiltersChange).toHaveBeenLastCalledWith({
+      categories: [],
+      priorities: [],
+      deadlines: ["overdue"],
+    });
+    expect(high).toHaveAttribute("aria-pressed", "false");
+    expect(high.querySelector("svg")).not.toBeInTheDocument();
+  });
+
   it("names the Deadline filter options from deadlineLabels so they cannot drift from the badge", () => {
     render(
       <BoardFilters
