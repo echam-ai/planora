@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response
 
 from planora_api.api.v1.archive import router as archive_router
 from planora_api.api.v1.auth import router as auth_router
+from planora_api.api.v1.settings import router as settings_router
 from planora_api.api.v1.tasks import router as tasks_router
 from planora_api.config import load_settings
 from planora_api.db.session import create_session_factory
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(tasks_router)
     app.include_router(archive_router)
+    app.include_router(settings_router)
 
     @app.middleware("http")
     async def request_logging(request: Request, call_next: object) -> Response:
