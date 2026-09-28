@@ -176,3 +176,43 @@ def move_to_column(
             changes[other_id] = new_position
 
     return changes
+
+
+def reorder_column(
+    column: Sequence[ColumnEntry], ordered_ids: Sequence[Hashable]
+) -> dict[Hashable, float]:
+    """Persist an explicit, full reordering of one column (spec §15.1:
+    manual order survives a refresh and a new device).
+
+    `ordered_ids` must be an exact permutation of `column`'s task ids — same
+    set, no duplicate, no omission, no foreign id — checked here so a
+    stale or incomplete client-sent order never reaches a partial write;
+    the caller turns the resulting `ValueError` into its `422`.
+
+    Returns a mapping of task id to new position holding only the tasks
+    whose position actually changes. Reordering to the column's current
+    order is a no-op and returns an empty mapping — this compares the *id
+    sequence*, not raw position values, so it stays a no-op even when the
+    column's existing positions aren't perfectly-spaced integers.
+    """
+    current_ids = [entry[0] for entry in column]
+
+    if len(ordered_ids) != len(set(ordered_ids)):
+        raise ValueError("ordered_ids contains a duplicate task id")
+    if set(ordered_ids) != set(current_ids):
+        raise ValueError(
+            "ordered_ids must be an exact permutation of this column's "
+            "active task ids"
+        )
+
+    if list(ordered_ids) == current_ids:
+        return {}
+
+    positions_by_id = dict(column)
+    changes: dict[Hashable, float] = {}
+    for slot, task_id in enumerate(ordered_ids):
+        new_position = float(slot + 1)
+        if positions_by_id[task_id] != new_position:
+            changes[task_id] = new_position
+
+    return changes

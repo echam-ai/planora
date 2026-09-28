@@ -135,6 +135,41 @@ class TaskUpdate(BaseModel):
         return _to_utc(value)
 
 
+class TaskMove(BaseModel):
+    """`POST /api/v1/tasks/{task_id}/move` request body (issue #29).
+
+    `index` is an insertion index, not a stored `position` value — for a
+    move into another column it is the index among that column's existing
+    tasks (`0` to `len(target)` inclusive); for a move whose `status`
+    equals the task's current one it is the task's final index in its own
+    column (`0` to `len(column) - 1` inclusive). Both bounds depend on the
+    target column's size at request time, so only the lower bound (never
+    negative) is enforced by the wire type here — the upper bound is
+    checked by `domain/ordering.py` and turned into a `422` by the router;
+    neither bound is ever clamped.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: TaskStatus
+    index: int = Field(ge=0)
+
+
+class TaskReorder(BaseModel):
+    """`POST /api/v1/tasks/reorder` request body (issue #29).
+
+    `ordered_ids` must be an exact permutation of the ids of the active
+    tasks currently in `status` — checked by `domain/ordering.reorder_column`
+    and turned into a `422` by the router for a duplicate, an omission, or
+    a foreign/archived/unknown id.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: TaskStatus
+    ordered_ids: list[UUID]
+
+
 class TaskResponse(BaseModel):
     """The full task wire shape — exactly the 14 §5 fields, nothing else."""
 
