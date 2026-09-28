@@ -50,6 +50,8 @@ From `apps/web`: `bun run verify` is the whole unit gate: every Vitest test with
 
 `bun` lives in `~/.bun/bin`, which a non-interactive agent shell may not have on `PATH`. If `bun` is not found, prefix the command with `PATH="$HOME/.bun/bin:$PATH"` rather than hunting for it. A fresh worktree needs `bun install` in `apps/web` before its first check.
 
+After any API contract change, regenerate the web tier's wire types with `bun run gen:api-types` (from `apps/web`) — it runs `openapi-typescript` against the committed `../api/openapi.json` and writes `src/shared/api/schema.gen.ts`, a types-only file that must never be hand-edited (binding rule 4). The order is: export `apps/api/openapi.json` (`uv run python -m planora_api.openapi`), then generate `schema.gen.ts`, then commit both files together. CI enforces both steps independently — the `api` job re-exports and diffs `openapi.json`, the `web` job regenerates and diffs `schema.gen.ts` — so a forgotten regeneration fails the build instead of surfacing at runtime.
+
 ## Vendor residue, being removed
 
 Scaffolded by an external frontend tool; separation in progress. Do not reintroduce it, and do not treat what remains as precedent.

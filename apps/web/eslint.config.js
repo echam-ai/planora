@@ -17,6 +17,9 @@ export default tseslint.config(
       "**/.tanstack/**",
       ".tmp/**",
       ".worktrees/**",
+      // Generated output (routeTree.gen.ts, schema.gen.ts after #34); binding
+      // rule 4 forbids editing them, so lint has no fix to offer here.
+      "**/*.gen.ts",
     ],
   },
   {

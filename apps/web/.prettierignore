@@ -1,0 +1,5 @@
+# Generated output (routeTree.gen.ts, schema.gen.ts after #34). Binding rule
+# 4 forbids editing these files, so `bun run format` must never rewrite them
+# — a reformat would show up as spurious drift in the generator's own diff
+# check.
+**/*.gen.ts
