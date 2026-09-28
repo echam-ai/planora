@@ -95,6 +95,13 @@ def delete_other_sessions(db: Session, keep_token_digest: str) -> None:
     )
 
 
+def delete_all_sessions(db: Session) -> None:
+    """Delete every session, with no exception (issue #33: an
+    administrative password reset has no session of its own to keep,
+    unlike #31's user-initiated change, which keeps the acting session)."""
+    db.execute(delete(AuthSession))
+
+
 def cookie_is_secure(app_origin: str) -> bool:
     """Whether the session cookie should carry `Secure`.
 

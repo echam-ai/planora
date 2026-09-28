@@ -93,3 +93,20 @@ configuration exits `2`, the same convention as the run-once command.
 
 This is what #43's Compose `scheduler` service runs from the API image —
 Compose wiring itself belongs to that issue, not this one.
+
+## Administrative commands
+
+`src/planora_api/admin/` holds commands run directly on the host, never
+through the HTTP API or imported by `planora_api.main`/`api/` — the same
+isolation rule as `jobs/` above.
+
+### Reset the password (or create the account on first run)
+
+```sh
+uv run python -m planora_api.admin.reset_password
+```
+
+See **[`docs/ops/password-reset.md`](../../docs/ops/password-reset.md)**
+for the full walkthrough: the production invocation, why `-T` must not be
+passed, what a reset does (every session signed out, every login lockout
+cleared, all in one transaction), and the exit codes.

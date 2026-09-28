@@ -3,10 +3,15 @@ no database and no FastAPI involved."""
 
 from __future__ import annotations
 
+import pytest
+
 from planora_api.security.password import (
     DUMMY_PASSWORD_HASH,
+    MAX_PASSWORD_LENGTH,
+    MIN_PASSWORD_LENGTH,
     hash_password,
     needs_rehash,
+    password_length_is_valid,
     verify_password,
 )
 
@@ -45,3 +50,33 @@ def test_needs_rehash_is_false_for_a_hash_just_produced() -> None:
     hashed = hash_password("correct horse battery staple")
 
     assert needs_rehash(hashed) is False
+
+
+# --- Shared password length rule (#31, #33) ---------------------------------
+
+
+def test_length_constants_are_six_to_1024() -> None:
+    assert MIN_PASSWORD_LENGTH == 6
+    assert MAX_PASSWORD_LENGTH == 1024
+
+
+@pytest.mark.parametrize(
+    ("length", "expected"),
+    [
+        (5, False),
+        (6, True),
+        (1024, True),
+        (1025, False),
+    ],
+)
+def test_password_length_is_valid_at_the_boundaries(length: int, expected: bool) -> None:
+    assert password_length_is_valid("a" * length) is expected
+
+
+def test_password_length_is_valid_never_trims_whitespace() -> None:
+    # 5 spaces + 1 real character = 6 raw characters: valid by raw length,
+    # even though a trimmed comparison would see something shorter.
+    assert password_length_is_valid("     x") is True
+    # A password that is only whitespace still counts by raw length.
+    assert password_length_is_valid(" " * 6) is True
+    assert password_length_is_valid(" " * 5) is False

@@ -91,3 +91,16 @@ def clear_failures(session_factory: sessionmaker[Session], client_ip: str) -> No
     with session_factory() as session:
         session.execute(delete(LoginFailure).where(LoginFailure.client_ip == client_ip))
         session.commit()
+
+
+def clear_all_login_failures(db: Session) -> None:
+    """Clear every recorded login failure, for every client IP (issue #33:
+    an administrative password reset also clears any active lockout, so a
+    locked-out owner can sign in immediately with the new password).
+
+    Unlike `clear_failures` above, this takes an already-open `Session`
+    rather than a `sessionmaker` — the reset command needs this in the
+    *same* transaction as the password change and session deletion (one
+    all-or-nothing write), not a separate short transaction of its own.
+    """
+    db.execute(delete(LoginFailure))
