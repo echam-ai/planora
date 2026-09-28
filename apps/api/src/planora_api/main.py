@@ -10,6 +10,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 
 from planora_api.ai.client import HttpLLMClient, register_llm_error_handler
+from planora_api.api.v1.ai import router as ai_router
 from planora_api.api.v1.archive import router as archive_router
 from planora_api.api.v1.auth import router as auth_router
 from planora_api.api.v1.settings import router as settings_router
@@ -71,6 +72,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(archive_router)
     app.include_router(settings_router)
+    app.include_router(ai_router)
 
     @app.middleware("http")
     async def request_logging(request: Request, call_next: object) -> Response:

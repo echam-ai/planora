@@ -85,6 +85,73 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "ParseTaskRequest": {
+        "additionalProperties": false,
+        "description": "`POST /api/v1/ai/parse-task` request body. `text` is required to be\n1 to 4000 characters *after* trimming; the trimmed value is what the\nrouter and the model both see — an over-length, empty, whitespace-only,\nmissing or non-string `text` is rejected here, before the model is\never called.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ParseTaskRequest",
+        "type": "object"
+      },
+      "ParsedTaskResponse": {
+        "additionalProperties": false,
+        "description": "The `TaskDraft` wire shape (spec §6.2) — exactly what a confirmed\npreview later posts, unchanged, to `POST /api/v1/tasks`\n(`schemas.task.TaskCreate` minus `status`). No `id`, no `status`, and\nno server timestamp: this is a proposal, not a persisted task (spec\n§6.2: \"The LLM may only propose values. It does not save a task\ndirectly\").",
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/TaskCategory"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "markdown_note": {
+            "default": "",
+            "title": "Markdown Note",
+            "type": "string"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TaskPriority"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "urls": {
+            "items": {
+              "$ref": "#/components/schemas/TaskUrl"
+            },
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "title",
+          "content",
+          "category",
+          "priority"
+        ],
+        "title": "ParsedTaskResponse",
+        "type": "object"
+      },
       "PasswordChangeRequest": {
         "additionalProperties": false,
         "description": "`POST /api/v1/settings/password` request body (spec §3.2).\n\nPasswords are compared and hashed verbatim — never trimmed. Only\n`new_password`'s length is checked here (before any database or Argon2\nwork); `current_password` is validated by the router, against the\nstored hash, so an invalid `new_password` never costs an Argon2\nverification. The length rule itself is `security.password`'s shared\ndefinition (issue #33 moved it there so #33's administrative reset\ncommand can reuse it without a second copy of the rule).",
@@ -569,6 +636,77 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/ai/parse-task": {
+      "post": {
+        "operationId": "parse_task_api_v1_ai_parse_task_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParseTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParsedTaskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request fields"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          }
+        },
+        "summary": "Parse Task",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/v1/archive": {
       "get": {
         "operationId": "list_archive_api_v1_archive_get",

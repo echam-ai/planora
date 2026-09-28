@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/ai/parse-task": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse Task */
+        post: operations["parse_task_api_v1_ai_parse_task_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/archive": {
         parameters: {
             query?: never;
@@ -271,6 +288,44 @@ export interface components {
             username: string;
         };
         /**
+         * ParseTaskRequest
+         * @description `POST /api/v1/ai/parse-task` request body. `text` is required to be
+         *     1 to 4000 characters *after* trimming; the trimmed value is what the
+         *     router and the model both see — an over-length, empty, whitespace-only,
+         *     missing or non-string `text` is rejected here, before the model is
+         *     ever called.
+         */
+        ParseTaskRequest: {
+            /** Text */
+            text: string;
+        };
+        /**
+         * ParsedTaskResponse
+         * @description The `TaskDraft` wire shape (spec §6.2) — exactly what a confirmed
+         *     preview later posts, unchanged, to `POST /api/v1/tasks`
+         *     (`schemas.task.TaskCreate` minus `status`). No `id`, no `status`, and
+         *     no server timestamp: this is a proposal, not a persisted task (spec
+         *     §6.2: "The LLM may only propose values. It does not save a task
+         *     directly").
+         */
+        ParsedTaskResponse: {
+            category: components["schemas"]["TaskCategory"];
+            /** Content */
+            content: string;
+            /** Deadline At */
+            deadline_at?: string | null;
+            /**
+             * Markdown Note
+             * @default
+             */
+            markdown_note: string;
+            priority: components["schemas"]["TaskPriority"];
+            /** Title */
+            title: string;
+            /** Urls */
+            urls?: components["schemas"]["TaskUrl"][];
+        };
+        /**
          * PasswordChangeRequest
          * @description `POST /api/v1/settings/password` request body (spec §3.2).
          *
@@ -508,6 +563,66 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    parse_task_api_v1_ai_parse_task_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParseTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParsedTaskResponse"];
+                };
+            };
+            /** @description API error envelope */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_archive_api_v1_archive_get: {
         parameters: {
             query?: {
