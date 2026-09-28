@@ -17,7 +17,11 @@ from itertools import pairwise
 
 import pytest
 
-from planora_api.domain.ordering import move_to_column, reorder_within_column
+from planora_api.domain.ordering import (
+    move_to_column,
+    reorder_column,
+    reorder_within_column,
+)
 
 MAX_ABS = 2.0**53
 
@@ -243,6 +247,63 @@ def test_repeated_inserts_at_the_first_slot_stay_strictly_increasing() -> None:
         _assert_strictly_increasing(ordered)
         _assert_within_bounds(ordered)
         assert _ids_in_position_order(target)[0] == new_id
+
+
+# --- Full-column reorder (issue #29) ------------------------------------------
+
+
+def test_reorder_column_to_a_new_order_returns_the_full_new_positions() -> None:
+    column = [("A", 1.0), ("B", 2.0), ("C", 3.0)]
+    result = reorder_column(column, ["C", "A", "B"])
+    applied = _apply(column, result)
+    assert _ids_in_position_order(applied) == ["C", "A", "B"]
+    _assert_strictly_increasing(_positions_in_order(applied))
+
+
+def test_reorder_column_to_the_current_order_is_a_no_op() -> None:
+    """Comparing the *id sequence*, not raw position values, so this stays a
+    no-op even when the existing positions aren't perfectly-spaced integers
+    — the caller must not touch any row when nothing actually moved."""
+    column = [("A", 1.0), ("B", 1.5), ("C", 3.0)]
+    result = reorder_column(column, ["A", "B", "C"])
+    assert result == {}
+
+
+def test_reorder_column_on_an_empty_column_is_a_no_op() -> None:
+    assert reorder_column([], []) == {}
+
+
+def test_reorder_column_with_a_duplicate_id_raises() -> None:
+    column = [("A", 1.0), ("B", 2.0)]
+    with pytest.raises(ValueError):
+        reorder_column(column, ["A", "A"])
+
+
+def test_reorder_column_omitting_an_active_task_raises() -> None:
+    column = [("A", 1.0), ("B", 2.0), ("C", 3.0)]
+    with pytest.raises(ValueError):
+        reorder_column(column, ["A", "B"])
+
+
+def test_reorder_column_with_a_foreign_id_raises() -> None:
+    column = [("A", 1.0), ("B", 2.0)]
+    with pytest.raises(ValueError):
+        reorder_column(column, ["A", "B", "Z"])
+
+
+def test_reorder_column_with_only_a_foreign_id_swapped_in_raises() -> None:
+    column = [("A", 1.0), ("B", 2.0)]
+    with pytest.raises(ValueError):
+        reorder_column(column, ["A", "Z"])
+
+
+def test_reorder_column_positions_are_finite_floats_within_bounds() -> None:
+    column = [("A", 1.0), ("B", 2.0), ("C", 3.0)]
+    result = reorder_column(column, ["C", "B", "A"])
+    for value in result.values():
+        assert isinstance(value, float)
+        assert math.isfinite(value)
+        assert abs(value) <= MAX_ABS
 
 
 def test_repeated_inserts_at_index_one_exhaust_the_midpoint_and_renumber() -> None:
