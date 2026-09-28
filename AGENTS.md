@@ -52,6 +52,8 @@ From `apps/web`: `bun run verify` is the whole unit gate: every Vitest test with
 
 After any API contract change, regenerate the web tier's wire types with `bun run gen:api-types` (from `apps/web`) — it runs `openapi-typescript` against the committed `../api/openapi.json` and writes `src/shared/api/schema.gen.ts`, a types-only file that must never be hand-edited (binding rule 4). The order is: export `apps/api/openapi.json` (`uv run python -m planora_api.openapi`), then generate `schema.gen.ts`, then commit both files together. CI enforces both steps independently — the `api` job re-exports and diffs `openapi.json`, the `web` job regenerates and diffs `schema.gen.ts` — so a forgotten regeneration fails the build instead of surfacing at runtime.
 
+`VITE_API_MODE` (`apps/web/.env.example`) selects the `ApiClient` implementation at build time: `http` for the real FastAPI backend, `mock` (the default when unset) for sample data in browser storage. Any other value, including wrong case (`HTTP`), fails `vite build` and `vite dev` immediately — `vite.config.ts` validates it via `src/services/api/apiMode.ts`'s `assertValidApiMode`, naming the variable and its allowed values; `services/api/index.ts` repeats the same check at runtime as a backstop. Production (#42/#43) must build with `VITE_API_MODE=http`. `PLANORA_API_PROXY_TARGET`, also documented there, points the dev server's `/api` proxy (`vite.config.ts`) at the API when running HTTP mode locally; it is never `VITE_`-prefixed, so it never reaches the client bundle.
+
 ## Vendor residue, being removed
 
 Scaffolded by an external frontend tool; separation in progress. Do not reintroduce it, and do not treat what remains as precedent.

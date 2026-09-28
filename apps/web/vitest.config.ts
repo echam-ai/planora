@@ -161,6 +161,37 @@ export default defineConfig({
           functions: 80,
           lines: 80,
         },
+        // #35: the HTTP ApiClient implementation and its build-time selection.
+        "src/services/api/index.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/services/api/apiMode.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/services/api/http/client.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/services/api/http/mappers.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/services/api/http/httpApiClient.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
       },
     },
   },
