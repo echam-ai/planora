@@ -26,6 +26,10 @@ jobs:
         run: bun run test:coverage
       - name: Build
         run: bun run build
+      - name: Check generated API types are up to date
+        run: |
+          bun run gen:api-types
+          git diff --exit-code -- src/shared/api/schema.gen.ts
 
   api:
     name: API
@@ -45,3 +49,7 @@ jobs:
         run: uv run ruff check .
       - name: Test
         run: uv run pytest --cov --cov-fail-under=80
+      - name: Check OpenAPI contract is up to date
+        run: |
+          uv run python -m planora_api.openapi
+          git diff --exit-code -- openapi.json

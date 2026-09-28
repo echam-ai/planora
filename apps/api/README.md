@@ -32,6 +32,29 @@ printed Local URL, normally `http://localhost:5173`; in production it's the publ
 origins to a browser, so pick the one you actually type into the address
 bar — the other one will be rejected.
 
+## OpenAPI contract
+
+`apps/api/openapi.json` is the committed, single source of truth for the
+API contract (spec §13.2). Regenerate it after any route or schema change:
+
+```sh
+uv run python -m planora_api.openapi
+```
+
+This needs no running server, no database connection and no real secrets —
+it builds the app from fixed placeholder configuration
+(`planora_api/openapi.py`), so it works even with `SESSION_SECRET`,
+`LLM_API_KEY` and `APP_ORIGIN` unset. The output is deterministic (fixed
+indent, sorted keys, a trailing newline), so re-running it with no contract
+change produces no diff. `uv run pytest` includes a test comparing the
+committed file to a fresh export, so a stale `openapi.json` fails locally
+before CI does; CI (`.github/workflows/ci.yml`) re-exports and runs `git
+diff --exit-code -- openapi.json` as an independent check.
+
+After any API contract change, the order is: export here, then regenerate
+the web tier's `schema.gen.ts` (`bun run gen:api-types` from `apps/web`),
+then commit both files together.
+
 ## Database
 
 SQLAlchemy models live in `src/planora_api/db/`; Alembic migrations live in

@@ -28,7 +28,7 @@ from planora_api.api.deps import (
 from planora_api.config import Settings
 from planora_api.db import auth_repository
 from planora_api.db.models import AuthSession
-from planora_api.errors import ApiError
+from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE, ApiError
 from planora_api.security import password as password_security
 from planora_api.security import rate_limit
 from planora_api.security import session as session_security
@@ -36,6 +36,25 @@ from planora_api.security import session as session_security
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 _INVALID_CREDENTIALS_MESSAGE = "Incorrect username or password."
+
+# Every mutating (POST/PUT/PATCH/DELETE) route documents 403: #26's CSRF
+# middleware can return `CSRF_ORIGIN_MISMATCH` for any of them (issue #34,
+# from #27's acceptance note).
+#
+# `login` additionally keeps 401 (wrong credentials), 422 (body
+# validation) and 429 (the rate limiter) — all three are real outcomes of
+# this route. `logout` documents nothing else: it has no body to fail
+# validation on, ignores a missing/invalid cookie rather than rejecting it,
+# and isn't rate-limited, so it always returns 204. `GET /session` needs no
+# entry here — it takes no session dependency that could raise 401 (a
+# signed-out caller gets `200 null`, not an error) and no rate limiting.
+_LOGIN_RESPONSES = {
+    401: ERROR_RESPONSE,
+    403: ERROR_RESPONSE,
+    422: VALIDATION_RESPONSE,
+    429: ERROR_RESPONSE,
+}
+_LOGOUT_RESPONSES = {403: ERROR_RESPONSE}
 
 
 class LoginRequest(BaseModel):
@@ -74,7 +93,7 @@ def _clear_session_cookie(response: Response, settings: Settings) -> None:
     )
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post("/login", response_model=SessionResponse, responses=_LOGIN_RESPONSES)
 def login(
     body: LoginRequest,
     request: Request,
@@ -136,7 +155,7 @@ def login(
     return SessionResponse(username=user.username, signed_in_at=row.created_at.isoformat())
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=204, responses=_LOGOUT_RESPONSES)
 def logout(
     request: Request,
     db: DbSession,
