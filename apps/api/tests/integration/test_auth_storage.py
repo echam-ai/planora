@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
-from planora_api.db.models import AppUser
+from planora_api.db.models import AppUser, AuthSession
 from planora_api.security.session import create_session, generate_token, hash_token
 
 _EXPECTED_APP_USER_COLUMNS = {"id", "username", "password_hash", "created_at", "updated_at"}
@@ -167,3 +167,47 @@ def test_upsert_app_user_creates_then_replaces_the_single_row(
         assert user.password_hash == "$argon2id$second"
         assert user.created_at == created_at  # unchanged by the replace
         assert user.updated_at == replaced_at
+
+
+# --- delete_all_sessions / clear_all_login_failures (issue #33) ------------
+
+
+def test_delete_all_sessions_removes_every_row_regardless_of_secret(
+    migrated_session_factory: sessionmaker[Session],
+) -> None:
+    from planora_api.security.session import delete_all_sessions
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    with migrated_session_factory() as session:
+        create_session(session, "secret-a", now)
+        create_session(session, "secret-b", now)
+        session.commit()
+
+    with migrated_session_factory() as session:
+        delete_all_sessions(session)
+        session.commit()
+
+    with migrated_session_factory() as session:
+        remaining = session.execute(select(AuthSession)).scalars().all()
+        assert list(remaining) == []
+
+
+def test_clear_all_login_failures_removes_every_row_regardless_of_client_ip(
+    migrated_session_factory: sessionmaker[Session],
+) -> None:
+    from planora_api.db.models import LoginFailure
+    from planora_api.security.rate_limit import clear_all_login_failures
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    with migrated_session_factory() as session:
+        session.add(LoginFailure(client_ip="203.0.113.1", failed_at=now))
+        session.add(LoginFailure(client_ip="203.0.113.2", failed_at=now))
+        session.commit()
+
+    with migrated_session_factory() as session:
+        clear_all_login_failures(session)
+        session.commit()
+
+    with migrated_session_factory() as session:
+        remaining = session.execute(select(LoginFailure)).scalars().all()
+        assert list(remaining) == []

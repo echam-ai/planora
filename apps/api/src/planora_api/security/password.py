@@ -10,6 +10,12 @@ parameter columns are needed.
 submitted username does not match any account, so an unknown-user login and
 a wrong-password login perform the same one Argon2 verification and cost
 the same time — the response never reveals whether the username exists.
+
+`MIN_PASSWORD_LENGTH`/`MAX_PASSWORD_LENGTH`/`password_length_is_valid` are
+the one shared definition of the 6-to-1024-character rule (spec §3.2),
+pinned at #31's grooming and reused unchanged by #33's administrative
+reset command — moved here specifically so neither caller can drift from
+the other. Passwords are never trimmed before this check.
 """
 
 from __future__ import annotations
@@ -18,6 +24,13 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 
 _hasher = PasswordHasher()
+
+MIN_PASSWORD_LENGTH = 6
+MAX_PASSWORD_LENGTH = 1024
+
+PASSWORD_LENGTH_RULE_MESSAGE = (
+    f"Password must be {MIN_PASSWORD_LENGTH} to {MAX_PASSWORD_LENGTH} characters."
+)
 
 # A hash of a value nobody can ever submit as a real password, computed once
 # at import time. Verifying against it always fails, but costs one real
@@ -48,3 +61,13 @@ def needs_rehash(password_hash: str) -> bool:
     """Return whether `password_hash` should be recomputed under the
     hasher's current parameters (rehash-on-login, issue #25)."""
     return _hasher.check_needs_rehash(password_hash)
+
+
+def password_length_is_valid(password: str) -> bool:
+    """Whether `password`'s raw length satisfies the shared 6-to-1024-
+    character rule (spec §3.2) — the one definition `schemas.settings.
+    PasswordChangeRequest` (#31) and `admin.reset_password` (#33) both
+    check against. `password` is never trimmed first: leading or trailing
+    whitespace counts toward the length exactly like any other character.
+    """
+    return MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH
