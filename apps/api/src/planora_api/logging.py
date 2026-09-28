@@ -117,3 +117,9 @@ def configure_logging(*, level: str, secrets: tuple[str, ...]) -> None:
         named_logger.handlers.clear()
         named_logger.propagate = True
     logging.getLogger("uvicorn.access").disabled = True
+    # Wire-level HTTP client logging (issue #37) can carry the
+    # Authorization header and full request/response bodies. Pinned to
+    # WARNING regardless of `LOG_LEVEL` — their request lines and
+    # wire-level debug output must never appear, even at DEBUG.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)

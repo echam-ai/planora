@@ -29,6 +29,7 @@ _BANNED_MODULES: frozenset[str] = frozenset(
         "fastapi",
         "planora_api.db",
         "planora_api.config",
+        "planora_api.ai",
         "time",
         "os",
         "socket",

@@ -25,21 +25,18 @@ export default defineConfig({
       ],
       thresholds: {
         // Ratchet (#71): global floor is the measured baseline (raised again by #78's shell,
-        // routing and auth tests), not the 80% target in AGENTS.md rule 9. It may only be
-        // raised, never lowered. Files below 80% per file today, grouped by follow-up issue
-        // that raises them and the global floor:
+        // routing and auth tests, and #79's server entry and error-handling tests), not the
+        // 80% target in AGENTS.md rule 9. It may only be raised, never lowered. Files below
+        // 80% per file today, grouped by follow-up issue that raises them and the global floor:
         //   Chat (ChatPanel.tsx, features/chat/hooks.ts, services/api/mock/chat.ts) -> #76
         //   Settings (routes/settings.tsx, features/settings/hooks.ts)          -> #77
-        //   Server entry and error handling (server.ts, start.ts,
-        //     lib/error-capture.ts, lib/error-page.ts,
-        //     lib/root-error-reporting.ts)                                      -> #79
         // The last follow-up ends the ratchet at 80% per file across the tier. perFile is
         // intentionally unset for files not yet listed below: the floor below is an aggregate
         // over the whole include set, not a per-file check, until every follow-up lands.
-        statements: 79,
-        branches: 74,
-        functions: 77,
-        lines: 79,
+        statements: 88,
+        branches: 82,
+        functions: 83,
+        lines: 88,
         // Per-file guarantees, unaffected by the ratchet above.
         "src/features/tasks/deadline.ts": {
           statements: 80,
@@ -128,6 +125,37 @@ export default defineConfig({
           lines: 80,
         },
         "src/router.tsx": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        // #79: server entry and error handling.
+        "src/server.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/start.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/lib/error-capture.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/lib/error-page.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/lib/root-error-reporting.ts": {
           statements: 80,
           branches: 80,
           functions: 80,
