@@ -35,11 +35,25 @@ export async function readCompletedAt(page: Page, title: string): Promise<string
   }, title);
 }
 
-/** Open a task's detail sheet once the board has stopped refetching. */
+/** Open a task's detail sheet once the board has stopped refetching, and
+ * wait for its embedded `TaskForm` to resolve the Settings timezone query.
+ *
+ * `TaskForm` renders "Loading your timezone…" (`aria-busy`) until
+ * `useSettings()` resolves, then swaps in the Date/Time fields. Every caller
+ * that immediately asserts on those fields is racing that query — normally
+ * it has already resolved (Board fetches the same cached query on load),
+ * but under CPU contention (a full, parallel `--repeat-each` run) the race
+ * can outlast an assertion's default timeout. Waiting for this named,
+ * observable ready state here means every spec that opens a task sheet
+ * benefits, instead of a one-off wait bolted onto a single scenario.
+ */
 export async function openTaskSheet(page: Page, title: string) {
   await settleBoard(page);
   await card(page, title).click();
-  return detailSheet(page);
+  const dialog = detailSheet(page);
+  await expect(dialog.getByText("Loading your timezone…")).toBeHidden();
+  await expect(dialog.getByLabel("Date")).toBeVisible();
+  return dialog;
 }
 
 function cardInColumn(page: Page, title: string, toColumn: string): Locator {
