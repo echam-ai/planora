@@ -14,9 +14,9 @@ import { openTaskSheet, signIn } from "./helpers";
  * client delays every call) while the sheet opens, so it often lands with the
  * sheet open.
  *
- * The drawer at the app's mobile width is the chat surface exercised here; its
- * inputs are addressed from inside the drawer because AppShell renders a second
- * ChatPanel on desktop with the same element ids.
+ * The drawer at the app's mobile width is the chat surface exercised here. Below
+ * 1024px the drawer is the only chat surface mounted (#62), so its inputs are
+ * addressed from inside the drawer without any duplicate-id ambiguity.
  */
 test.use({ viewport: { width: 390, height: 844 } });
 

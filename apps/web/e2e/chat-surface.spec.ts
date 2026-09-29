@@ -179,6 +179,74 @@ test.describe("mobile drawer (<1024px)", () => {
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
   });
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 360, height: 800 },
+  ]) {
+    test(`scenario: the drawer has one 44px close control at ${viewport.width}x${viewport.height}`, async ({
+      page,
+    }, testInfo) => {
+      test.skip(
+        testInfo.project.name === "chromium",
+        "requires the <1024px drawer layout; chromium's default viewport here is desktop width",
+      );
+      await page.setViewportSize(viewport);
+      await signIn(page);
+      const trigger = chatButton(page);
+      await trigger.click();
+
+      const dialog = chatDialog(page);
+      await expect(dialog).toBeVisible();
+      const closes = dialog.getByRole("button", { name: /close/i });
+      await expect(closes).toHaveCount(1);
+      const close = dialog.getByRole("button", { name: "Close assistant", exact: true });
+      await expect(close).toBeVisible();
+
+      const dialogBox = await settledBoundingBox(dialog);
+      const box = await close.boundingBox();
+      if (!box) throw new Error("close button has no bounding box");
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.x).toBeGreaterThanOrEqual(dialogBox.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
+      expect(box.y).toBeGreaterThanOrEqual(dialogBox.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(dialogBox.y + dialogBox.height);
+
+      await close.click();
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute("aria-pressed", "false");
+    });
+  }
+
+  test("scenario: keyboard user closes the drawer with Enter on Close assistant", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name === "chromium",
+      "requires the <1024px drawer layout; chromium's default viewport here is desktop width",
+    );
+    await signIn(page);
+    const trigger = chatButton(page);
+    await trigger.click();
+
+    const dialog = chatDialog(page);
+    await expect(dialog).toBeVisible();
+    const close = dialog.getByRole("button", { name: "Close assistant", exact: true });
+    for (let i = 0; i < 10; i += 1) {
+      if (await close.evaluate((el) => el === document.activeElement)) break;
+      await page.keyboard.press("Tab");
+    }
+    await expect(close).toBeFocused();
+    // The focus-visible ring from buttonVariants renders as a box-shadow.
+    expect(await close.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe("none");
+
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-pressed", "false");
+  });
 });
 
 test.describe("resize across the 1024px breakpoint", () => {

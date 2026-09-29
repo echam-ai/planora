@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/AppShell";
 import { api } from "@/services/api";
@@ -100,7 +100,10 @@ describe("AppShell", () => {
     fireEvent.click(screen.getByRole("button", { name: "AI Assistant" }));
 
     const closeButton = await screen.findByRole("button", { name: "Close assistant" });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    // One close control only: the Sheet's built-in "Close" is not rendered (#81).
+    expect(within(dialog).getAllByRole("button", { name: /close/i })).toHaveLength(1);
 
     fireEvent.click(closeButton);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
