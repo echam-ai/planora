@@ -80,7 +80,7 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 - It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, commits reviewed states, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
 - File intake immediately, with a concrete reproduction or quoted context. Do not wait for the user to ask.
 - Launch agents non-blocking unless the result blocks the next action. Continue an agent that still holds the context (Claude `SendMessage`, a Codex follow-up) instead of spawning a fresh one for the same role and issue — for example, return a FAIL to the engineer who wrote the code.
-- Cap three active agents; two when more than one will run a suite.
+- Cap three active agents. Serialize suites on the host: at most one `bun run e2e` runs at a time, and no other suite (`bun run verify`, `vitest`, `pytest`) overlaps it. `verify`/`vitest` and `pytest` may still overlap each other. Before an e2e run, `pgrep -fa '[p]laywright|[v]itest|[p]ytest' | grep -v "$PWD"` must print nothing; processes from other projects count. An e2e run that overlapped another suite is **void**: it counts as neither a pass nor a failure and is repeated in an exclusive window. The e2e suite is stable on a quiet host (230/230 at `--repeat-each=5`) and fails only under shared load ([#84](https://github.com/hgiang/planora/issues/84#issuecomment-5891442727)).
 - Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
 - Respect dependencies: API issues need #1, `apps/web/` paths need #7, database writes need #21 and #22, LLM calls need #37.
 - Route failures: code and test failures back to the engineer, CI and infrastructure failures to on-call.
@@ -226,7 +226,7 @@ Prefer the lowest-numbered ready, unblocked issue — the backlog is ordered del
 
 No `phase-7-deployment` issue is picked while any open issue in phases 1–6, or any open `P0`/`P1` intake issue, remains: local macOS usability in HTTP mode comes before deployment. `P2` intake does not block phase 7. Lowest-numbered first is still the tie-break within each group.
 
-Two independent issues may run in parallel when they touch different tiers.
+Two independent issues may run in parallel when they touch different tiers; their suites still follow the serialization rule in **Orchestrator**, so an e2e run waits for any active `pytest` or `vitest`.
 
 ## Release gate
 

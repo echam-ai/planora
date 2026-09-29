@@ -16,7 +16,7 @@ git status --short --untracked-files=all
 From `docs/PROCESS.md` → **Verification by project stage**. Match the row to what actually changed, not to the issue title.
 
 - Documentation / agent configuration only → diffs, links and paths, role frontmatter, symlink targets, and a walkthrough of each affected workflow. No application launch, no coverage.
-- Web → `bun run verify` (coverage run of every test at ≥80%, lint, typecheck, build), plus `bun run e2e` when UI code changed.
+- Web → `bun run verify` (coverage run of every test at ≥80%, lint, typecheck, build), plus `bun run e2e` when UI code changed. Run e2e only in an exclusive window; the rule and the void-run consequence are in `docs/PROCESS.md` → **Orchestrator**.
 - API (from `apps/api`) → `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`.
 - Migrations, from #22 → `uv run alembic upgrade head` against disposable empty databases, on SQLite and PostgreSQL.
 
