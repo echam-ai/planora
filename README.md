@@ -32,6 +32,68 @@ it previews the client build only, not the server entry above.
 See [`apps/api/README.md`](apps/api/README.md) for setup with `uv`,
 environment configuration and running the API.
 
+## Run locally on macOS
+
+One launcher starts the real stack — the API, the web app in HTTP mode,
+and the hourly archive job — with no Docker.
+
+**Prerequisites:** `uv` and `bun` installed. Docker is not required and is
+never used by this path.
+
+**One-time setup**, from the repository root:
+
+```sh
+cp apps/api/.env.example apps/api/.env
+openssl rand -hex 32   # paste the output into apps/api/.env as SESSION_SECRET
+```
+
+Edit `apps/api/.env` and set `APP_ORIGIN=http://localhost:5173` (the web
+dev server's default port). `LLM_API_KEY` ships blank in the template and
+startup fails on a blank value, so set it too — `LLM_API_KEY=placeholder`
+if you don't have a real key yet, which leaves AI parsing and chat
+unavailable (see the note below for a real key). Then apply migrations,
+which also creates the local database on first run:
+
+```sh
+cd apps/api
+uv run alembic upgrade head
+```
+
+**One-time account creation**, from `apps/api`:
+
+```sh
+uv run python -m planora_api.admin.reset_password
+```
+
+Follow the prompts to set the single account's username and password.
+
+**Launch**, from the repository root (the previous step left you in
+`apps/api`):
+
+```sh
+cd ../..
+scripts/run-local.sh
+```
+
+This installs dependencies, applies migrations, then starts the API, the
+web dev server (in HTTP mode, regardless of `apps/web/.env`) and the
+archive scheduler, and prints the URL to open once the API is healthy.
+Press `Ctrl-C` to stop all three cleanly.
+
+A placeholder `LLM_API_KEY` (e.g. `LLM_API_KEY=placeholder`) is enough to
+start everything — the board, tasks and archive all work — but AI parsing
+and chat report unavailable until a real key is configured. To use a real
+LLM endpoint, put the key in `LLM_API_KEY`; `LLM_BASE_URL`
+(`https://api.moonshot.ai/v1`) and `LLM_MODEL` (`kimi-k3`) are the
+defaults and only need changing for a different OpenAI-compatible
+endpoint. Restart the launcher after editing `apps/api/.env` — it reads
+the file once, at start.
+
+Done tasks are archived only while the launcher is running: once at
+start, then again every hour. A task reaches its seven full days either
+while the launcher is up (archived within the hour) or is picked up at
+the next start.
+
 ## Project documents
 
 - [Product spec](docs/specs/planora-v1-product-spec.md)
