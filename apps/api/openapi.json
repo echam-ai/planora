@@ -235,6 +235,21 @@
         "title": "PasswordChangeRequest",
         "type": "object"
       },
+      "SendMessageRequest": {
+        "additionalProperties": false,
+        "description": "`POST /api/v1/chat/messages` request body (issue #40). `text` is\nrequired to be 1 to 4000 characters *after* trimming — the same rule\n`schemas.ai.ParseTaskRequest` uses — and the trimmed value is what is\npersisted and sent to the model. An extra field, a missing field, a\nblank value, or an over-length value is rejected here, before the\nmodel is ever called and before any row is written.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SendMessageRequest",
+        "type": "object"
+      },
       "SessionResponse": {
         "properties": {
           "signed_in_at": {
@@ -1247,6 +1262,78 @@
           }
         },
         "summary": "Reset Conversation",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/api/v1/chat/messages": {
+      "post": {
+        "description": "Send one user message and return the full, updated conversation.\n\nNo write happens before `send_chat_message` returns successfully — a\nfailure anywhere in its tool-call loop (an `LLMUnavailableError`,\nsurfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_\nhandler`) propagates straight out of this route, and `api.deps.get_db`\nrolls back the request's transaction, so neither the user turn nor an\nassistant turn is ever persisted (spec §10.4).",
+        "operationId": "send_message_api_v1_chat_messages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request fields"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          }
+        },
+        "summary": "Send Message",
         "tags": [
           "chat"
         ]
