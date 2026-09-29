@@ -57,7 +57,10 @@ describe("TasksPage route", () => {
     vi.spyOn(api, "listTasks").mockResolvedValue([]);
     renderTasksRoute();
 
-    await screen.findByRole("heading", { name: "To do" });
+    // The column heading (an h2) appears only once the session, settings and task queries
+    // settle. A text query with the h2 selector avoids the role query's whole-tree style
+    // recomputation, which is what pushed this wait past the 1 s default under CPU load.
+    await screen.findByText("To do", { selector: "h2" });
     expect(navigate).not.toHaveBeenCalled();
   });
 
