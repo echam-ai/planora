@@ -34,6 +34,69 @@
         "title": "ArchiveListResponse",
         "type": "object"
       },
+      "ChatMessageResponse": {
+        "additionalProperties": false,
+        "description": "One message on the wire — exactly `id`, `role`, `text` and\n`created_at`. No `action` field here; #41 adds it.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ChatRole"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "text",
+          "created_at"
+        ],
+        "title": "ChatMessageResponse",
+        "type": "object"
+      },
+      "ChatRole": {
+        "enum": [
+          "user",
+          "assistant"
+        ],
+        "title": "ChatRole",
+        "type": "string"
+      },
+      "ConversationResponse": {
+        "additionalProperties": false,
+        "description": "The full conversation wire shape — exactly `id` and `messages`.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageResponse"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "messages"
+        ],
+        "title": "ConversationResponse",
+        "type": "object"
+      },
       "ErrorResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1116,6 +1179,76 @@
         "summary": "Read Session",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/chat/conversation": {
+      "get": {
+        "operationId": "read_conversation_api_v1_chat_conversation_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          }
+        },
+        "summary": "Read Conversation",
+        "tags": [
+          "chat"
+        ]
+      },
+      "post": {
+        "operationId": "reset_conversation_api_v1_chat_conversation_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          }
+        },
+        "summary": "Reset Conversation",
+        "tags": [
+          "chat"
         ]
       }
     },

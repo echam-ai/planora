@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import JSON as _JSON
-from sqlalchemy import CheckConstraint, Enum, Float, Integer, Text
+from sqlalchemy import CheckConstraint, Enum, Float, Integer, Text, UniqueConstraint
 from sqlalchemy import Uuid as _Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -188,6 +188,78 @@ class AuthSession(Base):
         UTCDateTime, nullable=False, default=_utc_now
     )
     expires_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False)
+
+
+class ChatRole(str, enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class Conversation(Base):
+    """The single current conversation row (issue #39, spec §10.3).
+
+    `CHECK (id = 1)` enforces exactly one row, like `AppUser`/`AppSettings`.
+    `conversation_id` is the wire-visible identifier (`Conversation.id` on
+    the wire, see `schemas/chat.py`) and is replaced with a fresh UUID on
+    every reset (`POST /api/v1/chat/conversation`); the fixed `id=1` primary
+    key never changes — it exists purely to enforce the single-row invariant
+    at the database layer, the same trick `AppSettings` uses. No foreign key
+    links this table to `task` (binding rule: chat tables never cascade into
+    task data).
+    """
+
+    __tablename__ = "conversation"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_conversation_single_row"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        _Uuid(as_uuid=True), nullable=False, default=uuid.uuid4
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
+class ChatMessage(Base):
+    """One message in the single current conversation (issue #39, spec
+    §10.3). Deleted in bulk on every reset, never updated in place.
+
+    No foreign key to `Conversation` — there is ever only one conversation
+    row, so a message's membership is implicit, and no foreign key links
+    this table to `task` either (chat rows can never cascade into task
+    data). `sequence` is assigned by `db.chat_repository.append_message`
+    itself (one greater than the current maximum), not by a database
+    autoincrement column, so ordering stays identical on SQLite and
+    PostgreSQL and survives two messages sharing an identical `created_at`
+    (the `created_at` column alone cannot break that tie).
+    """
+
+    __tablename__ = "chat_message"
+    __table_args__ = (UniqueConstraint("sequence", name="uq_chat_message_sequence"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        _Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[ChatRole] = mapped_column(
+        Enum(
+            ChatRole,
+            name="ck_chat_message_role",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            values_callable=_enum_values,
+            length=20,
+        ),
+        nullable=False,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now
+    )
 
 
 class LoginFailure(Base):
