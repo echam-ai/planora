@@ -246,8 +246,8 @@ def reject_action(
     now: Annotated[datetime, Depends(get_current_time)],
     _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
-    """Reject a pending proposal (spec §41). Calls no LLM. The only
-    documented failure (`409 ACTION_ALREADY_APPLIED`) is raised by
+    """Reject a pending proposal (spec §41). Calls no LLM. The documented
+    failures (`404 NOT_FOUND`, `409 ACTION_ALREADY_APPLIED`) are raised by
     `db.chat_action_repository.reject` itself."""
     chat_action_repository.reject(db, action_id, now=now)
     return _current_conversation_response(db, now)

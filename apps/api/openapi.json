@@ -1399,7 +1399,7 @@
     },
     "/api/v1/chat/actions/{action_id}/reject": {
       "post": {
-        "description": "Reject a pending proposal (spec §41). Calls no LLM. The only\ndocumented failure (`409 ACTION_ALREADY_APPLIED`) is raised by\n`db.chat_action_repository.reject` itself.",
+        "description": "Reject a pending proposal (spec §41). Calls no LLM. The documented\nfailures (`404 NOT_FOUND`, `409 ACTION_ALREADY_APPLIED`) are raised by\n`db.chat_action_repository.reject` itself.",
         "operationId": "reject_action_api_v1_chat_actions__action_id__reject_post",
         "parameters": [
           {
