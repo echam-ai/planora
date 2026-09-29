@@ -158,11 +158,22 @@ SCHEDULER_PID=$!
 
 # --- Signal handling and shutdown -------------------------------------------
 
+# True while any process is still in the group led by "$1" (the group's ID
+# is the leader's PID, and stays reserved while any member lives). Uses the
+# `kill -0 -- -PGID` idiom, which works on stock macOS and Linux.
+group_alive() {
+    [ -n "$1" ] && kill -0 -- "-$1" 2>/dev/null
+}
+
+# Signals the whole group, even when its recorded leader is already dead:
+# the leader's children (uvicorn under `uv run`, vite under `bun run dev`)
+# outlive a SIGKILLed leader and would otherwise keep their port. An empty
+# group is a no-op, and the builtin's error text is discarded.
 stop_process_group() {
     pid="$1"
     signal="$2"
-    if is_alive "$pid"; then
-        kill "-${signal}" "-${pid}" 2>/dev/null || kill "-${signal}" "$pid" 2>/dev/null || true
+    if group_alive "$pid"; then
+        kill "-${signal}" -- "-${pid}" 2>/dev/null || true
     fi
 }
 
@@ -176,7 +187,7 @@ shutdown_all() {
 
     waited=0
     while [ "$waited" -lt 10 ]; do
-        if ! is_alive "$API_PID" && ! is_alive "$WEB_PID" && ! is_alive "$SCHEDULER_PID"; then
+        if ! group_alive "$API_PID" && ! group_alive "$WEB_PID" && ! group_alive "$SCHEDULER_PID"; then
             break
         fi
         sleep 1
