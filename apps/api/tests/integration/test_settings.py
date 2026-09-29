@@ -91,12 +91,13 @@ def test_get_with_no_row_returns_deployment_defaults_and_creates_no_row(
     assert response.json() == {
         "timezone": VALID_ENV["DEFAULT_TIMEZONE"],
         "model_name": VALID_ENV["LLM_MODEL"],
+        "available_models": [VALID_ENV["LLM_MODEL"]],
     }
     with migrated_session_factory() as session:
         assert session.get(AppSettings, 1) is None
 
 
-def test_get_response_keys_are_exactly_timezone_and_model_name(
+def test_get_response_keys_are_exactly_timezone_model_name_and_available_models(
     valid_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     app_factory: Callable[[], FastAPI],
@@ -109,7 +110,7 @@ def test_get_response_keys_are_exactly_timezone_and_model_name(
             return await client.get(SETTINGS_URL)
 
     response = _run(scenario)
-    assert set(response.json().keys()) == {"timezone", "model_name"}
+    assert set(response.json().keys()) == {"timezone", "model_name", "available_models"}
 
 
 def test_get_response_never_contains_a_secret_sentinel(
@@ -179,6 +180,7 @@ def test_patch_timezone_only_updates_and_get_agrees(
     assert patch_response.json() == {
         "timezone": "America/New_York",
         "model_name": VALID_ENV["LLM_MODEL"],
+        "available_models": [VALID_ENV["LLM_MODEL"]],
     }
     assert get_response.json() == patch_response.json()
 
@@ -188,6 +190,7 @@ def test_patch_model_name_only_leaves_timezone_unchanged(
     seeded_user: tuple[str, str],
     app_factory: Callable[[], FastAPI],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "kimi-k3-turbo")
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response]:
@@ -201,7 +204,11 @@ def test_patch_model_name_only_leaves_timezone_unchanged(
     model_only, get_response = _run(scenario)
 
     assert model_only.status_code == 200
-    assert model_only.json() == {"timezone": "Asia/Tokyo", "model_name": "kimi-k3-turbo"}
+    assert model_only.json() == {
+        "timezone": "Asia/Tokyo",
+        "model_name": "kimi-k3-turbo",
+        "available_models": [VALID_ENV["LLM_MODEL"], "kimi-k3-turbo"],
+    }
     assert get_response.json() == model_only.json()
 
 
@@ -210,6 +217,7 @@ def test_patch_timezone_only_leaves_model_name_unchanged(
     seeded_user: tuple[str, str],
     app_factory: Callable[[], FastAPI],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "kimi-k3-turbo")
     app = app_factory()
 
     async def scenario() -> Response:
@@ -221,7 +229,11 @@ def test_patch_timezone_only_leaves_model_name_unchanged(
     response = _run(scenario)
 
     assert response.status_code == 200
-    assert response.json() == {"timezone": "Asia/Tokyo", "model_name": "kimi-k3-turbo"}
+    assert response.json() == {
+        "timezone": "Asia/Tokyo",
+        "model_name": "kimi-k3-turbo",
+        "available_models": [VALID_ENV["LLM_MODEL"], "kimi-k3-turbo"],
+    }
 
 
 def test_patch_unset_field_keeps_following_the_deployment_value_on_restart(
@@ -252,7 +264,11 @@ def test_patch_unset_field_keeps_following_the_deployment_value_on_restart(
 
     response = _run(read_again)
     assert response.status_code == 200
-    assert response.json() == {"timezone": "Asia/Tokyo", "model_name": "a-different-model"}
+    assert response.json() == {
+        "timezone": "Asia/Tokyo",
+        "model_name": "a-different-model",
+        "available_models": ["a-different-model"],
+    }
 
 
 def test_patch_empty_body_returns_current_settings_and_changes_nothing(
@@ -373,6 +389,7 @@ def test_patch_rejects_invalid_model_names(
     app_factory: Callable[[], FastAPI],
     model_name: str | None,
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "kimi-k3-turbo")
     app = app_factory()
 
     async def scenario() -> tuple[Response, Response]:
@@ -397,6 +414,7 @@ def test_patch_strips_surrounding_whitespace_from_model_name(
     seeded_user: tuple[str, str],
     app_factory: Callable[[], FastAPI],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "kimi-k3")
     app = app_factory()
 
     async def scenario() -> Response:
@@ -442,6 +460,7 @@ def test_patch_rejects_fields_outside_the_settings_contract(
     assert after.json() == {
         "timezone": VALID_ENV["DEFAULT_TIMEZONE"],
         "model_name": VALID_ENV["LLM_MODEL"],
+        "available_models": [VALID_ENV["LLM_MODEL"]],
     }
 
 
@@ -467,6 +486,7 @@ def test_patch_is_atomic_valid_timezone_with_invalid_model_name_persists_neither
     assert after.json() == {
         "timezone": VALID_ENV["DEFAULT_TIMEZONE"],
         "model_name": VALID_ENV["LLM_MODEL"],
+        "available_models": [VALID_ENV["LLM_MODEL"]],
     }
 
 
@@ -502,6 +522,7 @@ def test_get_effective_settings_resolves_override_else_deployment_default(
     valid_env: pytest.MonkeyPatch,
     migrated_session_factory: sessionmaker[Session],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "custom-model")
     settings = load_settings()
     with migrated_session_factory() as session:
         no_override = get_effective_settings(session, settings)
@@ -518,6 +539,138 @@ def test_get_effective_settings_resolves_override_else_deployment_default(
         overridden = get_effective_settings(session, settings)
         assert overridden.timezone == "Asia/Tokyo"
         assert overridden.model_name == "custom-model"
+
+
+# --- Model allow-list (issue #86) -------------------------------------------
+
+
+def _get(app: FastAPI) -> Response:
+    async def scenario() -> Response:
+        async with make_client(app) as client:
+            await _login(client)
+            return await client.get(SETTINGS_URL)
+
+    return _run(scenario)
+
+
+def test_available_models_are_default_first_then_trimmed_deduped_allow_list(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    valid_env.setenv("LLM_MODEL", "kimi-k3")
+    valid_env.setenv("LLM_ALLOWED_MODELS", " kimi-k3-thinking , ,kimi-k3")
+    response = _get(app_factory())
+    assert response.status_code == 200
+    assert response.json()["available_models"] == ["kimi-k3", "kimi-k3-thinking"]
+
+
+def test_unset_allow_list_offers_only_the_deployment_model(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    valid_env.setenv("LLM_MODEL", "kimi-k3")
+    assert _get(app_factory()).json()["available_models"] == ["kimi-k3"]
+
+
+def test_patch_response_carries_available_models(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "other-model")
+    app = app_factory()
+
+    async def scenario() -> Response:
+        async with make_client(app) as client:
+            await _login(client)
+            return await client.patch(SETTINGS_URL, json={"model_name": "other-model"})
+
+    response = _run(scenario)
+    assert response.status_code == 200
+    assert response.json() == {
+        "timezone": VALID_ENV["DEFAULT_TIMEZONE"],
+        "model_name": "other-model",
+        "available_models": [VALID_ENV["LLM_MODEL"], "other-model"],
+    }
+
+
+def test_patch_rejects_a_model_the_deployment_does_not_serve_and_stores_nothing(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    migrated_session_factory: sessionmaker[Session],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    valid_env.setenv("LLM_MODEL", "kimi-k3")
+    app = app_factory()
+
+    async def scenario() -> tuple[Response, Response]:
+        async with make_client(app) as client:
+            await _login(client)
+            rejected = await client.patch(
+                SETTINGS_URL, json={"timezone": "Asia/Tokyo", "model_name": " planora-pro "}
+            )
+            after = await client.get(SETTINGS_URL)
+            return rejected, after
+
+    rejected, after = _run(scenario)
+
+    assert rejected.status_code == 422
+    body = rejected.json()
+    assert body["code"] == "VALIDATION_ERROR"
+    assert [d["field"] for d in body["details"]] == ["model_name"]
+    assert after.json()["model_name"] == "kimi-k3"
+    assert after.json()["timezone"] == VALID_ENV["DEFAULT_TIMEZONE"]
+    with migrated_session_factory() as session:
+        assert session.get(AppSettings, 1) is None
+
+
+def test_patch_rejects_available_models_in_the_body(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    app = app_factory()
+
+    async def scenario() -> Response:
+        async with make_client(app) as client:
+            await _login(client)
+            return await client.patch(SETTINGS_URL, json={"available_models": ["x"]})
+
+    response = _run(scenario)
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+
+
+def test_stored_override_no_longer_allowed_falls_back_to_llm_model(
+    valid_env: pytest.MonkeyPatch,
+    seeded_user: tuple[str, str],
+    migrated_session_factory: sessionmaker[Session],
+    app_factory: Callable[[], FastAPI],
+) -> None:
+    valid_env.setenv("LLM_MODEL", "kimi-k3")
+    valid_env.setenv("LLM_ALLOWED_MODELS", "kimi-k3-thinking")
+    app = app_factory()
+
+    async def choose() -> None:
+        async with make_client(app) as client:
+            await _login(client)
+            response = await client.patch(SETTINGS_URL, json={"model_name": "kimi-k3-thinking"})
+            assert response.status_code == 200
+            assert response.json()["model_name"] == "kimi-k3-thinking"
+
+    _run(choose)
+
+    # The deployment restarts with the allow-list removed.
+    valid_env.delenv("LLM_ALLOWED_MODELS")
+    response = _get(app_factory())
+    assert response.json()["model_name"] == "kimi-k3"
+    assert response.json()["available_models"] == ["kimi-k3"]
+
+    with migrated_session_factory() as session:
+        effective = get_effective_settings(session, load_settings())
+        assert effective.model_name == "kimi-k3"
 
 
 # --- Security and contract ---------------------------------------------------
@@ -577,6 +730,7 @@ def test_patch_rejects_a_mismatched_origin_and_changes_nothing(
     assert after.json() == {
         "timezone": VALID_ENV["DEFAULT_TIMEZONE"],
         "model_name": VALID_ENV["LLM_MODEL"],
+        "available_models": [VALID_ENV["LLM_MODEL"]],
     }
 
 

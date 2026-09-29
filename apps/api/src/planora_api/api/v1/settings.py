@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
+from fastapi.exceptions import RequestValidationError
 
 from planora_api.api.deps import (
     DbSession,
@@ -46,7 +47,11 @@ _PASSWORD_RESPONSES = {**_WRITE_RESPONSES, 400: ERROR_RESPONSE}
 
 def _effective_response(db: DbSession, settings: Settings) -> SettingsResponse:
     effective = settings_repository.get_effective_settings(db, settings)
-    return SettingsResponse(timezone=effective.timezone, model_name=effective.model_name)
+    return SettingsResponse(
+        timezone=effective.timezone,
+        model_name=effective.model_name,
+        available_models=settings.available_models(),
+    )
 
 
 @router.get("", response_model=SettingsResponse, responses=_AUTH_RESPONSES)
@@ -67,6 +72,18 @@ def update_settings(
     _session: Annotated[AuthSession, Depends(require_session)],
 ) -> SettingsResponse:
     provided = body.model_dump(exclude_unset=True)
+    # Membership needs the deployment config, so it is checked here, before
+    # any write — a rejected model persists nothing, timezone included.
+    if "model_name" in provided and provided["model_name"] not in settings.available_models():
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", "model_name"),
+                    "msg": "model_name must be one of the available models",
+                }
+            ]
+        )
     settings_repository.update_app_settings(
         db,
         now=now,

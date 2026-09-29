@@ -51,7 +51,11 @@ function renderDialog(onOpenChange = vi.fn()) {
 }
 
 beforeEach(() => {
-  vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+  vi.spyOn(api, "getSettings").mockResolvedValue({
+    timezone: "UTC",
+    modelName: "kimi-k3",
+    availableModels: ["kimi-k3"],
+  });
 });
 
 afterEach(() => {

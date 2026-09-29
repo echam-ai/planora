@@ -40,7 +40,11 @@ function renderSheet(props: Partial<ComponentProps<typeof TaskDetailSheet>> = {}
 }
 
 beforeEach(() => {
-  vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+  vi.spyOn(api, "getSettings").mockResolvedValue({
+    timezone: "UTC",
+    modelName: "kimi-k3",
+    availableModels: ["kimi-k3"],
+  });
 });
 
 afterEach(() => {
@@ -68,7 +72,11 @@ describe("TaskDetailSheet", () => {
   });
 
   it("edit view shows an unlabelled link by its URL, above the editable form", () => {
-    vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+    vi.spyOn(api, "getSettings").mockResolvedValue({
+      timezone: "UTC",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
+    });
     renderSheet({
       task: makeTask({ urls: [{ id: "u1", url: "https://c.example" }] }),
     });

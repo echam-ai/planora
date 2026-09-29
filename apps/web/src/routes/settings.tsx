@@ -59,8 +59,6 @@ const TIMEZONES = [
   "America/Los_Angeles",
 ];
 
-const MODELS = ["planora-mini", "planora-pro", "planora-reasoning"];
-
 function SettingsPage() {
   useAuthGuard();
   const qc = useQueryClient();
@@ -68,7 +66,7 @@ function SettingsPage() {
   const { save, changePassword } = useSettingsMutations();
 
   const [timezone, setTimezone] = useState("UTC");
-  const [modelName, setModelName] = useState(MODELS[0]!);
+  const [modelName, setModelName] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
@@ -146,7 +144,7 @@ function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {MODELS.map((m) => (
+                    {(settings?.availableModels ?? []).map((m) => (
                       <SelectItem key={m} value={m}>
                         {m}
                       </SelectItem>

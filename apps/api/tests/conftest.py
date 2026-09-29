@@ -42,6 +42,7 @@ ENV_VAR_NAMES: tuple[str, ...] = (
     "LLM_BASE_URL",
     "LLM_API_KEY",
     "LLM_MODEL",
+    "LLM_ALLOWED_MODELS",
     "APP_ORIGIN",
     "DEFAULT_TIMEZONE",
 )

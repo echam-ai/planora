@@ -76,11 +76,18 @@ describe("httpApiClient — settings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("getSettings: GET /api/v1/settings", async () => {
-    const fetchSpy = stubFetch(jsonResponse(200, { timezone: "UTC", model_name: "kimi-k3" }));
+    const fetchSpy = stubFetch(
+      jsonResponse(200, {
+        timezone: "UTC",
+        model_name: "kimi-k3",
+        available_models: ["kimi-k3"],
+      }),
+    );
 
     await expect(httpApiClient.getSettings()).resolves.toEqual({
       timezone: "UTC",
       modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
     });
     expect(lastRequest(fetchSpy).url).toBe("/api/v1/settings");
     expect(lastRequest(fetchSpy).init.method).toBe("GET");
@@ -88,7 +95,11 @@ describe("httpApiClient — settings", () => {
 
   it("updateSettings: PATCH /api/v1/settings with only the provided fields", async () => {
     const fetchSpy = stubFetch(
-      jsonResponse(200, { timezone: "Asia/Singapore", model_name: "kimi-k3" }),
+      jsonResponse(200, {
+        timezone: "Asia/Singapore",
+        model_name: "kimi-k3",
+        available_models: ["kimi-k3"],
+      }),
     );
 
     await httpApiClient.updateSettings({ timezone: "Asia/Singapore" });

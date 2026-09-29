@@ -179,6 +179,7 @@ function renderTaskForm(props: ComponentProps<typeof TaskForm>) {
   vi.spyOn(api, "getSettings").mockResolvedValue({
     timezone: "Asia/Singapore",
     modelName: "kimi-k3",
+    availableModels: ["kimi-k3"],
   });
   return renderTaskFormRaw(props);
 }
@@ -330,7 +331,11 @@ describe("TaskForm validation", () => {
     expect(screen.queryByRole("button", { name: /Date/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
 
-    getSettings.mockResolvedValueOnce({ timezone: "Asia/Singapore", modelName: "kimi-k3" });
+    getSettings.mockResolvedValueOnce({
+      timezone: "Asia/Singapore",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
+    });
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByLabelText("Time")).toBeInTheDocument();

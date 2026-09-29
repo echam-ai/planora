@@ -41,7 +41,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.2.0
         with:
-          python-version: "3.12"
+          # No python-version: apps/api/.python-version is the single source of
+          # truth, read by setup-uv and by every `uv` command below.
           working-directory: apps/api
       - name: Install
         run: uv sync --frozen
