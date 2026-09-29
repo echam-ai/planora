@@ -692,6 +692,29 @@ describe("task detail sheet", () => {
     expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
   });
 
+  it("archive card keeps its name and is described by its category, priority and state", async () => {
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Old report",
+        category: "work",
+        priority: "low",
+        status: "done",
+        deadlineAt: iso(-3 * DAY),
+        completedAt: iso(-2 * DAY),
+        archivedAt: iso(-DAY),
+      }),
+    ]);
+    renderPage(ArchivePage);
+
+    const card = await screen.findByRole("button", { name: "Open archived task Old report" });
+    expect(card).toHaveAccessibleName("Open archived task Old report");
+    expect(card).toHaveAccessibleDescription(/Work/);
+    expect(card).toHaveAccessibleDescription(/Low priority/);
+    expect(card).toHaveAccessibleDescription(/Completed/);
+    expect(card).not.toHaveAccessibleDescription(/Overdue/);
+  });
+
   it("archive scenarios 4–5: holds selection through loading, errors, and retry", async () => {
     installClient([
       makeTask({
