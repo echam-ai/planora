@@ -2,9 +2,12 @@ import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createElement } from "react";
+import { toast } from "sonner";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { Toaster } from "@/components/ui/sonner";
 import { Route } from "@/routes/settings";
 import { api } from "@/services/api";
+import { qk } from "@/shared/queryKeys";
 
 vi.mock("@tanstack/react-router", async () => {
   const actual =
@@ -28,7 +31,10 @@ beforeAll(() => {
 
 let lastClient: QueryClient;
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  toast.dismiss(); // the toast store is module-global; keep one test's toast out of the next
+});
 
 function renderSettings() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -224,5 +230,135 @@ describe("Settings route — load failure", () => {
     await waitFor(() =>
       expect(update).toHaveBeenCalledWith({ timezone: "Asia/Singapore", modelName: "kimi-k3" }),
     );
+  });
+});
+
+function renderWithToaster() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  lastClient = queryClient;
+  return render(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(Route.options.component!),
+      createElement(Toaster),
+    ),
+  );
+}
+
+async function pickTimezone(name: string) {
+  const trigger = await screen.findByRole("combobox", { name: "Timezone" });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: "mouse" });
+  const option = within(await screen.findByRole("listbox")).getByRole("option", { name });
+  fireEvent.pointerUp(option, { pointerType: "mouse" });
+  fireEvent.click(option);
+}
+
+describe("Settings route — saving preferences", () => {
+  it("saves the chosen timezone, toasts, and caches the resolved settings without refetching", async () => {
+    signedIn(["kimi-k3"]);
+    const get = vi.mocked(api.getSettings);
+    const resolved = {
+      timezone: "Asia/Tokyo",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3", "resolved-only"],
+    };
+    const update = vi.spyOn(api, "updateSettings").mockResolvedValue(resolved);
+    renderWithToaster();
+
+    await pickTimezone("Asia/Tokyo");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect((await screen.findAllByText("Settings saved")).length).toBeGreaterThan(0);
+    expect(update).toHaveBeenCalledWith({ timezone: "Asia/Tokyo", modelName: "kimi-k3" });
+    expect(lastClient.getQueryData(qk.settings)).toEqual(resolved);
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Couldn't save your settings")).not.toBeInTheDocument();
+  });
+
+  it("shows an error toast when saving fails", async () => {
+    signedIn(["kimi-k3"]);
+    vi.spyOn(api, "updateSettings").mockRejectedValue(new Error("boom"));
+    renderWithToaster();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save changes" }));
+
+    expect((await screen.findAllByText("Couldn't save your settings")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Settings saved")).not.toBeInTheDocument();
+    expect(lastClient.getQueryData(qk.settings)).toEqual({
+      timezone: "Asia/Singapore",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
+    });
+  });
+});
+
+describe("Settings route — change password", () => {
+  async function fill(current: string, next: string) {
+    fireEvent.change(await screen.findByLabelText("Current password"), {
+      target: { value: current },
+    });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: next } });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+  }
+
+  it("rejects a new password shorter than 6 characters without calling the API", async () => {
+    signedIn(["kimi-k3"]);
+    const change = vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
+    renderSettings();
+
+    await fill("old-secret", "12345");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("New password must be at least 6 characters.");
+    expect(change).not.toHaveBeenCalled();
+  });
+
+  it("accepts a 6-character password, toasts, and clears both fields", async () => {
+    signedIn(["kimi-k3"]);
+    const change = vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
+    renderWithToaster();
+
+    await fill("old-secret", "123456");
+
+    expect((await screen.findAllByText("Password updated")).length).toBeGreaterThan(0);
+    expect(change).toHaveBeenCalledWith("old-secret", "123456");
+    expect(screen.getByLabelText("Current password")).toHaveValue("");
+    expect(screen.getByLabelText("New password")).toHaveValue("");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the message of an Error rejection in an alert and keeps the fields", async () => {
+    signedIn(["kimi-k3"]);
+    vi.spyOn(api, "changePassword").mockRejectedValue(new Error("Current password is wrong"));
+    renderSettings();
+
+    await fill("old-secret", "123456");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Current password is wrong");
+    expect(screen.getByLabelText("New password")).toHaveValue("123456");
+  });
+
+  it("shows a generic message when the rejection is not an Error", async () => {
+    signedIn(["kimi-k3"]);
+    vi.spyOn(api, "changePassword").mockRejectedValue("nope");
+    renderSettings();
+
+    await fill("old-secret", "123456");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't update password");
+  });
+
+  it("clears a previous error when the form is submitted again", async () => {
+    signedIn(["kimi-k3"]);
+    vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
+    renderSettings();
+
+    await fill("old-secret", "123");
+    await screen.findByRole("alert");
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
+
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 });
