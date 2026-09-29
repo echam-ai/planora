@@ -1,12 +1,14 @@
 """`/api/v1/tasks` — list, create, read, update, delete, move and reorder
 (issues #28, #29).
 
-Thin by design: this module validates the request via `schemas.task`,
-computes `position` and `completed_at` through the pure `domain` functions,
-and delegates every query to `db.task_repository`. `POST /reorder` is
-registered as a literal path before the `/{task_id}` family so it can never
-be shadowed by a path parameter. Archive list, search, restore and
-permanent delete stay with #30.
+Thin by design: this module validates the request and delegates every
+query and write to `db.task_repository` — `create_task_from_request`,
+`apply_task_update` and `apply_task_move` own the `domain.ordering`/
+`domain.completion` logic (shared with issue #41's chat-confirmed writes;
+see that module's docstring). `POST /reorder` is registered as a literal
+path before the `/{task_id}` family so it can never be shadowed by a path
+parameter. Archive list, search, restore and permanent delete stay with
+#30.
 """
 
 from __future__ import annotations
@@ -19,9 +21,8 @@ from fastapi import APIRouter, Depends, Response
 
 from planora_api.api.deps import DbSession, get_current_time, require_session
 from planora_api.db import task_repository
-from planora_api.db.models import AuthSession, Task, TaskStatus
+from planora_api.db.models import AuthSession, Task
 from planora_api.domain import ordering
-from planora_api.domain.completion import resolve_completed_at
 from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE, ApiError
 from planora_api.schemas.task import (
     TaskCreate,
@@ -55,17 +56,6 @@ def _ordering_error(exc: ValueError) -> ApiError:
     return ApiError(422, "VALIDATION_ERROR", str(exc))
 
 
-def _apply_column_changes(
-    changes: dict[uuid.UUID, float], others_by_id: dict[uuid.UUID, Task]
-) -> None:
-    """Write every position `ordering` returned back onto the loaded ORM
-    rows in `others_by_id` — the moved task itself is set by the caller."""
-    for task_id, position in changes.items():
-        other = others_by_id.get(task_id)
-        if other is not None:
-            other.position = position
-
-
 @router.get("", response_model=list[TaskResponse], responses=_VALIDATED_RESPONSES)
 def list_tasks(
     db: DbSession, _session: Annotated[AuthSession, Depends(require_session)]
@@ -82,38 +72,7 @@ def create_task(
     now: Annotated[datetime, Depends(get_current_time)],
     _session: Annotated[AuthSession, Depends(require_session)],
 ) -> Task:
-    task_id = uuid.uuid4()
-
-    column_tasks = task_repository.list_active_tasks_by_status(db, body.status)
-    target = [(task.id, task.position) for task in column_tasks]
-    changes = ordering.move_to_column(
-        [(task_id, 0.0)], target, task_id, len(target)
-    )
-
-    task = Task(
-        id=task_id,
-        title=body.title,
-        content=body.content,
-        status=body.status,
-        category=body.category,
-        priority=body.priority,
-        deadline_at=body.deadline_at,
-        urls=[url.model_dump() for url in body.urls],
-        markdown_note=body.markdown_note,
-        position=changes[task_id],
-        created_at=now,
-        updated_at=now,
-        completed_at=resolve_completed_at(
-            new_status=body.status,
-            previous_status=None,
-            previous_completed_at=None,
-            now=now,
-        ),
-        archived_at=None,
-    )
-    _apply_column_changes(changes, {t.id: t for t in column_tasks})
-
-    return task_repository.create_task(db, task)
+    return task_repository.create_task_from_request(db, body, now)
 
 
 # `POST /reorder` is registered here — a literal path, before the
@@ -134,7 +93,9 @@ def reorder_tasks(
     except ValueError as exc:
         raise _ordering_error(exc) from exc
 
-    _apply_column_changes(changes, {t.id: t for t in column_tasks})
+    by_id = {t.id: t for t in column_tasks}
+    for task_id, position in changes.items():
+        by_id[task_id].position = position
     db.flush()
     return task_repository.list_active_tasks(db)
 
@@ -166,60 +127,7 @@ def update_task(
     task = task_repository.get_active_task(db, task_id)
     if task is None:
         raise _not_found()
-
-    provided = body.model_dump(exclude_unset=True)
-
-    if "title" in provided:
-        task.title = body.title
-    if "content" in provided:
-        task.content = body.content
-    if "category" in provided:
-        task.category = body.category
-    if "priority" in provided:
-        task.priority = body.priority
-    if "markdown_note" in provided:
-        task.markdown_note = body.markdown_note
-    if "urls" in provided:
-        task.urls = [url.model_dump() for url in body.urls]
-    if "deadline_at" in provided:
-        task.deadline_at = body.deadline_at
-
-    if "status" in provided:
-        previous_status: TaskStatus = task.status
-        new_status = body.status
-        assert new_status is not None  # rejected as null by the schema
-
-        if new_status != previous_status:
-            source = [
-                (t.id, t.position)
-                for t in task_repository.list_active_tasks_by_status(
-                    db, previous_status
-                )
-            ]
-            target_tasks = task_repository.list_active_tasks_by_status(
-                db, new_status, exclude_id=task.id
-            )
-            target = [(t.id, t.position) for t in target_tasks]
-            changes = ordering.move_to_column(
-                source, target, task.id, len(target)
-            )
-            by_id = {t.id: t for t in target_tasks}
-            task.position = changes[task.id]
-            _apply_column_changes(
-                {k: v for k, v in changes.items() if k != task.id}, by_id
-            )
-
-        task.completed_at = resolve_completed_at(
-            new_status=new_status,
-            previous_status=previous_status,
-            previous_completed_at=task.completed_at,
-            now=now,
-        )
-        task.status = new_status
-
-    task.updated_at = now
-    db.flush()
-    return task
+    return task_repository.apply_task_update(db, task, body, now)
 
 
 @router.delete(
@@ -257,45 +165,8 @@ def move_task(
     if task is None:
         raise _not_found()
 
-    previous_status = task.status
-    new_status = body.status
-
-    if new_status == previous_status:
-        column_tasks = task_repository.list_active_tasks_by_status(
-            db, previous_status
-        )
-        column = [(t.id, t.position) for t in column_tasks]
-        try:
-            changes = ordering.reorder_within_column(column, task.id, body.index)
-        except ValueError as exc:
-            raise _ordering_error(exc) from exc
-        _apply_column_changes(changes, {t.id: t for t in column_tasks})
-    else:
-        source_tasks = task_repository.list_active_tasks_by_status(
-            db, previous_status
-        )
-        source = [(t.id, t.position) for t in source_tasks]
-        target_tasks = task_repository.list_active_tasks_by_status(
-            db, new_status, exclude_id=task.id
-        )
-        target = [(t.id, t.position) for t in target_tasks]
-        try:
-            changes = ordering.move_to_column(source, target, task.id, body.index)
-        except ValueError as exc:
-            raise _ordering_error(exc) from exc
-        by_id = {t.id: t for t in target_tasks}
-        task.position = changes[task.id]
-        _apply_column_changes(
-            {k: v for k, v in changes.items() if k != task.id}, by_id
-        )
-        task.status = new_status
-
-    task.completed_at = resolve_completed_at(
-        new_status=new_status,
-        previous_status=previous_status,
-        previous_completed_at=task.completed_at,
-        now=now,
-    )
-    task.updated_at = now
-    db.flush()
+    try:
+        task_repository.apply_task_move(db, task, body, now)
+    except ValueError as exc:
+        raise _ordering_error(exc) from exc
     return task_repository.list_active_tasks(db)

@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 
 from planora_api.db import task_repository
 from planora_api.db.models import Task, TaskCategory, TaskPriority, TaskStatus
+from planora_api.domain.chat_actions import ActionField
 from planora_api.domain.chat_filters import ActiveTaskFilters, active_task_matches
 from planora_api.domain.deadline import deadline_state
 
@@ -52,6 +53,36 @@ _FilterableDeadlineState = Literal["none", "scheduled", "due_soon", "overdue"]
 # argument. Carries no detail about *why* (never the raw arguments, which
 # could contain task content or an injected string) — see `ai.chat`.
 TOOL_CALL_ERROR_RESULT: dict[str, str] = {"error": "invalid_tool_call"}
+
+
+@dataclass(frozen=True)
+class PendingProposal:
+    """One proposed write, fully computed but not yet persisted (issue
+    #41). `ai.chat.send_chat_message` accumulates these across its whole
+    tool-call loop and only turns them into `chat_action`/`chat_message`
+    rows after that loop succeeds — never here, and never from
+    `ai.propose_tools`'s executors directly — so a later-round LLM failure
+    leaves nothing behind (spec §10.4)."""
+
+    kind: str
+    title: str
+    summary: str
+    fields: list[ActionField]
+    payload: dict[str, Any]
+    task_id: Any
+    stale_snapshot: dict[str, Any]
+    changed_fields: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class ToolExecutionResult:
+    """What one `ToolSpec.executor` call returns: `tool_result` is the
+    dict sent back to the model as the tool's `content`; `proposal`, only
+    set by a `propose_*` tool that actually produced a proposal, is
+    accumulated by `ai.chat`'s loop and never itself sent to the model."""
+
+    tool_result: dict[str, Any]
+    proposal: PendingProposal | None = None
 
 
 def _log_tool_call(
@@ -270,19 +301,23 @@ def search_archive(
 class ToolSpec:
     definition: Mapping[str, Any]
     args_model: type[BaseModel]
-    executor: Callable[[Session, Any, datetime, str], dict[str, Any]]
+    executor: Callable[[Session, Any, datetime, str], ToolExecutionResult]
 
 
 def _find_active_tasks_executor(
     db: Session, args: FindActiveTasksArgs, now: datetime, timezone_name: str
-) -> dict[str, Any]:
-    return find_active_tasks(db, args, now=now, timezone_name=timezone_name)
+) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        tool_result=find_active_tasks(db, args, now=now, timezone_name=timezone_name)
+    )
 
 
 def _search_archive_executor(
     db: Session, args: SearchArchiveArgs, now: datetime, timezone_name: str
-) -> dict[str, Any]:
-    return search_archive(db, args, now=now, timezone_name=timezone_name)
+) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        tool_result=search_archive(db, args, now=now, timezone_name=timezone_name)
+    )
 
 
 # Exactly the two read tools spec §10.1 allows in v1. `ai.chat` sends

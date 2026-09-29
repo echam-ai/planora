@@ -124,6 +124,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/actions/{action_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Action
+         * @description Apply a pending proposal's write (spec §41). Calls no LLM. Every
+         *     documented failure (`404`, `409 ACTION_ALREADY_REJECTED`,
+         *     `409 ACTION_STALE`) is raised by `db.chat_action_repository.confirm`
+         *     itself and propagates unchanged through this route.
+         */
+        post: operations["confirm_action_api_v1_chat_actions__action_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/actions/{action_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Action
+         * @description Reject a pending proposal (spec §41). Calls no LLM. The only
+         *     documented failure (`409 ACTION_ALREADY_APPLIED`) is raised by
+         *     `db.chat_action_repository.reject` itself.
+         */
+        post: operations["reject_action_api_v1_chat_actions__action_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversation": {
         parameters: {
             query?: never;
@@ -159,8 +204,13 @@ export interface paths {
          *     failure anywhere in its tool-call loop (an `LLMUnavailableError`,
          *     surfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_
          *     handler`) propagates straight out of this route, and `api.deps.get_db`
-         *     rolls back the request's transaction, so neither the user turn nor an
-         *     assistant turn is ever persisted (spec §10.4).
+         *     rolls back the request's transaction, so neither the user turn, an
+         *     assistant turn, nor any proposal is ever persisted (spec §10.4).
+         *
+         *     Issue #41: the first proposal the turn produced (if any) is attached to
+         *     the one assistant message that carries the model's final text; each
+         *     further proposal gets its own assistant message with empty text, in
+         *     call order — never a `task` row, which only a later confirm writes.
          */
         post: operations["send_message_api_v1_chat_messages_post"];
         delete?: never;
@@ -317,11 +367,67 @@ export interface components {
             total: number;
         };
         /**
+         * ChatActionFieldResponse
+         * @description One `{label, from, to}` preview entry (spec §41). `from` is a
+         *     reserved Python keyword, so the attribute is `from_`, populated either
+         *     by that name or by its wire alias `from` — FastAPI's default
+         *     `response_model_by_alias=True` always serializes it as `from`.
+         */
+        ChatActionFieldResponse: {
+            /** From */
+            from?: string | null;
+            /** Label */
+            label: string;
+            /** To */
+            to: string;
+        };
+        /**
+         * ChatActionKind
+         * @enum {string}
+         */
+        ChatActionKind: "create" | "update" | "move" | "schedule";
+        /**
+         * ChatActionResponse
+         * @description One proposed action, attached to the assistant message that carries
+         *     it (spec §41). `payload` is a kind-specific dict — `{"draft": ...}` for
+         *     `create`, `{"task_id": ..., "draft": ...}` for `update`, `{"task_id":
+         *     ..., "status": ...}` for `move`, `{"task_id": ..., "deadline_at": ...}`
+         *     for `schedule` — built once at proposal time by `ai.propose_tools` and
+         *     stored verbatim; this schema does not re-derive it.
+         */
+        ChatActionResponse: {
+            /** Fields */
+            fields: components["schemas"]["ChatActionFieldResponse"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["ChatActionKind"];
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            status: components["schemas"]["ChatActionStatus"];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ChatActionStatus
+         * @enum {string}
+         */
+        ChatActionStatus: "pending" | "applied" | "rejected";
+        /**
          * ChatMessageResponse
-         * @description One message on the wire — exactly `id`, `role`, `text` and
-         *     `created_at`. No `action` field here; #41 adds it.
+         * @description One message on the wire — `id`, `role`, `text`, `created_at`, and
+         *     `action` (spec §41: `null` on a user message, on an assistant message
+         *     with no proposal, and on a confirmation message; otherwise the
+         *     proposal it carries).
          */
         ChatMessageResponse: {
+            action?: components["schemas"]["ChatActionResponse"] | null;
             /**
              * Created At
              * Format: date-time
@@ -1030,6 +1136,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"] | null;
+                };
+            };
+        };
+    };
+    confirm_action_api_v1_chat_actions__action_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description API error envelope */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_action_api_v1_chat_actions__action_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description API error envelope */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

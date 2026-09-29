@@ -34,10 +34,118 @@
         "title": "ArchiveListResponse",
         "type": "object"
       },
+      "ChatActionFieldResponse": {
+        "additionalProperties": false,
+        "description": "One `{label, from, to}` preview entry (spec §41). `from` is a\nreserved Python keyword, so the attribute is `from_`, populated either\nby that name or by its wire alias `from` — FastAPI's default\n`response_model_by_alias=True` always serializes it as `from`.",
+        "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "to": {
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "to"
+        ],
+        "title": "ChatActionFieldResponse",
+        "type": "object"
+      },
+      "ChatActionKind": {
+        "enum": [
+          "create",
+          "update",
+          "move",
+          "schedule"
+        ],
+        "title": "ChatActionKind",
+        "type": "string"
+      },
+      "ChatActionResponse": {
+        "additionalProperties": false,
+        "description": "One proposed action, attached to the assistant message that carries\nit (spec §41). `payload` is a kind-specific dict — `{\"draft\": ...}` for\n`create`, `{\"task_id\": ..., \"draft\": ...}` for `update`, `{\"task_id\":\n..., \"status\": ...}` for `move`, `{\"task_id\": ..., \"deadline_at\": ...}`\nfor `schedule` — built once at proposal time by `ai.propose_tools` and\nstored verbatim; this schema does not re-derive it.",
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ChatActionFieldResponse"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ChatActionKind"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChatActionStatus"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "summary",
+          "fields",
+          "status",
+          "payload"
+        ],
+        "title": "ChatActionResponse",
+        "type": "object"
+      },
+      "ChatActionStatus": {
+        "enum": [
+          "pending",
+          "applied",
+          "rejected"
+        ],
+        "title": "ChatActionStatus",
+        "type": "string"
+      },
       "ChatMessageResponse": {
         "additionalProperties": false,
-        "description": "One message on the wire — exactly `id`, `role`, `text` and\n`created_at`. No `action` field here; #41 adds it.",
+        "description": "One message on the wire — `id`, `role`, `text`, `created_at`, and\n`action` (spec §41: `null` on a user message, on an assistant message\nwith no proposal, and on a confirmation message; otherwise the\nproposal it carries).",
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatActionResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1197,6 +1305,174 @@
         ]
       }
     },
+    "/api/v1/chat/actions/{action_id}/confirm": {
+      "post": {
+        "description": "Apply a pending proposal's write (spec §41). Calls no LLM. Every\ndocumented failure (`404`, `409 ACTION_ALREADY_REJECTED`,\n`409 ACTION_STALE`) is raised by `db.chat_action_repository.confirm`\nitself and propagates unchanged through this route.",
+        "operationId": "confirm_action_api_v1_chat_actions__action_id__confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Action Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request fields"
+          }
+        },
+        "summary": "Confirm Action",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
+    "/api/v1/chat/actions/{action_id}/reject": {
+      "post": {
+        "description": "Reject a pending proposal (spec §41). Calls no LLM. The only\ndocumented failure (`409 ACTION_ALREADY_APPLIED`) is raised by\n`db.chat_action_repository.reject` itself.",
+        "operationId": "reject_action_api_v1_chat_actions__action_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Action Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API error envelope"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request fields"
+          }
+        },
+        "summary": "Reject Action",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/api/v1/chat/conversation": {
       "get": {
         "operationId": "read_conversation_api_v1_chat_conversation_get",
@@ -1269,7 +1545,7 @@
     },
     "/api/v1/chat/messages": {
       "post": {
-        "description": "Send one user message and return the full, updated conversation.\n\nNo write happens before `send_chat_message` returns successfully — a\nfailure anywhere in its tool-call loop (an `LLMUnavailableError`,\nsurfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_\nhandler`) propagates straight out of this route, and `api.deps.get_db`\nrolls back the request's transaction, so neither the user turn nor an\nassistant turn is ever persisted (spec §10.4).",
+        "description": "Send one user message and return the full, updated conversation.\n\nNo write happens before `send_chat_message` returns successfully — a\nfailure anywhere in its tool-call loop (an `LLMUnavailableError`,\nsurfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_\nhandler`) propagates straight out of this route, and `api.deps.get_db`\nrolls back the request's transaction, so neither the user turn, an\nassistant turn, nor any proposal is ever persisted (spec §10.4).\n\nIssue #41: the first proposal the turn produced (if any) is attached to\nthe one assistant message that carries the model's final text; each\nfurther proposal gets its own assistant message with empty text, in\ncall order — never a `task` row, which only a later confirm writes.",
         "operationId": "send_message_api_v1_chat_messages_post",
         "requestBody": {
           "content": {

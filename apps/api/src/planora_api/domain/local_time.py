@@ -11,8 +11,31 @@ database), and deterministic for a given interpreter installation.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
+
+_DATE_ONLY_FORMAT = "%Y-%m-%d"
+_DATE_TIME_FORMAT = "%Y-%m-%dT%H:%M"
+# A bare date means end of day local time — the same rule #38's
+# `ai.parse_task` pins for its own deadline strings; issue #41 reuses it
+# exactly rather than defining a second copy.
+_END_OF_DAY = time(23, 59)
+
+
+def parse_local_wall_clock(value: str) -> datetime:
+    """Parse `value` as a naive local wall-clock `datetime` — exactly
+    `YYYY-MM-DD` (read as 23:59) or `YYYY-MM-DDTHH:MM`.
+
+    Raises `ValueError` for anything else, including a calendar-impossible
+    date or time (`strptime` itself rejects e.g. `2026-02-30` or hour
+    `25`) — the same format `ai.parse_task` requires of the model's own
+    `deadline` output, reused here for issue #41's `propose_create_task`/
+    `propose_set_deadline` tool arguments.
+    """
+    if "T" in value:
+        return datetime.strptime(value, _DATE_TIME_FORMAT)  # noqa: DTZ007 - deliberately naive local wall-clock
+    date_only = datetime.strptime(value, _DATE_ONLY_FORMAT)  # noqa: DTZ007 - deliberately naive local wall-clock
+    return datetime.combine(date_only.date(), _END_OF_DAY)
 
 
 def local_wall_clock_to_utc(local_dt: datetime, timezone_name: str) -> datetime:

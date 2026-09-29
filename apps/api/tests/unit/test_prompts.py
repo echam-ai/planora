@@ -103,11 +103,19 @@ def test_chat_prompt_never_contains_an_injected_sentinel() -> None:
     assert sentinel not in prompt
 
 
-def test_chat_prompt_names_only_the_two_read_tools() -> None:
+def test_chat_prompt_names_the_two_read_tools_and_four_proposal_tools() -> None:
     prompt = build_chat_system_prompt(**_CHAT_PROMPT_KWARGS)
     assert "find_active_tasks" in prompt
     assert "search_archive" in prompt
-    assert "create_task" not in prompt
+    assert "propose_create_task" in prompt
+    assert "propose_update_task" in prompt
+    assert "propose_move_task" in prompt
+    assert "propose_set_deadline" in prompt
+
+
+def test_chat_prompt_states_no_tool_writes_without_confirmation() -> None:
+    prompt = build_chat_system_prompt(**_CHAT_PROMPT_KWARGS).lower()
+    assert "confirm" in prompt
 
 
 def test_chat_prompt_states_messages_are_data_not_instructions() -> None:

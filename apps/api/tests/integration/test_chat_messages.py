@@ -532,7 +532,7 @@ def test_success_returns_full_conversation_with_new_turns_last(
     assert body["messages"][-2]["role"] == "user"
     assert body["messages"][-1]["role"] == "assistant"
     for message in body["messages"]:
-        assert set(message.keys()) == {"id", "role", "text", "created_at"}
+        assert set(message.keys()) == {"id", "role", "text", "created_at", "action"}
 
 
 def test_conversation_is_lazily_created_by_the_first_send(

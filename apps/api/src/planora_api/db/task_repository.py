@@ -6,16 +6,29 @@ after the route returns, so a partially-applied create/update/reorder is
 never persisted (spec §15.1). Callers pass the resulting ORM objects
 straight to `domain/ordering.py`'s `(task_id, position)` column shape and
 write any resulting position change back onto these same instances.
+
+`create_task_from_request`, `apply_task_update` and `apply_task_move`
+(issue #41) are the one shared write path `api.v1.tasks` and
+`db.chat_action_repository.confirm` both call — the acceptance criterion
+that a chat-confirmed write "applies the change through the same write
+code" (never a second copy of it) is satisfied by both callers reaching the
+same functions here, not by convention alone. They accept `schemas.task`
+request bodies directly and apply `domain.ordering`/`domain.completion`
+exactly as the pre-#41 router bodies did.
 """
 
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from planora_api.db.models import Task, TaskStatus
+from planora_api.domain import ordering
+from planora_api.domain.completion import resolve_completed_at
+from planora_api.schemas.task import TaskCreate, TaskMove, TaskUpdate
 
 # Board column order (spec §7.1): Todo, In Progress, Done. Used only to
 # order `list_active_tasks`'s single flat list; a query scoped to one status
@@ -91,6 +104,153 @@ def delete_task(db: Session, task: Task) -> None:
     float positions need no renumbering after a removal)."""
     db.delete(task)
     db.flush()
+
+
+# --- Shared write path: create, update, move (issue #28, #29, #41) ---------
+
+
+def _apply_column_changes(
+    changes: dict[uuid.UUID, float], others_by_id: dict[uuid.UUID, Task]
+) -> None:
+    """Write every position `ordering` returned back onto the loaded ORM
+    rows in `others_by_id` — the moved task itself is set by the caller."""
+    for task_id, position in changes.items():
+        other = others_by_id.get(task_id)
+        if other is not None:
+            other.position = position
+
+
+def create_task_from_request(db: Session, body: TaskCreate, now: datetime) -> Task:
+    """`POST /tasks`'s full create logic (spec §6.1 defaults): appends to
+    the end of `body.status`'s column (Todo by default — issue #41's
+    chat-created tasks rely on this same default) and resolves
+    `completed_at` through the one shared rule."""
+    task_id = uuid.uuid4()
+
+    column_tasks = list_active_tasks_by_status(db, body.status)
+    target = [(task.id, task.position) for task in column_tasks]
+    changes = ordering.move_to_column([(task_id, 0.0)], target, task_id, len(target))
+
+    task = Task(
+        id=task_id,
+        title=body.title,
+        content=body.content,
+        status=body.status,
+        category=body.category,
+        priority=body.priority,
+        deadline_at=body.deadline_at,
+        urls=[url.model_dump() for url in body.urls],
+        markdown_note=body.markdown_note,
+        position=changes[task_id],
+        created_at=now,
+        updated_at=now,
+        completed_at=resolve_completed_at(
+            new_status=body.status,
+            previous_status=None,
+            previous_completed_at=None,
+            now=now,
+        ),
+        archived_at=None,
+    )
+    _apply_column_changes(changes, {t.id: t for t in column_tasks})
+
+    return create_task(db, task)
+
+
+def apply_task_update(db: Session, task: Task, body: TaskUpdate, now: datetime) -> Task:
+    """`PATCH /tasks/{id}`'s full partial-update logic: only the fields
+    `body` actually sets (`model_dump(exclude_unset=True)`) are touched, a
+    `status` change re-runs the ordering/`completed_at` rules exactly like
+    a move, and every other field change is a plain attribute set."""
+    provided = body.model_dump(exclude_unset=True)
+
+    if "title" in provided:
+        task.title = body.title
+    if "content" in provided:
+        task.content = body.content
+    if "category" in provided:
+        task.category = body.category
+    if "priority" in provided:
+        task.priority = body.priority
+    if "markdown_note" in provided:
+        task.markdown_note = body.markdown_note
+    if "urls" in provided:
+        task.urls = [url.model_dump() for url in body.urls]
+    if "deadline_at" in provided:
+        task.deadline_at = body.deadline_at
+
+    if "status" in provided:
+        previous_status: TaskStatus = task.status
+        new_status = body.status
+        assert new_status is not None  # rejected as null by the schema
+
+        if new_status != previous_status:
+            source = [
+                (t.id, t.position)
+                for t in list_active_tasks_by_status(db, previous_status)
+            ]
+            target_tasks = list_active_tasks_by_status(
+                db, new_status, exclude_id=task.id
+            )
+            target = [(t.id, t.position) for t in target_tasks]
+            changes = ordering.move_to_column(source, target, task.id, len(target))
+            by_id = {t.id: t for t in target_tasks}
+            task.position = changes[task.id]
+            _apply_column_changes(
+                {k: v for k, v in changes.items() if k != task.id}, by_id
+            )
+
+        task.completed_at = resolve_completed_at(
+            new_status=new_status,
+            previous_status=previous_status,
+            previous_completed_at=task.completed_at,
+            now=now,
+        )
+        task.status = new_status
+
+    task.updated_at = now
+    db.flush()
+    return task
+
+
+def apply_task_move(db: Session, task: Task, body: TaskMove, now: datetime) -> Task:
+    """`POST /tasks/{id}/move`'s full move logic (board drag, or an
+    AI-confirmed move — issue #29, #41), cross-column or within one column.
+    `completed_at` always goes through `resolve_completed_at` — entering,
+    leaving and staying in Done are all handled by that one rule, never
+    re-implemented here. Raises `ValueError` for a bad `body.index` (the
+    caller turns it into a `422`, or #41 never produces one since it always
+    computes the target column's own current length)."""
+    previous_status = task.status
+    new_status = body.status
+
+    if new_status == previous_status:
+        column_tasks = list_active_tasks_by_status(db, previous_status)
+        column = [(t.id, t.position) for t in column_tasks]
+        changes = ordering.reorder_within_column(column, task.id, body.index)
+        _apply_column_changes(changes, {t.id: t for t in column_tasks})
+    else:
+        source_tasks = list_active_tasks_by_status(db, previous_status)
+        source = [(t.id, t.position) for t in source_tasks]
+        target_tasks = list_active_tasks_by_status(db, new_status, exclude_id=task.id)
+        target = [(t.id, t.position) for t in target_tasks]
+        changes = ordering.move_to_column(source, target, task.id, body.index)
+        by_id = {t.id: t for t in target_tasks}
+        task.position = changes[task.id]
+        _apply_column_changes(
+            {k: v for k, v in changes.items() if k != task.id}, by_id
+        )
+        task.status = new_status
+
+    task.completed_at = resolve_completed_at(
+        new_status=new_status,
+        previous_status=previous_status,
+        previous_completed_at=task.completed_at,
+        now=now,
+    )
+    task.updated_at = now
+    db.flush()
+    return task
 
 
 # --- Archive (spec §9.2, issue #30) -----------------------------------------
