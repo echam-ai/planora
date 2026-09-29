@@ -180,11 +180,13 @@ export default defineConfig({
           functions: 80,
           lines: 80,
         },
+        // #36: the field mapper is the single point of failure for wire-to-client
+        // naming, so it is held to 100% statement and branch coverage, not the ratchet.
         "src/services/api/http/mappers.ts": {
-          statements: 80,
-          branches: 80,
-          functions: 80,
-          lines: 80,
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
         },
         "src/services/api/http/httpApiClient.ts": {
           statements: 80,

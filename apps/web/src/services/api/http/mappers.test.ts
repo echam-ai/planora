@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { paths } from "@/shared/api/schema.gen";
-import type { TaskDraft, TaskUrl } from "@/types";
+import type { AppSettings, TaskDraft, TaskUrl } from "@/types";
 import {
   archiveListToDomain,
   archiveQueryToWire,
@@ -17,6 +17,61 @@ import {
 
 type WireTask =
   paths["/api/v1/tasks/{task_id}"]["get"]["responses"][200]["content"]["application/json"];
+type WireSession =
+  paths["/api/v1/auth/login"]["post"]["responses"][200]["content"]["application/json"];
+type WireSettings =
+  paths["/api/v1/settings"]["get"]["responses"][200]["content"]["application/json"];
+type WireArchiveList =
+  paths["/api/v1/archive"]["get"]["responses"][200]["content"]["application/json"];
+
+/** The exact 14 §5 domain `Task` keys, sorted — used to assert no leak and no drop. */
+const TASK_DOMAIN_KEYS = [
+  "archivedAt",
+  "category",
+  "completedAt",
+  "content",
+  "createdAt",
+  "deadlineAt",
+  "id",
+  "markdownNote",
+  "position",
+  "priority",
+  "status",
+  "title",
+  "updatedAt",
+  "urls",
+].sort();
+
+/** `TaskCreate`'s declared keys (schema.gen.ts), sorted. */
+const TASK_CREATE_KEYS = [
+  "category",
+  "content",
+  "deadline_at",
+  "markdown_note",
+  "priority",
+  "status",
+  "title",
+  "urls",
+].sort();
+
+/** `TaskUpdate`'s declared keys (schema.gen.ts), sorted. */
+const TASK_UPDATE_KEYS = [
+  "category",
+  "content",
+  "deadline_at",
+  "markdown_note",
+  "priority",
+  "status",
+  "title",
+  "urls",
+].sort();
+
+/** `SettingsUpdate`'s declared keys (schema.gen.ts), sorted. */
+const SETTINGS_UPDATE_KEYS = ["model_name", "timezone"].sort();
+
+function sortedKeys(obj: object): string[] {
+  return Object.keys(obj).sort();
+}
 
 function wireTask(overrides: Partial<WireTask> = {}): WireTask {
   return {
@@ -42,10 +97,15 @@ function wireTask(overrides: Partial<WireTask> = {}): WireTask {
 }
 
 describe("http/mappers taskToDomain", () => {
-  it("maps all 14 §5 fields to camelCase", () => {
-    const domain = taskToDomain(wireTask());
+  it("maps a fully populated TaskResponse to exactly the 14-field domain Task", () => {
+    const wire = wireTask({
+      completed_at: "2026-09-03T00:00:00+00:00",
+      archived_at: "2026-09-04T00:00:00+00:00",
+    });
 
-    expect(domain).toMatchObject({
+    const domain = taskToDomain(wire);
+
+    expect(domain).toStrictEqual({
       id: "task-1",
       title: "Write the mapper",
       content: "Convert wire fields to camelCase.",
@@ -53,14 +113,18 @@ describe("http/mappers taskToDomain", () => {
       priority: "high",
       status: "todo",
       deadlineAt: "2026-10-01T09:00:00+00:00",
+      urls: [
+        { id: "task-1:url:0", url: "https://example.com/a", label: "A" },
+        { id: "task-1:url:1", url: "https://example.com/b" },
+      ],
       markdownNote: "some **notes**",
       position: 0,
       createdAt: "2026-09-01T00:00:00+00:00",
       updatedAt: "2026-09-02T00:00:00+00:00",
-      completedAt: null,
-      archivedAt: null,
+      completedAt: "2026-09-03T00:00:00+00:00",
+      archivedAt: "2026-09-04T00:00:00+00:00",
     });
-    expect(domain.urls).toHaveLength(2);
+    expect(sortedKeys(domain)).toStrictEqual(TASK_DOMAIN_KEYS);
   });
 
   it("assigns stable, deterministic url ids across repeated fetches of the same task", () => {
@@ -72,12 +136,81 @@ describe("http/mappers taskToDomain", () => {
     expect(first.urls[1]!.id).toBe("task-1:url:1");
   });
 
-  it("maps a null label to undefined", () => {
+  it("maps a null label to an absent key, not undefined or null", () => {
     const domain = taskToDomain(wireTask());
 
     expect(domain.urls[0]!.label).toBe("A");
     expect(domain.urls[1]!.label).toBeUndefined();
     expect("label" in domain.urls[1]!).toBe(false);
+  });
+
+  it("keeps a null deadline as an explicit null key, not omitted", () => {
+    const domain = taskToDomain(wireTask({ deadline_at: null }));
+
+    expect(domain.deadlineAt).toBeNull();
+    expect("deadlineAt" in domain).toBe(true);
+  });
+
+  it("maps an empty url list to an empty array, not omitted", () => {
+    const domain = taskToDomain(wireTask({ urls: [] }));
+
+    expect(domain.urls).toStrictEqual([]);
+  });
+
+  it("maps an empty markdown note to an empty string, not omitted", () => {
+    const domain = taskToDomain(wireTask({ markdown_note: "" }));
+
+    expect(domain.markdownNote).toBe("");
+  });
+
+  it("round trips every editable field back to the original wire values", () => {
+    const wire = wireTask();
+    const domain = taskToDomain(wire);
+
+    const patch = taskPatchToWire({
+      title: domain.title,
+      content: domain.content,
+      category: domain.category,
+      priority: domain.priority,
+      status: domain.status,
+      deadlineAt: domain.deadlineAt,
+      markdownNote: domain.markdownNote,
+      urls: domain.urls,
+    });
+
+    expect(patch.title).toBe(wire.title);
+    expect(patch.content).toBe(wire.content);
+    expect(patch.category).toBe(wire.category);
+    expect(patch.priority).toBe(wire.priority);
+    expect(patch.status).toBe(wire.status);
+    expect(patch.deadline_at).toBe(wire.deadline_at);
+    expect(patch.markdown_note).toBe(wire.markdown_note);
+    expect(patch.urls).toStrictEqual(
+      wire.urls.map((u) => ({ url: u.url, ...(u.label != null ? { label: u.label } : {}) })),
+    );
+    for (const u of patch.urls!) expect(u).not.toHaveProperty("id");
+  });
+
+  it("drops an unrecognized wire field on the task, not passing it through under either name", () => {
+    const wire = { ...wireTask(), future_field: "surprise" } as WireTask;
+
+    const domain = taskToDomain(wire);
+
+    expect(domain).not.toHaveProperty("future_field");
+    expect(domain).not.toHaveProperty("futureField");
+    expect(sortedKeys(domain)).toStrictEqual(TASK_DOMAIN_KEYS);
+  });
+
+  it("drops an unrecognized wire field on a nested TaskUrl", () => {
+    const wire = wireTask({
+      urls: [{ url: "https://example.com/a", label: "A", future_field: "surprise" } as never],
+    });
+
+    const domain = taskToDomain(wire);
+
+    expect(domain.urls[0]).not.toHaveProperty("future_field");
+    expect(domain.urls[0]).not.toHaveProperty("futureField");
+    expect(sortedKeys(domain.urls[0]!)).toStrictEqual(["id", "label", "url"].sort());
   });
 });
 
@@ -116,11 +249,47 @@ describe("http/mappers task out", () => {
     expect(wire.urls![0]).not.toHaveProperty("label");
   });
 
+  it("sends an explicit null deadline, not an omitted key", () => {
+    const wire = taskDraftToWire({ ...draft, deadlineAt: null });
+
+    expect(wire.deadline_at).toBeNull();
+    expect("deadline_at" in wire).toBe(true);
+  });
+
+  it("sends an empty url list as [], not omitted or null", () => {
+    const wire = taskDraftToWire({ ...draft, urls: [] });
+
+    expect(wire.urls).toStrictEqual([]);
+  });
+
+  it("sends an empty markdown note as '', not omitted or null", () => {
+    const wire = taskDraftToWire({ ...draft, markdownNote: "" });
+
+    expect(wire.markdown_note).toBe("");
+  });
+
+  it("drops a stray property on the draft, keeping exactly TaskCreate's keys", () => {
+    const strayDraft = { ...draft, futureField: "surprise" } as TaskDraft;
+
+    const wire = taskDraftToWire(strayDraft);
+
+    expect(wire).not.toHaveProperty("futureField");
+    expect(wire).not.toHaveProperty("future_field");
+    expect(sortedKeys(wire)).toStrictEqual(TASK_CREATE_KEYS);
+  });
+
   it("maps only the provided fields of a partial update", () => {
     expect(taskPatchToWire({ title: "Renamed" })).toEqual({ title: "Renamed" });
     expect(taskPatchToWire({ status: "done" })).toEqual({ status: "done" });
     expect(taskPatchToWire({ deadlineAt: null })).toEqual({ deadline_at: null });
     expect(taskPatchToWire({})).toEqual({});
+  });
+
+  it("keeps an explicit null deadline in a patch, not an omitted key", () => {
+    const wire = taskPatchToWire({ deadlineAt: null });
+
+    expect(wire.deadline_at).toBeNull();
+    expect("deadline_at" in wire).toBe(true);
   });
 
   it("maps a full partial update across every field", () => {
@@ -146,6 +315,26 @@ describe("http/mappers task out", () => {
       urls: [{ url: "https://a.b" }],
     });
   });
+
+  it("drops a stray property on a full patch, keeping exactly TaskUpdate's keys", () => {
+    const strayPatch = {
+      title: "T",
+      content: "C",
+      category: "study",
+      priority: "low",
+      status: "in_progress",
+      markdownNote: "note",
+      deadlineAt: "2026-10-01T00:00:00+00:00",
+      urls: [{ id: "x", url: "https://a.b" }],
+      futureField: "surprise",
+    } as Parameters<typeof taskPatchToWire>[0];
+
+    const wire = taskPatchToWire(strayPatch);
+
+    expect(wire).not.toHaveProperty("futureField");
+    expect(wire).not.toHaveProperty("future_field");
+    expect(sortedKeys(wire)).toStrictEqual(TASK_UPDATE_KEYS);
+  });
 });
 
 describe("http/mappers moves and reorders", () => {
@@ -162,20 +351,55 @@ describe("http/mappers moves and reorders", () => {
 });
 
 describe("http/mappers session and settings", () => {
-  it("maps SessionResponse to camelCase", () => {
-    expect(
-      sessionToDomain({ username: "demo", signed_in_at: "2026-09-28T10:00:00+00:00" }),
-    ).toEqual({
+  it("maps SessionResponse to exactly {username, signedInAt}", () => {
+    const session = sessionToDomain({
+      username: "demo",
+      signed_in_at: "2026-09-28T10:00:00+00:00",
+    });
+
+    expect(session).toStrictEqual({
       username: "demo",
       signedInAt: "2026-09-28T10:00:00+00:00",
     });
+    expect(sortedKeys(session)).toStrictEqual(["signedInAt", "username"].sort());
   });
 
-  it("maps SettingsResponse to camelCase", () => {
-    expect(settingsToDomain({ timezone: "Asia/Singapore", model_name: "kimi-k3" })).toEqual({
+  it("drops an unrecognized field on SessionResponse", () => {
+    const wire = {
+      username: "demo",
+      signed_in_at: "2026-09-28T10:00:00+00:00",
+      future_field: "surprise",
+    } as WireSession;
+
+    const session = sessionToDomain(wire);
+
+    expect(session).not.toHaveProperty("future_field");
+    expect(session).not.toHaveProperty("futureField");
+    expect(sortedKeys(session)).toStrictEqual(["signedInAt", "username"].sort());
+  });
+
+  it("round trips SettingsResponse through settingsToDomain and settingsPatchToWire exactly", () => {
+    const wire: WireSettings = { timezone: "Asia/Singapore", model_name: "kimi-k3" };
+
+    const domain = settingsToDomain(wire);
+    expect(domain).toStrictEqual({ timezone: "Asia/Singapore", modelName: "kimi-k3" });
+
+    const patch = settingsPatchToWire(domain);
+    expect(patch).toStrictEqual(wire);
+  });
+
+  it("drops an unrecognized field on SettingsResponse", () => {
+    const wire = {
       timezone: "Asia/Singapore",
-      modelName: "kimi-k3",
-    });
+      model_name: "kimi-k3",
+      future_field: "surprise",
+    } as WireSettings;
+
+    const settings = settingsToDomain(wire);
+
+    expect(settings).not.toHaveProperty("future_field");
+    expect(settings).not.toHaveProperty("futureField");
+    expect(sortedKeys(settings)).toStrictEqual(["modelName", "timezone"].sort());
   });
 
   it("maps only the provided settings fields to a partial update", () => {
@@ -184,11 +408,28 @@ describe("http/mappers session and settings", () => {
     expect(settingsPatchToWire({})).toEqual({});
   });
 
-  it("maps a password change to snake_case", () => {
-    expect(passwordChangeToWire("old", "new")).toEqual({
+  it("drops a stray property on a settings patch, keeping exactly SettingsUpdate's keys", () => {
+    const strayPatch = {
+      timezone: "UTC",
+      modelName: "kimi-k3",
+      futureField: "surprise",
+    } as Partial<AppSettings>;
+
+    const wire = settingsPatchToWire(strayPatch);
+
+    expect(wire).not.toHaveProperty("futureField");
+    expect(wire).not.toHaveProperty("future_field");
+    expect(sortedKeys(wire)).toStrictEqual(SETTINGS_UPDATE_KEYS);
+  });
+
+  it("maps a password change to exactly {current_password, new_password}", () => {
+    const wire = passwordChangeToWire("old", "new");
+
+    expect(wire).toStrictEqual({
       current_password: "old",
       new_password: "new",
     });
+    expect(sortedKeys(wire)).toStrictEqual(["current_password", "new_password"].sort());
   });
 });
 
@@ -207,6 +448,26 @@ describe("http/mappers archive", () => {
     expect(domain.pageSize).toBe(10);
     expect(domain.total).toBe(1);
     expect(domain.items[0]!.id).toBe("task-1");
+    expect(sortedKeys(domain)).toStrictEqual(["items", "page", "pageSize", "total"].sort());
+  });
+
+  it("drops an unrecognized field at the top level and inside items", () => {
+    const wire = {
+      items: [{ ...wireTask(), future_field: "surprise" }],
+      page: 1,
+      page_size: 10,
+      total: 1,
+      future_field: "surprise",
+    } as unknown as WireArchiveList;
+
+    const domain = archiveListToDomain(wire);
+
+    expect(domain).not.toHaveProperty("future_field");
+    expect(domain).not.toHaveProperty("futureField");
+    expect(sortedKeys(domain)).toStrictEqual(["items", "page", "pageSize", "total"].sort());
+    expect(domain.items[0]).not.toHaveProperty("future_field");
+    expect(domain.items[0]).not.toHaveProperty("futureField");
+    expect(sortedKeys(domain.items[0]!)).toStrictEqual(TASK_DOMAIN_KEYS);
   });
 
   it("omits an empty search from the query, and always sends a fixed page_size", () => {
