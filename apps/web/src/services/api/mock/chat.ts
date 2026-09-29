@@ -262,6 +262,10 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
   };
 }
 
+const NOT_FOUND_MESSAGE = "That proposed change is no longer available.";
+const ALREADY_REJECTED_MESSAGE = "This change was cancelled, so it wasn't applied.";
+const ALREADY_APPLIED_MESSAGE = "This change has already been applied.";
+
 export function createChatClient(
   tasksClient: Pick<ApiClient, "createTask" | "moveTask" | "updateTask">,
 ): Pick<
@@ -289,13 +293,15 @@ export function createChatClient(
       return fresh;
     },
     async sendChatMessage(text) {
+      await delay(600, 1200);
+      // Like the API, a failed send persists nothing — not even the user's message.
+      if (read<boolean>(KEYS.forceError, false))
+        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable. Try again.", {
+          status: 503,
+        });
       const conversation =
         read<Conversation | null>(KEYS.conversation, null) ?? emptyConversation();
       conversation.messages.push({ id: uid("msg"), role: "user", text, createdAt: nowIso() });
-      write(KEYS.conversation, conversation);
-      await delay(600, 1200);
-      if (read<boolean>(KEYS.forceError, false))
-        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable. Try again.");
       conversation.messages.push(buildAssistantReply(text, ensureTasks()));
       write(KEYS.conversation, conversation);
       return conversation;
@@ -313,8 +319,10 @@ export function createChatClient(
       const proposed = conversation.messages.find(
         (message) => message.action?.id === actionId,
       )?.action;
-      if (!proposed) throw new ApiError("NOT_FOUND", "That proposed action is gone.");
-      if (proposed.status !== "pending") return conversation;
+      if (!proposed) throw new ApiError("NOT_FOUND", NOT_FOUND_MESSAGE, { status: 404 });
+      if (proposed.status === "rejected")
+        throw new ApiError("ACTION_ALREADY_REJECTED", ALREADY_REJECTED_MESSAGE, { status: 409 });
+      if (proposed.status === "applied") return conversation;
       if (proposed.kind === "create" && proposed.payload.draft)
         await tasksClient.createTask(proposed.payload.draft);
       else if (proposed.kind === "move" && proposed.payload.taskId && proposed.payload.status)
@@ -342,7 +350,10 @@ export function createChatClient(
       const action = conversation.messages.find(
         (message) => message.action?.id === actionId,
       )?.action;
-      if (action && action.status === "pending") action.status = "rejected";
+      if (!action) throw new ApiError("NOT_FOUND", NOT_FOUND_MESSAGE, { status: 404 });
+      if (action.status === "applied")
+        throw new ApiError("ACTION_ALREADY_APPLIED", ALREADY_APPLIED_MESSAGE, { status: 409 });
+      action.status = "rejected";
       write(KEYS.conversation, conversation);
       return conversation;
     },

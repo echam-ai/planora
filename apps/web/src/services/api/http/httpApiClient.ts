@@ -5,11 +5,12 @@
  * types readable. No generated client and no new runtime dependency.
  */
 import type { paths } from "@/shared/api/schema.gen";
-import { ApiError, type Conversation } from "@/types";
+import { ApiError } from "@/types";
 import type { ApiClient } from "../ApiClient";
 import { request } from "./client";
 import {
   archiveListToDomain,
+  conversationToDomain,
   archiveQueryToWire,
   taskDraftToDomain,
   passwordChangeToWire,
@@ -47,18 +48,12 @@ type ParseTaskRequest =
   paths["/api/v1/ai/parse-task"]["post"]["requestBody"]["content"]["application/json"];
 type ParseTaskResponse =
   paths["/api/v1/ai/parse-task"]["post"]["responses"][200]["content"]["application/json"];
+type ConversationResponse =
+  paths["/api/v1/chat/conversation"]["get"]["responses"][200]["content"]["application/json"];
+type SendMessageRequest =
+  paths["/api/v1/chat/messages"]["post"]["requestBody"]["content"]["application/json"];
 type RestoreResponse =
   paths["/api/v1/archive/{task_id}/restore"]["post"]["responses"][200]["content"]["application/json"];
-
-/**
- * The mock's chat runs entirely against browser storage, so
- * letting them fall back to it in HTTP mode would silently split the data:
- * a "confirmed" chat action would change tasks the server never saw. Reject
- * instead — the real chat endpoints arrive in #39–#41 — and never touch `fetch`.
- */
-function aiUnavailable<T>(): Promise<T> {
-  return Promise.reject(new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now."));
-}
 
 export const httpApiClient: ApiClient = {
   async login(username, password) {
@@ -177,11 +172,40 @@ export const httpApiClient: ApiClient = {
     await request<void>({ method: "DELETE", path: `/archive/${encodeURIComponent(id)}` });
   },
 
-  getCurrentConversation: () => aiUnavailable<Conversation>(),
-  sendChatMessage: () => aiUnavailable<Conversation>(),
-  startNewConversation: () => aiUnavailable<Conversation>(),
-  confirmChatAction: () => aiUnavailable<Conversation>(),
-  rejectChatAction: () => aiUnavailable<Conversation>(),
+  async getCurrentConversation() {
+    const wire = await request<ConversationResponse>({ method: "GET", path: "/chat/conversation" });
+    return conversationToDomain(wire);
+  },
+  async startNewConversation() {
+    const wire = await request<ConversationResponse>({
+      method: "POST",
+      path: "/chat/conversation",
+    });
+    return conversationToDomain(wire);
+  },
+  async sendChatMessage(text) {
+    const body: SendMessageRequest = { text };
+    const wire = await request<ConversationResponse>({
+      method: "POST",
+      path: "/chat/messages",
+      body,
+    });
+    return conversationToDomain(wire);
+  },
+  async confirmChatAction(id) {
+    const wire = await request<ConversationResponse>({
+      method: "POST",
+      path: `/chat/actions/${encodeURIComponent(id)}/confirm`,
+    });
+    return conversationToDomain(wire);
+  },
+  async rejectChatAction(id) {
+    const wire = await request<ConversationResponse>({
+      method: "POST",
+      path: `/chat/actions/${encodeURIComponent(id)}/reject`,
+    });
+    return conversationToDomain(wire);
+  },
 
   resetDemoData: () =>
     Promise.reject(new ApiError("NOT_SUPPORTED", "Demo data can't be reset on a live server.")),

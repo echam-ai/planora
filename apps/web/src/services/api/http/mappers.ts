@@ -8,6 +8,11 @@ import type { paths } from "@/shared/api/schema.gen";
 import type { ArchivePage } from "../ApiClient";
 import type {
   AppSettings,
+  ChatAction,
+  ChatActionField,
+  ChatActionPayload,
+  ChatMessage,
+  Conversation,
   ParsedTaskText,
   Session,
   Task,
@@ -24,6 +29,11 @@ type WireTaskUpdate =
   paths["/api/v1/tasks/{task_id}"]["patch"]["requestBody"]["content"]["application/json"];
 type WireParsedTask =
   paths["/api/v1/ai/parse-task"]["post"]["responses"][200]["content"]["application/json"];
+type WireConversation =
+  paths["/api/v1/chat/conversation"]["get"]["responses"][200]["content"]["application/json"];
+type WireChatMessage = WireConversation["messages"][number];
+type WireChatAction = NonNullable<WireChatMessage["action"]>;
+type WireChatField = WireChatAction["fields"][number];
 type WireSession =
   paths["/api/v1/auth/login"]["post"]["responses"][200]["content"]["application/json"];
 type WireSettings =
@@ -177,4 +187,64 @@ export function archiveQueryToWire(
 ): { search?: string; page: number; page_size: number } {
   const trimmed = search.trim();
   return { ...(trimmed ? { search: trimmed } : {}), page, page_size: 10 };
+}
+
+function chatFieldToDomain(wire: WireChatField): ChatActionField {
+  return {
+    label: wire.label,
+    ...(typeof wire.from === "string" ? { from: wire.from } : {}),
+    to: wire.to,
+  };
+}
+
+/**
+ * The wire `payload` is an open object, so it is narrowed by `kind` (create,
+ * update, move, schedule) into the `shared/domain/chat.ts` shape. Keys that do
+ * not belong to the kind are dropped, and a `null` `deadline_at` stays `null`
+ * (it removes the deadline).
+ */
+function chatPayloadToDomain(
+  kind: WireChatAction["kind"],
+  payload: WireChatAction["payload"],
+): ChatActionPayload {
+  const { task_id, draft, status, deadline_at } = payload;
+  const taskId = task_id as string;
+  switch (kind) {
+    case "create":
+      return { draft: taskDraftToDomain(draft as WireParsedTask) };
+    case "update":
+      return { taskId, draft: taskDraftToDomain(draft as WireParsedTask) };
+    case "move":
+      return { taskId, status: status as TaskStatus };
+    case "schedule":
+      return { taskId, deadlineAt: (deadline_at as string | null | undefined) ?? null };
+  }
+}
+
+export function chatActionToDomain(wire: WireChatAction): ChatAction {
+  return {
+    id: wire.id,
+    kind: wire.kind,
+    title: wire.title,
+    summary: wire.summary,
+    fields: wire.fields.map(chatFieldToDomain),
+    status: wire.status,
+    payload: chatPayloadToDomain(wire.kind, wire.payload),
+  };
+}
+
+export function chatMessageToDomain(wire: WireChatMessage): ChatMessage {
+  return {
+    id: wire.id,
+    role: wire.role,
+    text: wire.text,
+    createdAt: wire.created_at,
+    ...(wire.action != null && typeof wire.action === "object"
+      ? { action: chatActionToDomain(wire.action) }
+      : {}),
+  };
+}
+
+export function conversationToDomain(wire: WireConversation): Conversation {
+  return { id: wire.id, messages: wire.messages.map(chatMessageToDomain) };
 }

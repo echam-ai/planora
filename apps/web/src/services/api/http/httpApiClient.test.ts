@@ -346,28 +346,156 @@ describe("httpApiClient — archive", () => {
   });
 });
 
-describe("httpApiClient — unavailable methods", () => {
+const wireConversation = {
+  id: "c1",
+  messages: [
+    {
+      id: "m1",
+      role: "user",
+      text: "Move 'Pay rent' to Done",
+      created_at: "2026-09-28T10:00:00Z",
+      action: null,
+    },
+    {
+      id: "m2",
+      role: "assistant",
+      text: "I can move it.",
+      created_at: "2026-09-28T10:00:01Z",
+      action: {
+        id: "a1",
+        kind: "move",
+        title: "Move task",
+        summary: "Pay rent",
+        fields: [{ label: "Status", from: "Todo", to: "Done" }],
+        status: "pending",
+        payload: { task_id: "t1", status: "done" },
+      },
+    },
+  ],
+};
+const domainConversation = {
+  id: "c1",
+  messages: [
+    { id: "m1", role: "user", text: "Move 'Pay rent' to Done", createdAt: "2026-09-28T10:00:00Z" },
+    {
+      id: "m2",
+      role: "assistant",
+      text: "I can move it.",
+      createdAt: "2026-09-28T10:00:01Z",
+      action: {
+        id: "a1",
+        kind: "move",
+        title: "Move task",
+        summary: "Pay rent",
+        fields: [{ label: "Status", from: "Todo", to: "Done" }],
+        status: "pending",
+        payload: { taskId: "t1", status: "done" },
+      },
+    },
+  ],
+};
+
+describe("httpApiClient — chat", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("Scenario: chat is not wired yet — sendChatMessage rejects with AI_UNAVAILABLE and never calls fetch", async () => {
-    const fetchSpy = stubFetch(jsonResponse(200, {}));
+  it("getCurrentConversation: GET /api/v1/chat/conversation, mapped", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, wireConversation));
 
-    await expect(httpApiClient.sendChatMessage("hi")).rejects.toMatchObject({
-      code: "AI_UNAVAILABLE",
+    await expect(httpApiClient.getCurrentConversation()).resolves.toStrictEqual(domainConversation);
+    const { url, init } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/chat/conversation");
+    expect(init.method).toBe("GET");
+  });
+
+  it("startNewConversation: POST /api/v1/chat/conversation with no body, mapped from the 201", async () => {
+    const fetchSpy = stubFetch(jsonResponse(201, { id: "c2", messages: [] }));
+
+    await expect(httpApiClient.startNewConversation()).resolves.toStrictEqual({
+      id: "c2",
+      messages: [],
     });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    const { url, init } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/chat/conversation");
+    expect(init.method).toBe("POST");
+    expect(init.body).toBeUndefined();
+  });
+
+  it("Scenario: user receives a proposal — sendChatMessage posts exactly {text} and maps the result", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, wireConversation));
+
+    const result = await httpApiClient.sendChatMessage("Move 'Pay rent' to Done");
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const { url, init, body } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/chat/messages");
+    expect(init.method).toBe("POST");
+    expect(Object.keys(body)).toEqual(["text"]);
+    expect(body).toStrictEqual({ text: "Move 'Pay rent' to Done" });
+    expect(result).toStrictEqual(domainConversation);
+    expect("action" in result.messages[0]!).toBe(false);
   });
 
   it.each([
-    ["getCurrentConversation", () => httpApiClient.getCurrentConversation()],
-    ["startNewConversation", () => httpApiClient.startNewConversation()],
-    ["confirmChatAction", () => httpApiClient.confirmChatAction("action-1")],
-    ["rejectChatAction", () => httpApiClient.rejectChatAction("action-1")],
-  ])("%s rejects with AI_UNAVAILABLE without calling fetch", async (_name, call) => {
-    const fetchSpy = stubFetch(jsonResponse(200, {}));
+    ["confirmChatAction", "confirm"],
+    ["rejectChatAction", "reject"],
+  ] as const)(
+    "%s: POST .../actions/{id}/%s with the id percent-encoded and no body",
+    async (method, verb) => {
+      const fetchSpy = stubFetch(jsonResponse(200, wireConversation));
 
-    await expect(call()).rejects.toMatchObject({ code: "AI_UNAVAILABLE" });
-    expect(fetchSpy).not.toHaveBeenCalled();
+      await expect(httpApiClient[method]("a/1 ?x")).resolves.toStrictEqual(domainConversation);
+
+      const { url, init } = lastRequest(fetchSpy);
+      expect(url).toBe(`/api/v1/chat/actions/a%2F1%20%3Fx/${verb}`);
+      expect(init.method).toBe("POST");
+      expect(init.body).toBeUndefined();
+    },
+  );
+
+  it.each([
+    [503, "AI_UNAVAILABLE", "The assistant is unavailable right now.", "sendChatMessage"],
+    [404, "NOT_FOUND", "That proposed change is no longer available.", "confirmChatAction"],
+    [
+      409,
+      "ACTION_ALREADY_REJECTED",
+      "This change was cancelled, so it wasn't applied.",
+      "confirmChatAction",
+    ],
+    [409, "ACTION_ALREADY_APPLIED", "This change has already been applied.", "rejectChatAction"],
+    [409, "ACTION_STALE", "The task changed since this was proposed.", "confirmChatAction"],
+  ] as const)(
+    "%i %s rejects with an ApiError carrying code, status and message",
+    async (status, code, message, method) => {
+      stubFetch(jsonResponse(status, { code, message }));
+
+      const promise = httpApiClient[method]("x");
+      await expect(promise).rejects.toBeInstanceOf(ApiError);
+      await expect(promise).rejects.toMatchObject({ code, status, message });
+    },
+  );
+});
+
+describe("httpApiClient — unavailable methods", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("resetDemoData is the only method that rejects without calling fetch", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, {}));
+    const args: Record<string, unknown[]> = {
+      createTask: [{ title: "T", content: "", urls: [] }],
+      updateTask: ["x", {}],
+      moveTask: ["x", 0],
+      reorderTasks: ["todo", []],
+    };
+    const others = Object.entries(httpApiClient).filter(([name]) => name !== "resetDemoData");
+    expect(others.length).toBeGreaterThan(0);
+    for (const [name, method] of others) {
+      fetchSpy.mockClear();
+      fetchSpy.mockResolvedValue(jsonResponse(200, null));
+      await (method as (...a: unknown[]) => Promise<unknown>)(...(args[name] ?? ["x", "y"])).catch(
+        () => undefined,
+      );
+      expect(fetchSpy, name).toHaveBeenCalled();
+    }
   });
 
   it("resetDemoData rejects with NOT_SUPPORTED without calling fetch or deleting server data", async () => {

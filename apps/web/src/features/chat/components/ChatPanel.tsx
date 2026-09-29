@@ -91,7 +91,12 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
     if (!trimmed) return;
     setText("");
     send.mutate(trimmed, {
-      onError: (e: Error) => toast.error(e.message),
+      // A failed send persists nothing, so hand the text back rather than lose it —
+      // unless the user has already started typing something else.
+      onError: (e: Error) => {
+        setText((current) => (current === "" ? trimmed : current));
+        toast.error(e.message);
+      },
     });
   };
 
@@ -169,7 +174,11 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                       onError: (e: Error) => toast.error(e.message),
                     })
                   }
-                  onReject={() => reject.mutate(m.action!.id)}
+                  onReject={() =>
+                    reject.mutate(m.action!.id, {
+                      onError: (e: Error) => toast.error(e.message),
+                    })
+                  }
                 />
               )}
             </div>
