@@ -29,14 +29,13 @@ export default defineConfig({
         // 80% target in AGENTS.md rule 9. It may only be raised, never lowered. Files below
         // 80% per file today, grouped by follow-up issue that raises them and the global floor:
         //   Chat (ChatPanel.tsx, features/chat/hooks.ts, services/api/mock/chat.ts) -> #76
-        //   Settings (routes/settings.tsx, features/settings/hooks.ts)          -> #77
         // The last follow-up ends the ratchet at 80% per file across the tier. perFile is
         // intentionally unset for files not yet listed below: the floor below is an aggregate
         // over the whole include set, not a per-file check, until every follow-up lands.
-        statements: 88,
-        branches: 82,
-        functions: 83,
-        lines: 88,
+        statements: 95,
+        branches: 90,
+        functions: 93,
+        lines: 96,
         // Per-file guarantees, unaffected by the ratchet above.
         "src/features/tasks/deadline.ts": {
           statements: 80,
@@ -162,6 +161,19 @@ export default defineConfig({
           lines: 80,
         },
         "src/lib/root-error-reporting.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        // #77: settings.
+        "src/routes/settings.tsx": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        "src/features/settings/hooks.ts": {
           statements: 80,
           branches: 80,
           functions: 80,
