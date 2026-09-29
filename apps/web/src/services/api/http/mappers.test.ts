@@ -378,20 +378,25 @@ describe("http/mappers session and settings", () => {
     expect(sortedKeys(session)).toStrictEqual(["signedInAt", "username"].sort());
   });
 
-  it("round trips SettingsResponse through settingsToDomain and settingsPatchToWire exactly", () => {
-    const wire: WireSettings = { timezone: "Asia/Singapore", model_name: "kimi-k3" };
+  it("maps SettingsResponse to exactly timezone, modelName and availableModels", () => {
+    const wire: WireSettings = {
+      timezone: "Asia/Singapore",
+      model_name: "kimi-k3",
+      available_models: ["kimi-k3", "kimi-k3-thinking"],
+    };
 
-    const domain = settingsToDomain(wire);
-    expect(domain).toStrictEqual({ timezone: "Asia/Singapore", modelName: "kimi-k3" });
-
-    const patch = settingsPatchToWire(domain);
-    expect(patch).toStrictEqual(wire);
+    expect(settingsToDomain(wire)).toStrictEqual({
+      timezone: "Asia/Singapore",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3", "kimi-k3-thinking"],
+    });
   });
 
   it("drops an unrecognized field on SettingsResponse", () => {
     const wire = {
       timezone: "Asia/Singapore",
       model_name: "kimi-k3",
+      available_models: ["kimi-k3"],
       future_field: "surprise",
     } as WireSettings;
 
@@ -399,7 +404,18 @@ describe("http/mappers session and settings", () => {
 
     expect(settings).not.toHaveProperty("future_field");
     expect(settings).not.toHaveProperty("futureField");
-    expect(sortedKeys(settings)).toStrictEqual(["modelName", "timezone"].sort());
+    expect(sortedKeys(settings)).toStrictEqual(["availableModels", "modelName", "timezone"].sort());
+  });
+
+  it("never sends available_models, even when the patch carries availableModels", () => {
+    const wire = settingsPatchToWire({
+      timezone: "UTC",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3", "kimi-k3-thinking"],
+    });
+
+    expect(wire).not.toHaveProperty("available_models");
+    expect(sortedKeys(wire)).toStrictEqual(SETTINGS_UPDATE_KEYS);
   });
 
   it("maps only the provided settings fields to a partial update", () => {

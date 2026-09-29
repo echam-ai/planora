@@ -378,8 +378,15 @@
       },
       "SettingsResponse": {
         "additionalProperties": false,
-        "description": "The full settings wire shape — exactly `timezone` and `model_name`,\nnothing else; never a secret (spec §11).",
+        "description": "The full settings wire shape — exactly `timezone`, `model_name` and\n`available_models`, nothing else; never a secret (spec §11).\n`available_models` is read-only: the models the deployment serves.",
         "properties": {
+          "available_models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Models",
+            "type": "array"
+          },
           "model_name": {
             "title": "Model Name",
             "type": "string"
@@ -391,7 +398,8 @@
         },
         "required": [
           "timezone",
-          "model_name"
+          "model_name",
+          "available_models"
         ],
         "title": "SettingsResponse",
         "type": "object"

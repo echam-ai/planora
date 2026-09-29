@@ -554,10 +554,13 @@ export interface components {
         };
         /**
          * SettingsResponse
-         * @description The full settings wire shape — exactly `timezone` and `model_name`,
-         *     nothing else; never a secret (spec §11).
+         * @description The full settings wire shape — exactly `timezone`, `model_name` and
+         *     `available_models`, nothing else; never a secret (spec §11).
+         *     `available_models` is read-only: the models the deployment serves.
          */
         SettingsResponse: {
+            /** Available Models */
+            available_models: string[];
             /** Model Name */
             model_name: string;
             /** Timezone */

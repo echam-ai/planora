@@ -74,7 +74,11 @@ function installClient(seed: Task[]) {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 
   vi.spyOn(api, "getSession").mockResolvedValue({ username: "demo", signedInAt: iso(-HOUR) });
-  vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+  vi.spyOn(api, "getSettings").mockResolvedValue({
+    timezone: "UTC",
+    modelName: "kimi-k3",
+    availableModels: ["kimi-k3"],
+  });
   vi.spyOn(api, "listTasks").mockImplementation(async () =>
     store.tasks.filter((t) => !t.archivedAt),
   );

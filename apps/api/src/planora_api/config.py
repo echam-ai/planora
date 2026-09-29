@@ -19,6 +19,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ValidationError, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from planora_api.domain.llm_models import available_models
+
 # Maps each pydantic field name to the environment variable it is read from,
 # so error messages can always name the variable an operator actually sets.
 _ENV_VAR_NAMES: dict[str, str] = {
@@ -27,6 +29,7 @@ _ENV_VAR_NAMES: dict[str, str] = {
     "llm_base_url": "LLM_BASE_URL",
     "llm_api_key": "LLM_API_KEY",
     "llm_model": "LLM_MODEL",
+    "llm_allowed_models": "LLM_ALLOWED_MODELS",
     "app_origin": "APP_ORIGIN",
     "default_timezone": "DEFAULT_TIMEZONE",
     "log_level": "LOG_LEVEL",
@@ -63,6 +66,9 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.moonshot.ai/v1"
     llm_api_key: str
     llm_model: str = "kimi-k3"
+    # Optional comma-separated extra model names the user may choose in
+    # Settings (issue #86). Never exposed except via `available_models`.
+    llm_allowed_models: str = ""
     app_origin: str
     default_timezone: str = "Asia/Singapore"
     log_level: str = "INFO"
@@ -110,6 +116,11 @@ class Settings(BaseSettings):
         if normalized not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             raise ValueError("must be DEBUG, INFO, WARNING, or ERROR")
         return normalized
+
+    def available_models(self) -> list[str]:
+        """`LLM_MODEL` first, then each `LLM_ALLOWED_MODELS` entry not
+        already listed (see `domain.llm_models`)."""
+        return available_models(self.llm_model, self.llm_allowed_models)
 
     def __repr__(self) -> str:
         data = self.model_dump()

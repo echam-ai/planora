@@ -475,6 +475,7 @@ def test_settings_model_override_is_used_on_every_call(
     migrated_session_factory: sessionmaker[Session],
     app_factory: Callable[[], FastAPI],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "override-model")
     app = app_factory()
     _fixed_clock(app)
     fake = _wire_fake(

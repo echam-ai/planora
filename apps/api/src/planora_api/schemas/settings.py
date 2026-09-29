@@ -33,13 +33,15 @@ def _has_control_character(value: str) -> bool:
 
 
 class SettingsResponse(BaseModel):
-    """The full settings wire shape — exactly `timezone` and `model_name`,
-    nothing else; never a secret (spec §11)."""
+    """The full settings wire shape — exactly `timezone`, `model_name` and
+    `available_models`, nothing else; never a secret (spec §11).
+    `available_models` is read-only: the models the deployment serves."""
 
     model_config = ConfigDict(extra="forbid")
 
     timezone: str
     model_name: str
+    available_models: list[str]
 
 
 class SettingsUpdate(BaseModel):

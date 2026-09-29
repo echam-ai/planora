@@ -49,7 +49,11 @@ describe("TasksPage route", () => {
       username: "demo",
       signedInAt: new Date().toISOString(),
     });
-    vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+    vi.spyOn(api, "getSettings").mockResolvedValue({
+      timezone: "UTC",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
+    });
     vi.spyOn(api, "listTasks").mockResolvedValue([]);
     renderTasksRoute();
 

@@ -2,7 +2,12 @@ import { ApiError, type AppSettings, type Session } from "@/types";
 import type { ApiClient } from "../ApiClient";
 import { KEYS, delay, ensureTasks, hasWindow, nowIso, read, write } from "./store";
 
-const DEFAULT_SETTINGS: AppSettings = { timezone: "Asia/Singapore", modelName: "kimi-k3" };
+const AVAILABLE_MODELS = ["kimi-k3"];
+const DEFAULT_SETTINGS: AppSettings = {
+  timezone: "Asia/Singapore",
+  modelName: "kimi-k3",
+  availableModels: AVAILABLE_MODELS,
+};
 const DEMO_USER = "demo";
 const DEFAULT_PASSWORD = "focusboard";
 
@@ -39,10 +44,15 @@ export function createAuthClient(): Pick<
       if (read<boolean>(KEYS.forceError, false)) {
         throw new ApiError("SIMULATED_FAILURE", "Simulated failure while trying to save settings.");
       }
-      const next = {
+      if (patch.modelName !== undefined && !AVAILABLE_MODELS.includes(patch.modelName.trim())) {
+        throw new ApiError("VALIDATION_ERROR", "Choose one of the available models.");
+      }
+      // The list is read-only: never taken from the patch or from storage.
+      const next: AppSettings = {
         ...DEFAULT_SETTINGS,
         ...read<Partial<AppSettings>>(KEYS.settings, {}),
         ...patch,
+        availableModels: AVAILABLE_MODELS,
       };
       write(KEYS.settings, next);
       return next;
