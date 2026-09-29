@@ -86,7 +86,9 @@ and chat report unavailable until a real key is configured. To use a real
 LLM endpoint, put the key in `LLM_API_KEY`; `LLM_BASE_URL`
 (`https://api.moonshot.ai/v1`) and `LLM_MODEL` (`kimi-k3`) are the
 defaults and only need changing for a different OpenAI-compatible
-endpoint. Restart the launcher after editing `apps/api/.env` — it reads
+endpoint. Settings offers only `LLM_MODEL` as the assistant model unless
+`LLM_ALLOWED_MODELS` lists more (comma-separated) that the endpoint also
+serves. Restart the launcher after editing `apps/api/.env` — it reads
 the file once, at start.
 
 Done tasks are archived only while the launcher is running: once at
