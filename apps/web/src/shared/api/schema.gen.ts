@@ -158,8 +158,8 @@ export interface paths {
         put?: never;
         /**
          * Reject Action
-         * @description Reject a pending proposal (spec §41). Calls no LLM. The only
-         *     documented failure (`409 ACTION_ALREADY_APPLIED`) is raised by
+         * @description Reject a pending proposal (spec §41). Calls no LLM. The documented
+         *     failures (`404 NOT_FOUND`, `409 ACTION_ALREADY_APPLIED`) are raised by
          *     `db.chat_action_repository.reject` itself.
          */
         post: operations["reject_action_api_v1_chat_actions__action_id__reject_post"];
