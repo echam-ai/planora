@@ -45,30 +45,33 @@ async function activeElementIsInside(page: Page, containerSelector: string): Pro
 }
 
 /**
- * Waits for the drawer's open slide-in transition to finish (a single
- * in-page `transitionend` wait, with a safety-net fallback in case the
- * transition already finished or never starts), then returns its settled
- * bounding box. This makes no assumption about the transition's exact
- * duration, and it costs one round trip rather than a Node-side poll loop.
+ * Waits for the drawer's own open animation to finish, then returns its
+ * settled bounding box.
+ *
+ * The slide-in is a `tw-animate-css` keyframe *animation* (`animate-in`), not
+ * a transition, so `transitionend` is the wrong signal: it bubbles, and a
+ * descendant's `outline-color` focus-ring transition (the first focusable
+ * `buttonVariants` button in the drawer, #81) fired mid-slide and resolved the
+ * wait early, giving a box that still overlapped the final panel (#108). The
+ * Web Animations API reports the element's own animations and transitions and
+ * ignores anything a descendant runs, so nothing here depends on event
+ * bubbling or on the animation's duration. The trailing assertions make a
+ * box measured mid-animation fail instead of yielding a click inside the
+ * panel.
  */
 async function settledBoundingBox(locator: Locator) {
-  await locator.evaluate(
-    (el) =>
-      new Promise<void>((resolve) => {
-        if (parseFloat(getComputedStyle(el).transitionDuration) === 0) {
-          resolve();
-          return;
-        }
-        const onEnd = () => {
-          el.removeEventListener("transitionend", onEnd);
-          resolve();
-        };
-        el.addEventListener("transitionend", onEnd, { once: true });
-        setTimeout(resolve, 800);
-      }),
+  await locator.evaluate((el) =>
+    Promise.all(el.getAnimations().map((animation) => animation.finished)).then(() => undefined),
   );
+  expect(
+    await locator.evaluate((el) => el.getAnimations().length),
+    "the drawer's own animations must have finished before it is measured",
+  ).toBe(0);
   const box = await locator.boundingBox();
   if (!box) throw new Error("drawer panel has no bounding box");
+  expect(await locator.boundingBox(), "the settled drawer box must not still be moving").toEqual(
+    box,
+  );
   return box;
 }
 
@@ -81,7 +84,9 @@ async function settledBoundingBox(locator: Locator) {
 async function clickOutsideDrawer(page: Page, dialog: Locator) {
   const box = await settledBoundingBox(dialog);
   expect(box.x, "the drawer must leave some overlay exposed at this width").toBeGreaterThan(0);
-  await page.mouse.click(Math.max(0, box.x - 10), box.y + box.height / 2);
+  const clickX = Math.max(0, box.x - 10);
+  expect(clickX, "the click point must lie outside the settled drawer box").toBeLessThan(box.x);
+  await page.mouse.click(clickX, box.y + box.height / 2);
 }
 
 test.describe("desktop side panel (>=1024px)", () => {
@@ -132,6 +137,7 @@ test.describe("mobile drawer (<1024px)", () => {
       testInfo.project.name === "chromium",
       "requires the <1024px drawer layout; chromium's default viewport here is desktop width",
     );
+    await page.setViewportSize({ width: 390, height: 844 });
     await signIn(page);
     const trigger = chatButton(page);
     await trigger.click();
@@ -158,6 +164,7 @@ test.describe("mobile drawer (<1024px)", () => {
     await clickOutsideDrawer(page, dialog);
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-pressed", "false");
   });
 
   test("scenario: a real pointer click outside the drawer closes it at 360px width", async ({
@@ -178,6 +185,7 @@ test.describe("mobile drawer (<1024px)", () => {
     await clickOutsideDrawer(page, dialog);
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-pressed", "false");
   });
 
   for (const viewport of [
