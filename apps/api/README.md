@@ -1,6 +1,9 @@
 # Planora API
 
-Requires Python 3.12 or newer and `uv`. Copy `.env.example` to `.env` and
+Requires `uv`. Python 3.12 is the canonical interpreter, pinned by
+`.python-version` (`uv` reads it and downloads 3.12 if needed; CI and the
+production image must use the same version, so do not pass `--python`). The
+package itself accepts `>=3.12`. Copy `.env.example` to `.env` and
 fill in the three required values with no default — `SESSION_SECRET`,
 `LLM_API_KEY` and `APP_ORIGIN` — plus any other values you want to change,
 before starting uvicorn. Startup fails fast, naming the missing variable, if
