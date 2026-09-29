@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -16,6 +16,7 @@ import {
 import { useSettings, useSettingsMutations } from "@/features/settings/hooks";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { DemoDataSection } from "@/features/settings/components/DemoDataSection";
+import type { AppSettings } from "@/types";
 import { DEMO_UI_ENABLED } from "@/services/api/demoUi";
 
 export const Route = createFileRoute("/settings")({
@@ -48,23 +49,10 @@ const TIMEZONES = [
   "America/Los_Angeles",
 ];
 
-function SettingsPage() {
-  useAuthGuard();
-  const { data: settings, isLoading } = useSettings();
-  const { save, changePassword } = useSettingsMutations();
-
-  const [timezone, setTimezone] = useState("UTC");
-  const [modelName, setModelName] = useState("");
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [pwError, setPwError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (settings) {
-      setTimezone(settings.timezone);
-      setModelName(settings.modelName);
-    }
-  }, [settings]);
+function PreferencesForm({ settings }: { settings: AppSettings }) {
+  const { save } = useSettingsMutations();
+  const [timezone, setTimezone] = useState(settings.timezone);
+  const [modelName, setModelName] = useState(settings.modelName);
 
   const onSave = () =>
     save.mutate(
@@ -74,6 +62,54 @@ function SettingsPage() {
         onError: () => toast.error("Couldn't save your settings"),
       },
     );
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="tz">Timezone</Label>
+        <Select value={timezone} onValueChange={setTimezone}>
+          <SelectTrigger id="tz">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIMEZONES.map((tz) => (
+              <SelectItem key={tz} value={tz}>
+                {tz}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="model">Assistant model</Label>
+        <Select value={modelName} onValueChange={setModelName}>
+          <SelectTrigger id="model">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {settings.availableModels.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <Button className="min-h-11" onClick={onSave} disabled={save.isPending}>
+        Save changes
+      </Button>
+    </>
+  );
+}
+
+function SettingsPage() {
+  useAuthGuard();
+  const { data: settings, isError, refetch } = useSettings();
+  const { changePassword } = useSettingsMutations();
+
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [pwError, setPwError] = useState<string | null>(null);
 
   const onChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,44 +141,19 @@ function SettingsPage() {
 
         <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-card">
           <h2 className="text-sm font-semibold">Preferences</h2>
-          {isLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="tz">Timezone</Label>
-                <Select value={timezone} onValueChange={setTimezone}>
-                  <SelectTrigger id="tz">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONES.map((tz) => (
-                      <SelectItem key={tz} value={tz}>
-                        {tz}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="model">Assistant model</Label>
-                <Select value={modelName} onValueChange={setModelName}>
-                  <SelectTrigger id="model">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(settings?.availableModels ?? []).map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="min-h-11" onClick={onSave} disabled={save.isPending}>
-                Save changes
+          {settings ? (
+            <PreferencesForm settings={settings} />
+          ) : isError ? (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+              <p role="alert" className="text-sm text-destructive">
+                We couldn't load your settings.
+              </p>
+              <Button className="mt-3 min-h-11" variant="outline" onClick={() => refetch()}>
+                Try again
               </Button>
-            </>
+            </div>
+          ) : (
+            <Skeleton className="h-24 w-full" />
           )}
         </section>
 
