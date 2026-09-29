@@ -8,6 +8,7 @@ it and break those imports. One conftest, at `tests/`.
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -22,6 +23,16 @@ from alembic import command
 from planora_api.config import load_settings
 from planora_api.db.session import create_session_factory
 from planora_api.main import create_app
+
+# Binding rule 10: temporary files go in the repository's `.tmp/`, never the
+# system temp dir. pytest's own `PYTEST_DEBUG_TEMPROOT` moves the root that
+# `pytest-of-<user>/pytest-N` is created under, so numbered per-run dirs,
+# locking and retention pruning keep working (unlike a fixed `--basetemp`,
+# which is wiped at every start and collides across concurrent runs). The root
+# is derived from this file's location, so it holds in any worktree and in CI.
+_REPO_TMP = Path(__file__).resolve().parents[3] / ".tmp"
+_REPO_TMP.mkdir(exist_ok=True)
+os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_REPO_TMP)
 
 # The seven variable names fixed by #21; #22, #25, #26, #37 and #43 rely on
 # these exact names.
