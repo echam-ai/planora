@@ -224,6 +224,8 @@ Read candidate bodies with `gh issue view N --repo hgiang/planora`. Ready means 
 
 Prefer the lowest-numbered ready, unblocked issue — the backlog is ordered deliberately, and Phase 1 establishes the toolchain everything else builds on. #2 and #3 carry the main technical risk and are sequenced before the file moves on purpose; do not reorder them behind #7.
 
+No `phase-7-deployment` issue is picked while any open issue in phases 1–6, or any open `P0`/`P1` intake issue, remains: local macOS usability in HTTP mode comes before deployment. `P2` intake does not block phase 7. Lowest-numbered first is still the tie-break within each group.
+
 Two independent issues may run in parallel when they touch different tiers.
 
 ## Release gate
