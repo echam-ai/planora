@@ -358,15 +358,6 @@ describe("httpApiClient — unavailable methods", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("parseTaskText rejects with AI_UNAVAILABLE without calling fetch", async () => {
-    const fetchSpy = stubFetch(jsonResponse(200, {}));
-
-    await expect(httpApiClient.parseTaskText("do the thing tomorrow")).rejects.toMatchObject({
-      code: "AI_UNAVAILABLE",
-    });
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
   it.each([
     ["getCurrentConversation", () => httpApiClient.getCurrentConversation()],
     ["startNewConversation", () => httpApiClient.startNewConversation()],
@@ -384,5 +375,80 @@ describe("httpApiClient — unavailable methods", () => {
 
     await expect(httpApiClient.resetDemoData()).rejects.toMatchObject({ code: "NOT_SUPPORTED" });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("httpApiClient — parseTaskText", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const text =
+    "Prepare the search-quality review by Friday 4 PM. Use the experiment dashboard link.";
+
+  it("Scenario: user parses free text — one POST with only {text}, mapped to a domain draft", async () => {
+    const fetchSpy = stubFetch(
+      jsonResponse(200, {
+        title: "Prepare the search-quality review",
+        content: "Review the experiment.",
+        category: "work",
+        priority: "high",
+        deadline_at: "2026-10-02T08:00:00Z",
+        urls: [{ url: "https://dash.example/exp", label: null }],
+        markdown_note: "",
+        unexpected: 1,
+      }),
+    );
+
+    const draft = await httpApiClient.parseTaskText(text);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const { url, init, body } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/ai/parse-task");
+    expect(init.method).toBe("POST");
+    expect(Object.keys(body)).toEqual(["text"]);
+    expect(body.text).toBe(text);
+    expect(draft).toStrictEqual({
+      title: "Prepare the search-quality review",
+      content: "Review the experiment.",
+      category: "work",
+      priority: "high",
+      deadlineAt: "2026-10-02T08:00:00Z",
+      urls: [{ id: expect.stringMatching(/.+/), url: "https://dash.example/exp" }],
+      markdownNote: "",
+    });
+  });
+
+  it("Scenario: assistant is unavailable — rejects with ApiError AI_UNAVAILABLE, 503 and the envelope message", async () => {
+    stubFetch(
+      jsonResponse(503, {
+        code: "AI_UNAVAILABLE",
+        message: "The assistant is unavailable right now.",
+      }),
+    );
+
+    const promise = httpApiClient.parseTaskText("anything");
+    await expect(promise).rejects.toBeInstanceOf(ApiError);
+    await expect(promise).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      status: 503,
+      message: "The assistant is unavailable right now.",
+    });
+  });
+
+  it("rejects a 422 VALIDATION_ERROR with code, status and mapped details", async () => {
+    stubFetch(
+      jsonResponse(422, {
+        code: "VALIDATION_ERROR",
+        message: "Text is too long.",
+        details: [{ field: "text", message: "Must be at most 4000 characters." }],
+      }),
+    );
+
+    const promise = httpApiClient.parseTaskText("x".repeat(4001));
+    await expect(promise).rejects.toBeInstanceOf(ApiError);
+    await expect(promise).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      status: 422,
+      details: [{ field: "text", message: "Must be at most 4000 characters." }],
+    });
   });
 });

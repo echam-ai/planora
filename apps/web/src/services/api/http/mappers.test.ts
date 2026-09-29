@@ -4,6 +4,7 @@ import type { AppSettings, TaskDraft, TaskUrl } from "@/types";
 import {
   archiveListToDomain,
   archiveQueryToWire,
+  taskDraftToDomain,
   passwordChangeToWire,
   sessionToDomain,
   settingsPatchToWire,
@@ -490,5 +491,78 @@ describe("http/mappers archive", () => {
     expect(archiveQueryToWire("", 1)).toEqual({ page: 1, page_size: 10 });
     expect(archiveQueryToWire("  ", 3)).toEqual({ page: 3, page_size: 10 });
     expect(archiveQueryToWire("urgent", 2)).toEqual({ search: "urgent", page: 2, page_size: 10 });
+  });
+});
+
+describe("taskDraftToDomain", () => {
+  const minimal = { title: "T", content: "C", category: "work", priority: "low" } as const;
+
+  it("maps a fully populated wire draft to exactly the seven domain keys", () => {
+    const result = taskDraftToDomain({
+      title: "T",
+      content: "C",
+      category: "personal",
+      priority: "high",
+      deadline_at: "2026-10-02T08:00:00Z",
+      urls: [
+        { url: "https://a.example", label: "A" },
+        { url: "https://b.example", label: null },
+      ],
+      markdown_note: "# note",
+    });
+
+    expect(Object.keys(result).sort()).toEqual([
+      "category",
+      "content",
+      "deadlineAt",
+      "markdownNote",
+      "priority",
+      "title",
+      "urls",
+    ]);
+    expect(result).toStrictEqual({
+      title: "T",
+      content: "C",
+      category: "personal",
+      priority: "high",
+      deadlineAt: "2026-10-02T08:00:00Z",
+      urls: [
+        { id: expect.any(String), url: "https://a.example", label: "A" },
+        { id: expect.any(String), url: "https://b.example" },
+      ],
+      markdownNote: "# note",
+    });
+    const ids = result.urls.map((u) => u.id);
+    expect(ids.every((id) => id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("Scenario: minimal wire draft gets domain defaults", () => {
+    const result = taskDraftToDomain({ ...minimal, markdown_note: undefined } as never);
+    expect(result.deadlineAt).toBeNull();
+    expect(result.urls).toEqual([]);
+    expect(result.markdownNote).toBe("");
+  });
+
+  it("maps a null deadline_at to null", () => {
+    expect(
+      taskDraftToDomain({ ...minimal, markdown_note: "", deadline_at: null }).deadlineAt,
+    ).toBeNull();
+  });
+
+  it("drops unknown top-level and URL fields instead of throwing or passing them through", () => {
+    const wire = {
+      ...minimal,
+      markdown_note: "",
+      status: "done",
+      extra: 1,
+      urls: [{ url: "https://a.example", label: null, tracking: "x" }],
+    } as never;
+
+    const result = taskDraftToDomain(wire);
+
+    expect(Object.keys(result)).not.toContain("extra");
+    expect(Object.keys(result)).not.toContain("status");
+    expect(result.urls).toStrictEqual([{ id: expect.any(String), url: "https://a.example" }]);
   });
 });
