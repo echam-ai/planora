@@ -19,8 +19,8 @@ import { defineConfig, devices } from "@playwright/test";
 //
 // A direct `playwright test` invocation that skips the wrapper falls back
 // to the previous fixed port 4173 and loses the multi-worktree isolation.
-const host = process.env.PLAYWRIGHT_WEB_HOST ?? "127.0.0.1";
-const port = Number(process.env.PLAYWRIGHT_WEB_PORT ?? 4173);
+const host = process.env["PLAYWRIGHT_WEB_HOST"] ?? "127.0.0.1";
+const port = Number(process.env["PLAYWRIGHT_WEB_PORT"] ?? 4173);
 const baseURL = `http://${host}:${port}`;
 
 // Cold-start measurement for #66 (apps/web, `rm -rf node_modules/.vite`,
