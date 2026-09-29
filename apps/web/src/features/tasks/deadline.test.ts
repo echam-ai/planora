@@ -65,3 +65,9 @@ describe("deadline display helpers", () => {
     expect(formatInZone("2026-01-15T12:00:00.000Z", "UTC", false)).toBe("15 Jan 2026");
   });
 });
+
+describe("formatInZone month spelling", () => {
+  it("writes September as Sep regardless of the ICU version", () => {
+    expect(formatInZone("2026-09-25T07:00:00.000Z", "Asia/Singapore")).toBe("25 Sep 2026, 15:00");
+  });
+});

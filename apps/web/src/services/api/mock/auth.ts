@@ -11,6 +11,11 @@ const DEFAULT_SETTINGS: AppSettings = {
 const DEMO_USER = "demo";
 const DEFAULT_PASSWORD = "focusboard";
 
+/** The Settings timezone the mock currently holds. */
+export function currentTimezone(): string {
+  return { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(KEYS.settings, {}) }.timezone;
+}
+
 export function createAuthClient(): Pick<
   ApiClient,
   "login" | "logout" | "getSession" | "getSettings" | "updateSettings" | "changePassword"
