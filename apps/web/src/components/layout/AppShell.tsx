@@ -173,6 +173,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             // has somewhere to land (criterion 6) while staying usable for
             // chat even at 360px (~306px of panel width).
             className="w-[85%] p-0 sm:max-w-md"
+            // ChatPanel's own "Close assistant" is the drawer's single close
+            // control (#81); the built-in 16px "Close" would be a duplicate.
+            showCloseButton={false}
             onCloseAutoFocus={(event) => {
               // Radix only restores focus to a SheetTrigger; the header AI
               // Assistant button toggles `chatOpen` directly instead (#57

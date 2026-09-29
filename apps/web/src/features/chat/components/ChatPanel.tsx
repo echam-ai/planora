@@ -120,7 +120,13 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           <Button variant="ghost" size="sm" onClick={() => setConfirmNew(true)}>
             <RefreshCw className="h-4 w-4" /> New
           </Button>
-          <Button variant="ghost" size="icon" aria-label="Close assistant" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11"
+            aria-label="Close assistant"
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
