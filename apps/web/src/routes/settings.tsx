@@ -1,23 +1,11 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { RotateCcw } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -27,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { useSettings, useSettingsMutations } from "@/features/settings/hooks";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { api } from "@/services/api";
+import { DemoDataSection } from "@/features/settings/components/DemoDataSection";
+import { DEMO_UI_ENABLED } from "@/services/api/demoUi";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -61,7 +50,6 @@ const TIMEZONES = [
 
 function SettingsPage() {
   useAuthGuard();
-  const qc = useQueryClient();
   const { data: settings, isLoading } = useSettings();
   const { save, changePassword } = useSettingsMutations();
 
@@ -70,7 +58,6 @@ function SettingsPage() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [pwError, setPwError] = useState<string | null>(null);
-  const [resetOpen, setResetOpen] = useState(false);
 
   useEffect(() => {
     if (settings) {
@@ -194,40 +181,8 @@ function SettingsPage() {
           </Button>
         </form>
 
-        <section className="space-y-3 rounded-2xl border border-dashed border-border p-6">
-          <h2 className="text-sm font-semibold">Demo data</h2>
-          <p className="text-sm text-muted-foreground">
-            Reset everything back to the sample tasks and a fresh conversation.
-          </p>
-          <Button variant="outline" className="min-h-11" onClick={() => setResetOpen(true)}>
-            <RotateCcw className="h-4 w-4" /> Reset demo data
-          </Button>
-        </section>
+        {DEMO_UI_ENABLED && <DemoDataSection />}
       </div>
-
-      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset demo data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              All current tasks, chat history and settings will be replaced with the sample set.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async () => {
-                await api.resetDemoData();
-                await qc.invalidateQueries();
-                toast.success("Demo data reset");
-                setResetOpen(false);
-              }}
-            >
-              Reset
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </AppShell>
   );
 }

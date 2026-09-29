@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/services/api";
+import { DEMO_UI_ENABLED } from "@/services/api/demoUi";
 import { useSession } from "@/features/auth/hooks";
 import { credentialsSchema, type Credentials } from "@/shared/domain/session";
 import { APP_NAME } from "@/types";
@@ -104,10 +105,12 @@ function LoginPage() {
             Sign in
           </Button>
 
-          <p className="text-center text-xs text-muted-foreground">
-            Demo login: <span className="font-medium">demo</span> /{" "}
-            <span className="font-medium">focusboard</span>
-          </p>
+          {DEMO_UI_ENABLED && (
+            <p className="text-center text-xs text-muted-foreground">
+              Demo login: <span className="font-medium">demo</span> /{" "}
+              <span className="font-medium">focusboard</span>
+            </p>
+          )}
         </form>
       </div>
     </main>
