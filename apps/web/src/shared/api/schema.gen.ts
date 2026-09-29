@@ -142,6 +142,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Message
+         * @description Send one user message and return the full, updated conversation.
+         *
+         *     No write happens before `send_chat_message` returns successfully — a
+         *     failure anywhere in its tool-call loop (an `LLMUnavailableError`,
+         *     surfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_
+         *     handler`) propagates straight out of this route, and `api.deps.get_db`
+         *     rolls back the request's transaction, so neither the user turn nor an
+         *     assistant turn is ever persisted (spec §10.4).
+         */
+        post: operations["send_message_api_v1_chat_messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -398,6 +425,19 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * SendMessageRequest
+         * @description `POST /api/v1/chat/messages` request body (issue #40). `text` is
+         *     required to be 1 to 4000 characters *after* trimming — the same rule
+         *     `schemas.ai.ParseTaskRequest` uses — and the trimmed value is what is
+         *     persisted and sent to the model. An extra field, a missing field, a
+         *     blank value, or an over-length value is rejected here, before the
+         *     model is ever called and before any row is written.
+         */
+        SendMessageRequest: {
+            /** Text */
+            text: string;
         };
         /** SessionResponse */
         SessionResponse: {
@@ -1052,6 +1092,66 @@ export interface operations {
             };
             /** @description API error envelope */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    send_message_api_v1_chat_messages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationResponse"];
+                };
+            };
+            /** @description API error envelope */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API error envelope */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
