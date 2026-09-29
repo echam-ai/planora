@@ -65,7 +65,11 @@ let qc: QueryClient;
 
 function renderBoard(tasks: Task[]) {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+  vi.spyOn(api, "getSettings").mockResolvedValue({
+    timezone: "UTC",
+    modelName: "kimi-k3",
+    availableModels: ["kimi-k3"],
+  });
   const listTasks = vi.spyOn(api, "listTasks").mockResolvedValue(tasks);
   return {
     listTasks,
@@ -101,7 +105,11 @@ describe("Board", () => {
     const listTasks = vi
       .spyOn(api, "listTasks")
       .mockRejectedValueOnce(new ApiError("NETWORK", "down"));
-    vi.spyOn(api, "getSettings").mockResolvedValue({ timezone: "UTC", modelName: "kimi-k3" });
+    vi.spyOn(api, "getSettings").mockResolvedValue({
+      timezone: "UTC",
+      modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
+    });
     qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>

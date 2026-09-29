@@ -111,7 +111,11 @@ export function sessionToDomain(wire: WireSession): Session {
 }
 
 export function settingsToDomain(wire: WireSettings): AppSettings {
-  return { timezone: wire.timezone, modelName: wire.model_name };
+  return {
+    timezone: wire.timezone,
+    modelName: wire.model_name,
+    availableModels: [...wire.available_models],
+  };
 }
 
 export function settingsPatchToWire(patch: Partial<AppSettings>): WireSettingsUpdate {

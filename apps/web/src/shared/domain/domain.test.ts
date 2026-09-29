@@ -30,9 +30,16 @@ describe("shared domain schemas", () => {
     expect(taskSchema.parse(task)).toEqual(task);
     expect(taskDraftSchema.parse(draft)).toEqual(draft);
     expect(taskUrlSchema.parse(draft.urls[0])).toEqual(draft.urls[0]);
-    expect(settingsSchema.parse({ timezone: "Asia/Singapore", modelName: "kimi-k3" })).toEqual({
+    expect(
+      settingsSchema.parse({
+        timezone: "Asia/Singapore",
+        modelName: "kimi-k3",
+        availableModels: ["kimi-k3"],
+      }),
+    ).toEqual({
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
     });
     expect(sessionSchema.parse({ username: "demo", signedInAt: task.createdAt })).toEqual({
       username: "demo",

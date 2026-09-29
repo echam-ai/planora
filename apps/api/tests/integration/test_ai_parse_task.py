@@ -397,6 +397,7 @@ def test_model_name_is_resolved_per_request(
     migrated_session_factory: sessionmaker[Session],
     app_factory: Callable[[], FastAPI],
 ) -> None:
+    valid_env.setenv("LLM_ALLOWED_MODELS", "custom-model-one,custom-model-two")
     app = app_factory()
     _fixed_clock(app, datetime(2026, 9, 28, 2, 0, tzinfo=UTC))
     answer = {"category": "other", "priority": "medium"}

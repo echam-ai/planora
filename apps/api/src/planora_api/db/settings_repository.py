@@ -56,7 +56,12 @@ def get_effective_settings(db: Session, settings: Settings) -> EffectiveSettings
     """
     row = get_app_settings(db)
     timezone = row.timezone if row is not None and row.timezone else settings.default_timezone
-    model_name = row.model_name if row is not None and row.model_name else settings.llm_model
+    model_name = settings.llm_model
+    if row is not None and row.model_name and row.model_name in settings.available_models():
+        # A stored override the deployment no longer offers is ignored
+        # (issue #86), so no AI call ever names a model the endpoint may
+        # not serve.
+        model_name = row.model_name
     return EffectiveSettings(timezone=timezone, model_name=model_name)
 
 

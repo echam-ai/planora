@@ -55,10 +55,12 @@ describe("mock API client characterization", () => {
     expect(await resolve(mockApiClient.getSettings())).toEqual({
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
     });
     expect(await resolve(mockApiClient.updateSettings({ timezone: "UTC" }))).toEqual({
       timezone: "UTC",
       modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
     });
     await expectApiError(
       mockApiClient.changePassword("wrong", "new-password"),
@@ -293,6 +295,7 @@ describe("mock API client characterization", () => {
     expect(await resolve(mockApiClient.getSettings())).toEqual({
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
+      availableModels: ["kimi-k3"],
     });
     const current = await resolve(mockApiClient.getCurrentConversation());
     expect(current.messages).toEqual([]);
@@ -301,7 +304,7 @@ describe("mock API client characterization", () => {
     mockDevTools.setErrorMode(true);
     expect(mockDevTools.isErrorModeOn()).toBe(true);
     await expectApiError(
-      mockApiClient.updateSettings({ modelName: "other" }),
+      mockApiClient.updateSettings({ modelName: "kimi-k3" }),
       "SIMULATED_FAILURE",
       "Simulated failure while trying to save settings.",
     );
@@ -312,6 +315,15 @@ describe("mock API client characterization", () => {
     expect(storedTasks().length).toBeGreaterThan(0);
   });
 
+  it("rejects a model outside the available models and keeps the stored one", async () => {
+    await expectApiError(
+      mockApiClient.updateSettings({ modelName: "not-served-model" }),
+      "VALIDATION_ERROR",
+      "Choose one of the available models.",
+    );
+    expect(await resolve(mockApiClient.getSettings())).toMatchObject({ modelName: "kimi-k3" });
+  });
+
   it("uses browser-less storage fallbacks without throwing", async () => {
     vi.stubGlobal("window", undefined);
     try {
@@ -319,6 +331,7 @@ describe("mock API client characterization", () => {
       expect(await resolve(mockApiClient.getSettings())).toEqual({
         timezone: "Asia/Singapore",
         modelName: "kimi-k3",
+        availableModels: ["kimi-k3"],
       });
       expect(await resolve(mockApiClient.listTasks())).toEqual([]);
       expect(await resolve(mockApiClient.getCurrentConversation())).toMatchObject({ messages: [] });
