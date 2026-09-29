@@ -2,6 +2,7 @@ import { GripVertical, Link2, StickyNote } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
+import { taskCardDetailsId } from "@/features/tasks/cardIds";
 import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
 import {
   CategoryBadge,
@@ -14,10 +15,14 @@ export function TaskCardContent({
   task,
   timezone,
   dragging,
+  detailsId,
 }: {
   task: Task;
   timezone: string;
   dragging?: boolean;
+  /** Id for the badge/meta block, so the wrapping button can reference it as its
+   * accessible description. Omit for copies that must not add a duplicate id (drag overlay). */
+  detailsId?: string;
 }) {
   const state = getDeadlineState(task);
   return (
@@ -29,30 +34,32 @@ export function TaskCardContent({
     >
       <h3 className="text-sm font-semibold leading-snug text-card-foreground">{task.title}</h3>
       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.content}</p>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        <CategoryBadge category={task.category} />
-        <PriorityBadge priority={task.priority} />
-        <DeadlineBadge
-          state={state}
-          text={task.deadlineAt ? formatInZone(task.deadlineAt, timezone) : undefined}
-        />
-      </div>
-      {(task.urls.length > 0 || task.markdownNote.trim()) && (
-        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-          {task.urls.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <Link2 className="h-3.5 w-3.5" aria-hidden />
-              {task.urls.length} link{task.urls.length > 1 ? "s" : ""}
-            </span>
-          )}
-          {task.markdownNote.trim() && (
-            <span className="inline-flex items-center gap-1">
-              <StickyNote className="h-3.5 w-3.5" aria-hidden />
-              Note
-            </span>
-          )}
+      <div id={detailsId}>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <CategoryBadge category={task.category} />
+          <PriorityBadge priority={task.priority} />
+          <DeadlineBadge
+            state={state}
+            text={task.deadlineAt ? formatInZone(task.deadlineAt, timezone) : undefined}
+          />
         </div>
-      )}
+        {(task.urls.length > 0 || task.markdownNote.trim()) && (
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+            {task.urls.length > 0 && (
+              <span className="inline-flex items-center gap-1">
+                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                {task.urls.length} link{task.urls.length > 1 ? "s" : ""}
+              </span>
+            )}
+            {task.markdownNote.trim() && (
+              <span className="inline-flex items-center gap-1">
+                <StickyNote className="h-3.5 w-3.5" aria-hidden />
+                Note
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -82,8 +89,9 @@ export function SortableTaskCard({
         onClick={() => onOpen(task)}
         className="w-full rounded-xl text-left focus-visible:outline-none"
         aria-label={`Open task ${task.title}`}
+        aria-describedby={taskCardDetailsId(task.id)}
       >
-        <TaskCardContent task={task} timezone={timezone} />
+        <TaskCardContent task={task} timezone={timezone} detailsId={taskCardDetailsId(task.id)} />
       </button>
       <button
         type="button"

@@ -11,7 +11,11 @@ test("archive detail is read-only and archive actions retain their confirmation 
   await expect(page.getByRole("heading", { name: "Archive" })).toBeVisible();
 
   await page.getByLabel("Search archived tasks").fill("postgres");
-  await page.getByRole("button", { name: `Open archived task ${ARCHIVED}` }).click();
+  const archivedCard = page.getByRole("button", { name: `Open archived task ${ARCHIVED}` });
+  await expect(archivedCard).toHaveAccessibleName(`Open archived task ${ARCHIVED}`);
+  await expect(archivedCard).toHaveAccessibleDescription(/Completed/);
+  await expect(archivedCard).not.toHaveAccessibleDescription(/Overdue/);
+  await archivedCard.click();
   const dialog = page.getByRole("dialog", { name: ARCHIVED });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText("Archived task (read only)");

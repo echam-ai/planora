@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArchiveRestore, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { taskCardDetailsId } from "@/features/tasks/cardIds";
 import { TaskCardContent } from "@/features/tasks/components/TaskCard";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import { Input } from "@/components/ui/input";
@@ -126,8 +127,13 @@ function ArchivePage() {
                 className="w-full text-left"
                 onClick={() => setSelectedId(task.id)}
                 aria-label={`Open archived task ${task.title}`}
+                aria-describedby={taskCardDetailsId(task.id)}
               >
-                <TaskCardContent task={task} timezone={timezone} />
+                <TaskCardContent
+                  task={task}
+                  timezone={timezone}
+                  detailsId={taskCardDetailsId(task.id)}
+                />
               </button>
               <div className="flex gap-2">
                 <Button
