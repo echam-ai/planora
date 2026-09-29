@@ -25,17 +25,15 @@ export default defineConfig({
       ],
       thresholds: {
         // Ratchet (#71): global floor is the measured baseline (raised again by #78's shell,
-        // routing and auth tests, and #79's server entry and error-handling tests), not the
-        // 80% target in AGENTS.md rule 9. It may only be raised, never lowered. Files below
-        // 80% per file today, grouped by follow-up issue that raises them and the global floor:
-        //   Tasks (features/tasks/components/TaskForm.tsx)                       -> #104
-        // The last follow-up ends the ratchet at 80% per file across the tier. perFile is
-        // intentionally unset for files not yet listed below: the floor below is an aggregate
-        // over the whole include set, not a per-file check, until every follow-up lands.
-        statements: 96,
-        branches: 94,
-        functions: 95,
-        lines: 97,
+        // routing and auth tests, #79's server entry and error-handling tests, and #104's
+        // TaskForm tests), not the 80% target in AGENTS.md rule 9. It may only be raised,
+        // never lowered. No file is known to be below 80% per file now; the tier-wide per-file
+        // switch is #109. perFile is intentionally unset for files not listed below: the floor
+        // is an aggregate over the whole include set, not a per-file check, until #109 lands.
+        statements: 98,
+        branches: 95,
+        functions: 98,
+        lines: 99,
         // Per-file guarantees, unaffected by the ratchet above.
         "src/features/tasks/deadline.ts": {
           statements: 80,
@@ -207,6 +205,13 @@ export default defineConfig({
           lines: 100,
         },
         "src/services/api/http/httpApiClient.ts": {
+          statements: 80,
+          branches: 80,
+          functions: 80,
+          lines: 80,
+        },
+        // #104: task form.
+        "src/features/tasks/components/TaskForm.tsx": {
           statements: 80,
           branches: 80,
           functions: 80,
