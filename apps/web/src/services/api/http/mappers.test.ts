@@ -4,6 +4,9 @@ import type { AppSettings, TaskDraft, TaskUrl } from "@/types";
 import {
   archiveListToDomain,
   archiveQueryToWire,
+  chatActionToDomain,
+  chatMessageToDomain,
+  conversationToDomain,
   taskDraftToDomain,
   passwordChangeToWire,
   sessionToDomain,
@@ -564,5 +567,151 @@ describe("taskDraftToDomain", () => {
     expect(Object.keys(result)).not.toContain("extra");
     expect(Object.keys(result)).not.toContain("status");
     expect(result.urls).toStrictEqual([{ id: expect.any(String), url: "https://a.example" }]);
+  });
+});
+
+type WireConversation =
+  paths["/api/v1/chat/conversation"]["get"]["responses"][200]["content"]["application/json"];
+type WireChatMessage = WireConversation["messages"][number];
+type WireChatAction = NonNullable<WireChatMessage["action"]>;
+
+const wireDraft = {
+  title: "T",
+  content: "C",
+  category: "work",
+  priority: "high",
+  deadline_at: null,
+  urls: [{ url: "https://a.example", label: "A", extra: "x" }],
+  markdown_note: "# n",
+  extra: "x",
+};
+const domainDraft = {
+  title: "T",
+  content: "C",
+  category: "work",
+  priority: "high",
+  deadlineAt: null,
+  urls: [{ id: expect.any(String), url: "https://a.example", label: "A" }],
+  markdownNote: "# n",
+};
+
+function wireAction(kind: WireChatAction["kind"], payload: Record<string, unknown>) {
+  return {
+    id: "a1",
+    kind,
+    title: "Title",
+    summary: "Summary",
+    fields: [{ label: "L", from: "F", to: "T", extra: "x" }],
+    status: "pending",
+    payload,
+    extra: "x",
+  } as unknown as WireChatAction;
+}
+
+describe("http/mappers chat", () => {
+  it.each([
+    ["create", { draft: wireDraft, task_id: "leak", status: "done" }, { draft: domainDraft }],
+    [
+      "update",
+      { task_id: "t1", draft: wireDraft, status: "done" },
+      { taskId: "t1", draft: domainDraft },
+    ],
+    ["move", { task_id: "t1", status: "done", draft: wireDraft }, { taskId: "t1", status: "done" }],
+    [
+      "schedule",
+      { task_id: "t1", deadline_at: "2026-10-02T08:00:00Z", status: "done" },
+      { taskId: "t1", deadlineAt: "2026-10-02T08:00:00Z" },
+    ],
+    ["schedule", { task_id: "t1", deadline_at: null }, { taskId: "t1", deadlineAt: null }],
+  ] as const)("narrows a %s payload to its kind's shape", (kind, payload, expected) => {
+    const action = chatActionToDomain(wireAction(kind, { ...payload }));
+    expect(action.payload).toStrictEqual(expected);
+    expect(Object.keys(action.payload).sort()).toEqual(Object.keys(expected).sort());
+  });
+
+  it("maps an action to exactly the seven domain keys, dropping unknown fields", () => {
+    const action = chatActionToDomain(wireAction("move", { task_id: "t1", status: "done" }));
+    expect(Object.keys(action).sort()).toEqual(
+      ["fields", "id", "kind", "payload", "status", "summary", "title"].sort(),
+    );
+    expect(action).toStrictEqual({
+      id: "a1",
+      kind: "move",
+      title: "Title",
+      summary: "Summary",
+      fields: [{ label: "L", from: "F", to: "T" }],
+      status: "pending",
+      payload: { taskId: "t1", status: "done" },
+    });
+  });
+
+  it.each([[null], [undefined]])("maps a %s field `from` to no `from` key", (from) => {
+    const wire = wireAction("move", { task_id: "t1", status: "done" });
+    wire.fields = [{ label: "L", from, to: "T" }] as unknown as typeof wire.fields;
+    const [field] = chatActionToDomain(wire).fields;
+    expect(field).toStrictEqual({ label: "L", to: "T" });
+    expect("from" in field!).toBe(false);
+  });
+
+  it.each([[null], [undefined]])("maps a %s message action to no `action` key", (action) => {
+    const message = chatMessageToDomain({
+      id: "m1",
+      role: "user",
+      text: "hi",
+      created_at: "2026-09-28T10:00:00Z",
+      action,
+    } as unknown as WireChatMessage);
+    expect(message).toStrictEqual({
+      id: "m1",
+      role: "user",
+      text: "hi",
+      createdAt: "2026-09-28T10:00:00Z",
+    });
+    expect("action" in message).toBe(false);
+  });
+
+  it("maps a conversation to exactly {id, messages}, dropping unknown fields at every level", () => {
+    const wire = {
+      id: "c1",
+      extra: "x",
+      messages: [
+        {
+          id: "m1",
+          role: "assistant",
+          text: "hi",
+          created_at: "2026-09-28T10:00:00Z",
+          extra: "x",
+          action: wireAction("create", { draft: wireDraft }),
+        },
+      ],
+    } as unknown as WireConversation;
+    const result = conversationToDomain(wire);
+    expect(Object.keys(result).sort()).toEqual(["id", "messages"]);
+    expect(Object.keys(result.messages[0]!).sort()).toEqual(
+      ["action", "createdAt", "id", "role", "text"].sort(),
+    );
+    expect(result.messages[0]!.action!.payload).toStrictEqual({ draft: domainDraft });
+    expect(result.messages[0]!.action!.fields[0]).toStrictEqual({
+      label: "L",
+      from: "F",
+      to: "T",
+    });
+  });
+
+  it("defaults an absent urls and markdown_note in a payload draft", () => {
+    const action = chatActionToDomain(
+      wireAction("create", {
+        draft: { title: "T", content: "C", category: "work", priority: "low" },
+      }),
+    );
+    expect(action.payload.draft).toStrictEqual({
+      title: "T",
+      content: "C",
+      category: "work",
+      priority: "low",
+      deadlineAt: null,
+      urls: [],
+      markdownNote: "",
+    });
   });
 });

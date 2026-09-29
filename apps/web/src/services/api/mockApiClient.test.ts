@@ -208,7 +208,7 @@ describe("mock API client characterization", () => {
     await expectApiError(
       mockApiClient.confirmChatAction("missing"),
       "NOT_FOUND",
-      "That proposed action is gone.",
+      "That proposed change is no longer available.",
     );
     const rejected = await resolve(mockApiClient.sendChatMessage("create task to buy bread"));
     const rejectedAction = rejected.messages.at(-1)?.action;
@@ -268,6 +268,89 @@ describe("mock API client characterization", () => {
 
     const dueSoon = await resolve(mockApiClient.sendChatMessage("What is due soon?"));
     expect(dueSoon.messages.at(-1)?.text).toBe(nearDeadlineReply);
+  });
+
+  describe("chat outcomes match the API", () => {
+    const NOT_FOUND = "That proposed change is no longer available.";
+    const REJECTED = "This change was cancelled, so it wasn't applied.";
+    const APPLIED = "This change has already been applied.";
+
+    async function propose(text: string) {
+      const conversation = await resolve(mockApiClient.sendChatMessage(text));
+      const action = conversation.messages.at(-1)?.action;
+      if (!action) throw new Error("Expected a proposal");
+      return action;
+    }
+    async function expectStatus(
+      promise: Promise<unknown>,
+      code: string,
+      status: number,
+      message: string,
+    ) {
+      const expectation = expect(promise).rejects.toMatchObject({ code, status, message });
+      await vi.runAllTimersAsync();
+      await expectation;
+    }
+
+    it("confirming a rejected action fails 409 ACTION_ALREADY_REJECTED and writes nothing", async () => {
+      const action = await propose("create task to buy tea");
+      await resolve(mockApiClient.rejectChatAction(action.id));
+      const before = await resolve(mockApiClient.getCurrentConversation());
+      const tasksBefore = await resolve(mockApiClient.listTasks());
+      await expectStatus(
+        mockApiClient.confirmChatAction(action.id),
+        "ACTION_ALREADY_REJECTED",
+        409,
+        REJECTED,
+      );
+      expect(await resolve(mockApiClient.getCurrentConversation())).toEqual(before);
+      expect(await resolve(mockApiClient.listTasks())).toEqual(tasksBefore);
+    });
+
+    it("rejecting an applied action fails 409 ACTION_ALREADY_APPLIED", async () => {
+      const action = await propose("create task to buy jam");
+      await resolve(mockApiClient.confirmChatAction(action.id));
+      await expectStatus(
+        mockApiClient.rejectChatAction(action.id),
+        "ACTION_ALREADY_APPLIED",
+        409,
+        APPLIED,
+      );
+    });
+
+    it("rejecting or confirming an unknown id fails 404 NOT_FOUND", async () => {
+      await expectStatus(mockApiClient.rejectChatAction("missing"), "NOT_FOUND", 404, NOT_FOUND);
+      await expectStatus(mockApiClient.confirmChatAction("missing"), "NOT_FOUND", 404, NOT_FOUND);
+    });
+
+    it("rejecting a rejected action is an idempotent no-op", async () => {
+      const action = await propose("create task to buy figs");
+      const first = await resolve(mockApiClient.rejectChatAction(action.id));
+      expect(await resolve(mockApiClient.rejectChatAction(action.id))).toEqual(first);
+    });
+
+    it("confirming an applied create twice adds one task and one confirmation message", async () => {
+      const action = await propose("create task to buy rice");
+      const first = await resolve(mockApiClient.confirmChatAction(action.id));
+      const tasks = await resolve(mockApiClient.listTasks());
+      const second = await resolve(mockApiClient.confirmChatAction(action.id));
+      expect(second).toEqual(first);
+      expect(second.messages.filter((m) => m.text.startsWith("Done"))).toHaveLength(1);
+      expect(await resolve(mockApiClient.listTasks())).toEqual(tasks);
+    });
+
+    it("a failed send persists nothing", async () => {
+      await resolve(mockApiClient.getCurrentConversation());
+      const before = window.localStorage.getItem("planora.conversation");
+      mockDevTools.setErrorMode(true);
+      await expectApiError(
+        mockApiClient.sendChatMessage("hello"),
+        "AI_UNAVAILABLE",
+        "The assistant is unavailable. Try again.",
+      );
+      mockDevTools.setErrorMode(false);
+      expect(window.localStorage.getItem("planora.conversation")).toBe(before);
+    });
   });
 
   it("retains a pending proposed action when its confirmed mutation fails", async () => {
