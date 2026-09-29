@@ -122,7 +122,7 @@ Select checks from actual files, scripts and issue scope. Record each command, c
 | Work | Required verification |
 | --- | --- |
 | Documentation and agent configuration only | Diff/whitespace checks, links and paths, role frontmatter and symlink targets, discovery where supported, and a walkthrough of each affected workflow. No application launch, coverage, or new harness. |
-| Web application | `bun run verify` from `apps/web` — coverage run (it runs every Vitest test and enforces the coverage ratchet toward 80% defined in `vitest.config.ts`), lint, typecheck and build in one command. `bun run e2e` whenever routes, components, hooks, the API client or browser flows change. Browser evidence beyond that follows the evidence ladder below. Use package scripts, not Bun's built-in test runner. |
+| Web application | `bun run verify` from `apps/web` — coverage run (it runs every Vitest test and enforces 80% coverage per file, as defined in `vitest.config.ts`), lint, typecheck and build in one command. `bun run e2e` whenever routes, components, hooks, the API client or browser flows change. Browser evidence beyond that follows the evidence ladder below. Use package scripts, not Bun's built-in test runner. |
 | API | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected health/startup and integration checks. |
 | Database/migration work from #22 | Apply the history to disposable empty databases with `uv run alembic upgrade head`; verify affected upgrades and SQLite/PostgreSQL compatibility. Never point verification at production data. |
 
