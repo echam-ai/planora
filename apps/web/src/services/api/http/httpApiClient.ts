@@ -5,12 +5,13 @@
  * types readable. No generated client and no new runtime dependency.
  */
 import type { paths } from "@/shared/api/schema.gen";
-import { ApiError, type Conversation, type ParsedTaskText } from "@/types";
+import { ApiError, type Conversation } from "@/types";
 import type { ApiClient } from "../ApiClient";
 import { request } from "./client";
 import {
   archiveListToDomain,
   archiveQueryToWire,
+  taskDraftToDomain,
   passwordChangeToWire,
   sessionToDomain,
   settingsPatchToWire,
@@ -42,14 +43,18 @@ type ArchiveListResponse =
   paths["/api/v1/archive"]["get"]["responses"][200]["content"]["application/json"];
 type ArchivedTaskResponse =
   paths["/api/v1/archive/{task_id}"]["get"]["responses"][200]["content"]["application/json"];
+type ParseTaskRequest =
+  paths["/api/v1/ai/parse-task"]["post"]["requestBody"]["content"]["application/json"];
+type ParseTaskResponse =
+  paths["/api/v1/ai/parse-task"]["post"]["responses"][200]["content"]["application/json"];
 type RestoreResponse =
   paths["/api/v1/archive/{task_id}/restore"]["post"]["responses"][200]["content"]["application/json"];
 
 /**
- * The mock's AI parsing and chat run entirely against browser storage, so
+ * The mock's chat runs entirely against browser storage, so
  * letting them fall back to it in HTTP mode would silently split the data:
  * a "confirmed" chat action would change tasks the server never saw. Reject
- * instead — the real endpoints arrive in #38–#41 — and never touch `fetch`.
+ * instead — the real chat endpoints arrive in #39–#41 — and never touch `fetch`.
  */
 function aiUnavailable<T>(): Promise<T> {
   return Promise.reject(new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now."));
@@ -136,7 +141,15 @@ export const httpApiClient: ApiClient = {
     return wire.map(taskToDomain);
   },
 
-  parseTaskText: () => aiUnavailable<ParsedTaskText>(),
+  async parseTaskText(text) {
+    const body: ParseTaskRequest = { text };
+    const wire = await request<ParseTaskResponse>({
+      method: "POST",
+      path: "/ai/parse-task",
+      body,
+    });
+    return taskDraftToDomain(wire);
+  },
 
   async listArchive(search = "", page = 1) {
     const wire = await request<ArchiveListResponse>({

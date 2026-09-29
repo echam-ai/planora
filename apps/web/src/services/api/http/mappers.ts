@@ -6,7 +6,15 @@
  */
 import type { paths } from "@/shared/api/schema.gen";
 import type { ArchivePage } from "../ApiClient";
-import type { AppSettings, Session, Task, TaskDraft, TaskStatus, TaskUrl } from "@/types";
+import type {
+  AppSettings,
+  ParsedTaskText,
+  Session,
+  Task,
+  TaskDraft,
+  TaskStatus,
+  TaskUrl,
+} from "@/types";
 
 type WireTask =
   paths["/api/v1/tasks/{task_id}"]["get"]["responses"][200]["content"]["application/json"];
@@ -14,6 +22,8 @@ type WireTaskUrl = WireTask["urls"][number];
 type WireTaskCreate = paths["/api/v1/tasks"]["post"]["requestBody"]["content"]["application/json"];
 type WireTaskUpdate =
   paths["/api/v1/tasks/{task_id}"]["patch"]["requestBody"]["content"]["application/json"];
+type WireParsedTask =
+  paths["/api/v1/ai/parse-task"]["post"]["responses"][200]["content"]["application/json"];
 type WireSession =
   paths["/api/v1/auth/login"]["post"]["responses"][200]["content"]["application/json"];
 type WireSettings =
@@ -65,6 +75,25 @@ export function taskToDomain(wire: WireTask): Task {
     updatedAt: wire.updated_at,
     completedAt: wire.completed_at,
     archivedAt: wire.archived_at,
+  };
+}
+
+/**
+ * A `TaskDraft` wire object (`ParsedTaskResponse`, spec §6.2) to the domain
+ * draft. Also the mapper for any later payload that carries a proposed task,
+ * such as chat create/update actions. Applies the domain defaults for omitted
+ * optional fields, builds a URL id (the wire `TaskUrl` has none), and copies
+ * fields explicitly so unknown ones are dropped (#36).
+ */
+export function taskDraftToDomain(wire: WireParsedTask): TaskDraft {
+  return {
+    title: wire.title,
+    content: wire.content,
+    category: wire.category,
+    priority: wire.priority,
+    deadlineAt: wire.deadline_at ?? null,
+    urls: (wire.urls ?? []).map((url, index) => taskUrlToDomain(url, "draft", index)),
+    markdownNote: wire.markdown_note ?? "",
   };
 }
 

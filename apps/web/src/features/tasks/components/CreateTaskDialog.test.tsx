@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { api } from "@/services/api";
-import type { Task, TaskDraft } from "@/types";
+import { ApiError, type Task, type TaskDraft } from "@/types";
 
 function draft(overrides: Partial<TaskDraft> = {}): TaskDraft {
   return {
@@ -96,6 +96,24 @@ describe("CreateTaskDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue in the form instead" }));
 
     expect(await screen.findByRole("tab", { name: "Task form", selected: true })).toBeVisible();
+  });
+
+  it("keeps the typed text and the escape hatch when the assistant is unavailable", async () => {
+    vi.spyOn(api, "parseTaskText").mockRejectedValue(
+      new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now."),
+    );
+    renderDialog();
+
+    fireEvent.change(screen.getByLabelText("Describe the task in your own words"), {
+      target: { value: "Book the dentist for Tuesday" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+
+    expect(await screen.findByText("The assistant is unavailable right now.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Describe the task in your own words")).toHaveValue(
+      "Book the dentist for Tuesday",
+    );
+    expect(screen.getByRole("button", { name: "Continue in the form instead" })).toBeVisible();
   });
 
   it("returns from the review step back to the quick-capture text", async () => {
