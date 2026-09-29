@@ -21,13 +21,16 @@ export const deadlineLabels: Record<DeadlineState, string> = {
 export function formatInZone(iso: string | null, timezone: string, withTime = true) {
   if (!iso) return "—";
   try {
+    // Newer ICU spells September "Sept" in en-GB; the API's format is "Sep".
     return new Intl.DateTimeFormat("en-GB", {
       timeZone: timezone,
       day: "2-digit",
       month: "short",
       year: "numeric",
       ...(withTime ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
-    }).format(new Date(iso));
+    })
+      .format(new Date(iso))
+      .replace(/\bSept\b/, "Sep");
   } catch {
     return new Date(iso).toLocaleString();
   }

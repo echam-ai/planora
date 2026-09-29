@@ -1,4 +1,6 @@
-import { getDeadlineState } from "@/features/tasks/deadline";
+import { formatInTimeZone } from "date-fns-tz";
+import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
+import { zonedDateTimeToIso } from "@/features/tasks/formMapping";
 import { uid } from "@/lib/id";
 import {
   ApiError,
@@ -13,6 +15,7 @@ import {
   type TaskStatus,
 } from "@/types";
 import type { ApiClient } from "../ApiClient";
+import { currentTimezone } from "./auth";
 import { KEYS, delay, ensureTasks, nowIso, read, write } from "./store";
 
 const CATEGORY_WORDS: Record<TaskCategory, string[]> = {
@@ -28,36 +31,44 @@ const PRIORITY_WORDS: Record<TaskPriority, string[]> = {
 };
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-function parseDeadline(text: string): string | null {
+/** Interprets relative days and wall-clock times in the Settings timezone,
+ * never the browser's (spec §6.1, §11). */
+function parseDeadline(text: string, timezone: string): string | null {
   const lower = text.toLowerCase();
-  const now = new Date();
-  const target = new Date(now);
+  // The calendar date "now" in the Settings zone, as a UTC-midnight anchor so
+  // day arithmetic is independent of the process zone.
+  const anchor = new Date(`${formatInTimeZone(new Date(), timezone, "yyyy-MM-dd")}T00:00:00Z`);
+  const addDays = (days: number) => anchor.setUTCDate(anchor.getUTCDate() + days);
   let matched = false;
   if (lower.includes("tomorrow")) {
-    target.setDate(target.getDate() + 1);
+    addDays(1);
     matched = true;
   } else if (lower.includes("today") || lower.includes("tonight")) matched = true;
   else if (lower.includes("next week")) {
-    target.setDate(target.getDate() + 7);
+    addDays(7);
     matched = true;
   } else {
     const day = WEEKDAYS.findIndex((weekday) => lower.includes(weekday));
     if (day >= 0) {
-      target.setDate(target.getDate() + ((day - target.getDay() + 7) % 7 || 7));
+      addDays((day - anchor.getUTCDay() + 7) % 7 || 7);
       matched = true;
     }
   }
+  let hours = 17;
+  let minutes = 0;
   const time = lower.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/);
   if (time) {
-    let hours = parseInt(time[1] ?? "0", 10) % 12;
+    hours = parseInt(time[1] ?? "0", 10) % 12;
     if (time[3] === "pm") hours += 12;
-    target.setHours(hours, time[2] ? parseInt(time[2], 10) : 0, 0, 0);
+    minutes = time[2] ? parseInt(time[2], 10) : 0;
     matched = true;
-  } else if (matched) target.setHours(17, 0, 0, 0);
-  return matched ? target.toISOString() : null;
+  }
+  if (!matched) return null;
+  const clock = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  return zonedDateTimeToIso(anchor.toISOString().slice(0, 10), clock, timezone);
 }
 
-function parseText(text: string): ParsedTaskText {
+function parseText(text: string, timezone: string): ParsedTaskText {
   const lower = text.toLowerCase();
   const urls = (text.match(/https?:\/\/[^\s)]+/g) ?? []).map((url) => ({ id: uid("url"), url }));
   let priority: TaskPriority = "medium";
@@ -80,7 +91,7 @@ function parseText(text: string): ParsedTaskText {
     content: withoutUrls || text,
     category,
     priority,
-    deadlineAt: parseDeadline(text),
+    deadlineAt: parseDeadline(text, timezone),
     urls,
     markdownNote: "",
   };
@@ -110,14 +121,12 @@ function findTaskByPhrase(tasks: Task[], text: string) {
     ? tasks.find((task) => task.title.toLowerCase().includes(needle))
     : tasks.find((task) => text.toLowerCase().includes(task.title.toLowerCase().slice(0, 12)));
 }
-function describeTask(task: Task) {
-  const deadline = task.deadlineAt
-    ? new Date(task.deadlineAt).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })
-    : "no deadline";
+function describeTask(task: Task, timezone: string) {
+  const deadline = task.deadlineAt ? formatInZone(task.deadlineAt, timezone) : "no deadline";
   return `• ${task.title} — ${task.priority} priority, ${task.category}, ${deadline}`;
 }
 
-function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
+function buildAssistantReply(text: string, tasks: Task[], timezone: string): ChatMessage {
   const lower = text.toLowerCase();
   const active = tasks.filter((task) => !task.archivedAt);
   const base = { id: uid("msg"), role: "assistant" as const, createdAt: nowIso() };
@@ -152,7 +161,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
     !/^what|^show|^list/.test(lower)
   ) {
     const task = findTaskByPhrase(active, text);
-    const deadline = parseDeadline(text);
+    const deadline = parseDeadline(text, timezone);
     if (task && deadline)
       return {
         ...base,
@@ -164,10 +173,8 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
           fields: [
             {
               label: "Deadline",
-              from: task.deadlineAt
-                ? new Date(task.deadlineAt).toLocaleString("en-GB")
-                : "No deadline",
-              to: new Date(deadline).toLocaleString("en-GB"),
+              from: task.deadlineAt ? formatInZone(task.deadlineAt, timezone) : "No deadline",
+              to: formatInZone(deadline, timezone),
             },
           ],
           payload: { taskId: task.id, deadlineAt: deadline },
@@ -194,6 +201,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
   if (/\b(add|create|remind me to|new task)\b/.test(lower)) {
     const draft = parseText(
       text.replace(/^(add|create)\s+(a\s+)?task\s*(to)?/i, "").trim() || text,
+      timezone,
     );
     return {
       ...base,
@@ -208,7 +216,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
           { label: "Priority", to: draft.priority },
           {
             label: "Deadline",
-            to: draft.deadlineAt ? new Date(draft.deadlineAt).toLocaleString("en-GB") : "None",
+            to: draft.deadlineAt ? formatInZone(draft.deadlineAt, timezone) : "None",
           },
         ],
         payload: { draft },
@@ -220,7 +228,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
     return {
       ...base,
       text: hits.length
-        ? `You have ${hits.length} overdue task${hits.length > 1 ? "s" : ""}:\n${hits.map(describeTask).join("\n")}`
+        ? `You have ${hits.length} overdue task${hits.length > 1 ? "s" : ""}:\n${hits.map((hit) => describeTask(hit, timezone)).join("\n")}`
         : "Nothing is overdue right now. Nice.",
     };
   }
@@ -229,7 +237,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
     return {
       ...base,
       text: hits.length
-        ? `Due within 24 hours:\n${hits.map(describeTask).join("\n")}`
+        ? `Due within 24 hours:\n${hits.map((hit) => describeTask(hit, timezone)).join("\n")}`
         : "Nothing is due within the next 24 hours.",
     };
   }
@@ -247,7 +255,7 @@ function buildAssistantReply(text: string, tasks: Task[]): ChatMessage {
     return {
       ...base,
       text: hits.length
-        ? `Found ${hits.length} matching task${hits.length > 1 ? "s" : ""}:\n${hits.map(describeTask).join("\n")}`
+        ? `Found ${hits.length} matching task${hits.length > 1 ? "s" : ""}:\n${hits.map((hit) => describeTask(hit, timezone)).join("\n")}`
         : "No tasks match that description.",
     };
   }
@@ -282,7 +290,7 @@ export function createChatClient(
       await delay(700, 1400);
       if (read<boolean>(KEYS.forceError, false) || /\bfail\b/i.test(text))
         throw new ApiError("AI_UNAVAILABLE", "The assistant couldn't parse that right now.");
-      return parseText(text);
+      return parseText(text, currentTimezone());
     },
     async getCurrentConversation() {
       await delay(150, 300);
@@ -302,7 +310,7 @@ export function createChatClient(
       const conversation =
         read<Conversation | null>(KEYS.conversation, null) ?? emptyConversation();
       conversation.messages.push({ id: uid("msg"), role: "user", text, createdAt: nowIso() });
-      conversation.messages.push(buildAssistantReply(text, ensureTasks()));
+      conversation.messages.push(buildAssistantReply(text, ensureTasks(), currentTimezone()));
       write(KEYS.conversation, conversation);
       return conversation;
     },

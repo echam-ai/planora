@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { formatInZone } from "@/features/tasks/deadline";
 import { ApiError, type Task, type TaskDraft } from "@/types";
 import { mockApiClient, mockDevTools } from "./mockApiClient";
 
@@ -244,8 +245,14 @@ describe("mock API client characterization", () => {
     if (!scheduleAction) throw new Error("Expected a schedule proposal");
     expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBeNull();
     await resolve(mockApiClient.confirmChatAction(scheduleAction.id));
-    const expectedLocalDeadline = new Date("2026-09-25T15:00:00").toISOString();
-    expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBe(expectedLocalDeadline);
+    expect(scheduleAction.fields[0]).toEqual({
+      label: "Deadline",
+      from: "No deadline",
+      to: "25 Sep 2026, 15:00",
+    });
+    expect((await resolve(mockApiClient.getTask(task.id))).deadlineAt).toBe(
+      "2026-09-25T07:00:00.000Z",
+    );
 
     const update = await resolve(
       mockApiClient.sendChatMessage("make it high 'Tidy the garage shelves'"),
@@ -256,6 +263,60 @@ describe("mock API client characterization", () => {
     expect((await resolve(mockApiClient.getTask(task.id))).priority).toBe("low");
     await resolve(mockApiClient.confirmChatAction(updateAction.id));
     expect((await resolve(mockApiClient.getTask(task.id))).priority).toBe("high");
+  });
+
+  describe("chat deadlines use the Settings timezone", () => {
+    async function proposedDeadline(text: string) {
+      const conversation = await resolve(mockApiClient.sendChatMessage(text));
+      return conversation.messages.at(-1)?.action?.payload.deadlineAt;
+    }
+    const message = "schedule 'Tidy the garage shelves' tomorrow at 3pm";
+
+    it("counts tomorrow from the calendar date in the Settings zone", async () => {
+      vi.setSystemTime(new Date("2026-09-24T18:00:00.000Z"));
+      expect(await proposedDeadline(message)).toBe("2026-09-26T07:00:00.000Z");
+    });
+
+    it("follows a Settings timezone change", async () => {
+      await resolve(mockApiClient.updateSettings({ timezone: "America/New_York" }));
+      expect(await proposedDeadline(message)).toBe("2026-09-25T19:00:00.000Z");
+    });
+
+    it("defaults a bare day to 17:00 and reads am/pm times in the Settings zone", async () => {
+      expect(await proposedDeadline("schedule 'Tidy the garage shelves' tomorrow")).toBe(
+        "2026-09-25T09:00:00.000Z",
+      );
+      expect(await proposedDeadline("schedule 'Tidy the garage shelves' today at 9:30am")).toBe(
+        "2026-09-24T01:30:00.000Z",
+      );
+    });
+
+    it("resolves weekdays and next week from the Settings zone date", async () => {
+      // 2026-09-24 is a Thursday in Singapore.
+      expect(await proposedDeadline("schedule 'Tidy the garage shelves' friday at 3pm")).toBe(
+        "2026-09-25T07:00:00.000Z",
+      );
+      expect(await proposedDeadline("schedule 'Tidy the garage shelves' next week at 3pm")).toBe(
+        "2026-10-01T07:00:00.000Z",
+      );
+    });
+
+    it("gives quick capture the same instant as chat", async () => {
+      const parsed = await resolve(mockApiClient.parseTaskText("Call the plumber tomorrow at 3pm"));
+      expect(parsed.deadlineAt).toBe("2026-09-25T07:00:00.000Z");
+    });
+
+    it("shows listed deadlines in the Settings zone in the board format", async () => {
+      await resolve(mockApiClient.updateSettings({ timezone: "America/New_York" }));
+      const reply = await resolve(mockApiClient.sendChatMessage("What is near deadline?"));
+      const task = (await resolve(mockApiClient.listTasks())).find(
+        (candidate) => candidate.title === "Renew passport",
+      )!;
+      const expected = formatInZone(task.deadlineAt, "America/New_York");
+      expect(expected).toMatch(/^\d{2} \w{3} 2026, \d{2}:\d{2}$/);
+      expect(reply.messages.at(-1)?.text).toContain(`Renew passport — `);
+      expect(reply.messages.at(-1)?.text).toContain(expected);
+    });
   });
 
   it("answers 'near deadline' and 'due soon' questions with the same due-within-24-hours reply", async () => {
