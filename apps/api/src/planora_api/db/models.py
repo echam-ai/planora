@@ -262,6 +262,95 @@ class ChatMessage(Base):
     )
 
 
+class ChatActionKind(str, enum.Enum):
+    CREATE = "create"
+    UPDATE = "update"
+    MOVE = "move"
+    SCHEDULE = "schedule"
+
+
+class ChatActionStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPLIED = "applied"
+    REJECTED = "rejected"
+
+
+class ChatAction(Base):
+    """One proposed write, attached to exactly one assistant `ChatMessage`
+    (issue #41, spec §10.1-§10.4).
+
+    No foreign key to `chat_message` or to `task` — matching `ChatMessage`'s
+    own no-FK-to-`Conversation` precedent, and binding rule: chat rows never
+    cascade into task data. `message_id`/`task_id` are plain columns; a
+    conversation reset (`db.chat_repository.reset_conversation`) deletes
+    every `chat_action` row in bulk, the same way it deletes every
+    `chat_message` row, so an action orphaned by a reset simply no longer
+    exists (its confirm/reject then correctly 404s).
+
+    `fields` and `payload` are the exact wire shapes `schemas.chat` returns
+    (label/from/to entries; the kind-specific payload dict) — built once at
+    proposal time and never recomputed. `stale_snapshot` holds the *raw*
+    (unformatted) current value of each field the proposal's preview shows,
+    for the confirm-time staleness check (`domain.chat_actions.is_stale`);
+    it is never sent on the wire. `changed_fields` is populated only for
+    `kind=UPDATE` — the raw new values for exactly the fields that changed,
+    which confirm applies through `schemas.task.TaskUpdate` (spec §41:
+    "confirm applies only changed fields", even though `payload["draft"]`
+    itself carries the *full* resulting draft for display).
+    """
+
+    __tablename__ = "chat_action"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        _Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    message_id: Mapped[uuid.UUID] = mapped_column(_Uuid(as_uuid=True), nullable=False)
+    kind: Mapped[ChatActionKind] = mapped_column(
+        Enum(
+            ChatActionKind,
+            name="ck_chat_action_kind",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            values_callable=_enum_values,
+            length=20,
+        ),
+        nullable=False,
+    )
+    status: Mapped[ChatActionStatus] = mapped_column(
+        Enum(
+            ChatActionStatus,
+            name="ck_chat_action_status",
+            native_enum=False,
+            create_constraint=True,
+            validate_strings=True,
+            values_callable=_enum_values,
+            length=20,
+        ),
+        nullable=False,
+        default=ChatActionStatus.PENDING,
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    fields: Mapped[list[dict[str, Any]]] = mapped_column(_JSON, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(_JSON, nullable=False)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        _Uuid(as_uuid=True), nullable=True, default=None
+    )
+    stale_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        _JSON, nullable=False, default=dict
+    )
+    changed_fields: Mapped[dict[str, Any] | None] = mapped_column(
+        _JSON, nullable=True, default=None
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+
 class LoginFailure(Base):
     """One failed login attempt, keyed by client IP (issue #25).
 

@@ -38,7 +38,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from planora_api.db.models import ChatMessage, ChatRole, Conversation
+from planora_api.db.models import ChatAction, ChatMessage, ChatRole, Conversation
 
 # `conversation.id` is always 1 — the table's `CHECK (id = 1)` constraint
 # allows no other value (mirrors `settings_repository._SINGLE_SETTINGS_ID`).
@@ -108,10 +108,15 @@ def reset_conversation(db: Session, *, now: datetime) -> Conversation:
     row is deleted (not hidden or orphaned — there is nothing left for a
     later message to orphan into, since a message carries no foreign key
     back to a conversation), and the stored `conversation_id` is replaced
-    with a fresh UUID so a subsequent read returns a different `id`.
+    with a fresh UUID so a subsequent read returns a different `id`. Every
+    `chat_action` row is deleted along with its message (issue #41) —
+    neither table has a foreign key to the other, so this bulk delete is
+    what makes a reset-removed action's id 404 on a later confirm/reject,
+    not database-enforced cascade.
 
     Every task row is untouched — this function never queries `task`.
     """
+    db.execute(delete(ChatAction))
     db.execute(delete(ChatMessage))
     conversation = get_or_create_conversation(db, now=now)
     conversation.conversation_id = uuid.uuid4()

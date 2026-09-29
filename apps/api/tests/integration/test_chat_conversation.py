@@ -197,7 +197,7 @@ def test_messages_come_back_in_append_order_including_a_shared_created_at(
     assert [m["text"] for m in messages] == ["first", "second", "third"]
     assert [m["role"] for m in messages] == ["user", "assistant", "user"]
     for message in messages:
-        assert set(message.keys()) == {"id", "role", "text", "created_at"}
+        assert set(message.keys()) == {"id", "role", "text", "created_at", "action"}
         assert uuid.UUID(message["id"])
         # ISO 8601 UTC, same format as task timestamps.
         datetime.fromisoformat(message["created_at"])

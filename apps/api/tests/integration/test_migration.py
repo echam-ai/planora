@@ -128,12 +128,15 @@ def test_downgrade_one_step_drops_the_chat_tables_and_upgrade_recreates_them(
     migrated_db_path: Path,
     alembic_config: Config,
 ) -> None:
-    command.downgrade(alembic_config, "-1")
+    # Targets the chat-action revision's own `down_revision` explicitly —
+    # "-1" from head now lands one step short of removing these tables,
+    # the same reason the `app_settings` test above stopped using it.
+    command.downgrade(alembic_config, "0cf85705ba3d")
     engine = create_engine(f"sqlite:///{migrated_db_path}")
     table_names = set(inspect(engine).get_table_names())
     assert "conversation" not in table_names
     assert "chat_message" not in table_names
-    # Every earlier table is unaffected by this one-step downgrade.
+    # Every earlier table is unaffected by this downgrade.
     assert _PRE_CHAT_TABLES <= table_names
     engine.dispose()
 
@@ -146,4 +149,58 @@ def test_downgrade_one_step_drops_the_chat_tables_and_upgrade_recreates_them(
     chat_message_columns = {column["name"] for column in inspector.get_columns("chat_message")}
     assert conversation_columns == _EXPECTED_CONVERSATION_COLUMNS
     assert chat_message_columns == _EXPECTED_CHAT_MESSAGE_COLUMNS
+    engine.dispose()
+
+
+# --- issue #41: chat_action --------------------------------------------------
+
+_EXPECTED_CHAT_ACTION_COLUMNS = {
+    "id",
+    "message_id",
+    "kind",
+    "status",
+    "title",
+    "summary",
+    "fields",
+    "payload",
+    "task_id",
+    "stale_snapshot",
+    "changed_fields",
+    "created_at",
+    "updated_at",
+}
+_PRE_CHAT_ACTION_TABLES = _PRE_CHAT_TABLES | {"conversation", "chat_message"}
+
+
+def test_upgrade_head_creates_the_chat_action_table_with_all_columns(
+    migrated_db_path: Path,
+) -> None:
+    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    inspector = inspect(engine)
+
+    assert "chat_action" in inspector.get_table_names()
+    column_names = {column["name"] for column in inspector.get_columns("chat_action")}
+    assert column_names == _EXPECTED_CHAT_ACTION_COLUMNS
+    engine.dispose()
+
+
+def test_downgrade_one_step_drops_the_chat_action_table_and_upgrade_recreates_it(
+    migrated_db_path: Path,
+    alembic_config: Config,
+) -> None:
+    command.downgrade(alembic_config, "-1")
+    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    table_names = set(inspect(engine).get_table_names())
+    assert "chat_action" not in table_names
+    # Every earlier table, including the other chat tables, is unaffected
+    # by this one-step downgrade.
+    assert _PRE_CHAT_ACTION_TABLES <= table_names
+    engine.dispose()
+
+    command.upgrade(alembic_config, "head")
+    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    inspector = inspect(engine)
+    assert "chat_action" in inspector.get_table_names()
+    column_names = {column["name"] for column in inspector.get_columns("chat_action")}
+    assert column_names == _EXPECTED_CHAT_ACTION_COLUMNS
     engine.dispose()

@@ -11,7 +11,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from planora_api.domain.local_time import local_wall_clock_to_utc
+from planora_api.domain.local_time import (
+    local_wall_clock_to_utc,
+    parse_local_wall_clock,
+)
 
 
 def test_singapore_offset() -> None:
@@ -57,3 +60,33 @@ def test_rejects_an_already_aware_datetime() -> None:
 def test_rejects_an_unknown_timezone_name() -> None:
     with pytest.raises(Exception):  # noqa: B017 - zoneinfo's own exception type
         local_wall_clock_to_utc(datetime(2026, 1, 1, 0, 0), "Mars/Olympus")  # noqa: DTZ001 - deliberately naive
+
+
+# --- parse_local_wall_clock (issue #41) --------------------------------------
+
+
+def test_parses_a_date_only_string_as_end_of_day() -> None:
+    assert parse_local_wall_clock("2026-10-09") == datetime(2026, 10, 9, 23, 59)  # noqa: DTZ001
+
+
+def test_parses_a_date_and_time_string() -> None:
+    assert parse_local_wall_clock("2026-10-09T17:00") == datetime(2026, 10, 9, 17, 0)  # noqa: DTZ001
+
+
+def test_rejects_a_calendar_impossible_date() -> None:
+    with pytest.raises(ValueError):
+        parse_local_wall_clock("2026-02-30")
+
+
+def test_rejects_an_impossible_hour() -> None:
+    with pytest.raises(ValueError):
+        parse_local_wall_clock("2026-10-09T25:00")
+
+
+def test_rejects_a_malformed_string() -> None:
+    with pytest.raises(ValueError):
+        parse_local_wall_clock("not-a-date")
+
+
+def test_result_is_naive() -> None:
+    assert parse_local_wall_clock("2026-10-09").tzinfo is None
