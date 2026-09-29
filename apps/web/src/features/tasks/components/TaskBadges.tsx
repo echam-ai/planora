@@ -1,6 +1,7 @@
 import { AlertTriangle, CalendarClock, CalendarOff, CheckCircle2, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deadlineLabels } from "@/features/tasks/deadline";
+import { categoryLabels, priorityLabels } from "@/features/tasks/labels";
 import type { DeadlineState, TaskCategory, TaskPriority } from "@/types";
 
 const categoryClass: Record<TaskCategory, string> = {
@@ -8,19 +9,6 @@ const categoryClass: Record<TaskCategory, string> = {
   personal: "bg-cat-personal text-cat-personal-foreground",
   study: "bg-cat-study text-cat-study-foreground",
   other: "bg-cat-other text-cat-other-foreground",
-};
-
-export const categoryLabels: Record<TaskCategory, string> = {
-  work: "Work",
-  personal: "Personal",
-  study: "Study",
-  other: "Other",
-};
-
-export const priorityLabels: Record<TaskPriority, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
 };
 
 const priorityClass: Record<TaskPriority, string> = {

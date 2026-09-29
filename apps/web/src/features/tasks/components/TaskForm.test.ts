@@ -2,12 +2,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  TaskForm,
-  dirtyDraftPatch,
-  draftToValues,
-  type TaskFormValues,
-} from "@/features/tasks/components/TaskForm";
+import { TaskForm, type TaskFormValues } from "@/features/tasks/components/TaskForm";
+import { dirtyDraftPatch, draftToValues } from "@/features/tasks/formMapping";
 import { api } from "@/services/api";
 
 const values: TaskFormValues = {

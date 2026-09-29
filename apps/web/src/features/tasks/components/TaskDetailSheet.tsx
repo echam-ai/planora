@@ -20,14 +20,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TaskForm } from "@/features/tasks/components/TaskForm";
+import { categoryLabels, priorityLabels } from "@/features/tasks/labels";
 import { MarkdownPreview } from "@/lib/markdown";
 import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
 import {
   CategoryBadge,
   DeadlineBadge,
   PriorityBadge,
-  categoryLabels,
-  priorityLabels,
 } from "@/features/tasks/components/TaskBadges";
 import { useTaskMutations } from "@/features/tasks/hooks";
 import type { Task, TaskDraft, TaskStatus } from "@/types";

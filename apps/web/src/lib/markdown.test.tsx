@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MarkdownPreview, renderMarkdownToHtml } from "./markdown";
+import { MarkdownPreview } from "./markdown";
+import { renderMarkdownToHtml } from "./markdown-html";
 
 /** Parses sanitized HTML into a detached DOM so attributes can be read with `getAttribute`. */
 function parse(html: string): HTMLDivElement {
