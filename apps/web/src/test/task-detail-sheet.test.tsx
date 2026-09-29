@@ -199,14 +199,44 @@ function renderPage(Page: React.ComponentType) {
   );
 }
 
+/** A task card's button, found by its aria-label. A name-filtered `findByRole`
+ * computes accessible names and computed styles for every element on the page
+ * on each poll, which is what pushed these tests toward the 5 s limit under CPU
+ * contention; the label query matches the same button at a fraction of the cost. */
+async function findCard(title: string) {
+  const card = await screen.findByLabelText(new RegExp(`^Open (archived )?task ${title}$`));
+  expect(card.tagName).toBe("BUTTON");
+  return card;
+}
+
+/** The cheap lookups below stand in for `getByRole(..., { name })` on the paths that only
+ * need to reach a control: a role query with a name recomputes styles for the whole tree
+ * after every DOM change (~250 ms each in jsdom), and this file makes dozens of them.
+ * Each helper still asserts the element's role, so a control that stops being a button,
+ * combobox or option fails here. */
+function combobox(scope: HTMLElement, name: string) {
+  const el = within(scope).getByLabelText(name);
+  expect(el).toHaveAttribute("role", "combobox");
+  return el;
+}
+
+function textButton(scope: HTMLElement, name: string) {
+  return within(scope).getByText(name, { selector: "button" });
+}
+
+function saveButton(scope: HTMLElement) {
+  return textButton(scope, "Save changes");
+}
+
+async function findOption(name: string) {
+  const label = await screen.findByText(name, { selector: '[role="option"] span' });
+  const option = label.closest('[role="option"]');
+  if (!option) throw new Error(`missing option: ${name}`);
+  return option;
+}
+
 async function openSheet(title: string) {
-  fireEvent.click(
-    await screen.findByRole(
-      "button",
-      { name: new RegExp(`Open (archived )?task ${title}`) },
-      { timeout: 5_000 },
-    ),
-  );
+  fireEvent.click(await findCard(title));
   return screen.findByRole("dialog");
 }
 
@@ -246,16 +276,14 @@ describe("task detail sheet", () => {
 
     const dialog = await openSheet("Ship it");
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Todo");
+      expect(combobox(dialog, "Status")).toHaveTextContent("Todo");
     });
 
     // a board drag produces exactly this client-store move
     await externalWrite(() => api.moveTask("a", "in_progress", 0));
 
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent(
-        "In Progress",
-      );
+      expect(combobox(dialog, "Status")).toHaveTextContent("In Progress");
     });
     expect(screen.getByRole("dialog")).toBe(dialog);
   });
@@ -266,7 +294,7 @@ describe("task detail sheet", () => {
 
     const dialog = await openSheet("Ship it");
     fireEvent.change(field(dialog, "Title"), { target: { value: "Ship it v2" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     expect(updateTask).toHaveBeenCalledWith("a", { title: "Ship it v2" });
@@ -315,16 +343,14 @@ describe("task detail sheet", () => {
     // untouched fields display the external write at once
     await waitFor(() => {
       expect(within(dialog).getByLabelText("Content")).toHaveValue("External content");
-      expect(within(dialog).getByRole("combobox", { name: "Category" })).toHaveTextContent(
-        "Personal",
-      );
-      expect(within(dialog).getByRole("combobox", { name: "Priority" })).toHaveTextContent("High");
-      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
+      expect(combobox(dialog, "Category")).toHaveTextContent("Personal");
+      expect(combobox(dialog, "Priority")).toHaveTextContent("High");
+      expect(combobox(dialog, "Status")).toHaveTextContent("Done");
     });
     // the field the user edited keeps the user's value
     expect(within(dialog).getByLabelText("Title")).toHaveValue("User title");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     expect(updateTask).toHaveBeenCalledWith("a", { title: "User title" });
@@ -356,7 +382,7 @@ describe("task detail sheet", () => {
     });
 
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Priority" })).toHaveTextContent("High");
+      expect(combobox(dialog, "Priority")).toHaveTextContent("High");
     });
     expect(within(dialog).getByLabelText("Title")).toHaveValue("My own title");
   });
@@ -389,12 +415,12 @@ describe("task detail sheet", () => {
     });
 
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Priority" })).toHaveTextContent("Low");
+      expect(combobox(dialog, "Priority")).toHaveTextContent("Low");
       expect(within(dialog).getByLabelText("Content")).toHaveValue("Chat-written content");
     });
     expect(within(dialog).getByLabelText("Title")).toHaveValue("My own title");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     expect(updateTask).toHaveBeenCalledWith("a", { title: "My own title" });
 
@@ -412,12 +438,12 @@ describe("task detail sheet", () => {
     renderPage(TasksPage);
 
     const dialog = await openSheet("Ship it");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(textButton(dialog, "Cancel"));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(updateTask).not.toHaveBeenCalled();
 
     const reopened = await openSheet("Ship it");
-    fireEvent.click(within(reopened).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(reopened));
     // let any (buggy) update request surface before asserting there was none
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
@@ -430,13 +456,13 @@ describe("task detail sheet", () => {
     renderPage(TasksPage);
 
     const dialog = await openSheet("Ship it");
-    fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Done" }));
+    fireEvent.click(combobox(dialog, "Status"));
+    fireEvent.click(await findOption("Done"));
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
+      expect(combobox(dialog, "Status")).toHaveTextContent("Done");
     });
     fireEvent.change(field(dialog, "Title"), { target: { value: "Ship it v2" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     const [, patch] = updateTask.mock.calls[0] as [string, Record<string, unknown>];
@@ -451,13 +477,13 @@ describe("task detail sheet", () => {
     const dialog = await openSheet("Ship it");
     const clearButton = await within(dialog).findByRole("button", { name: "Clear deadline" });
     fireEvent.click(clearButton);
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     expect(updateTask).toHaveBeenCalledWith("a", { deadlineAt: null });
     expect(requireTask("a").deadlineAt).toBeNull();
 
-    const card = await screen.findByRole("button", { name: "Open task Ship it" });
+    const card = await findCard("Ship it");
     expect(within(card).getByText("No deadline")).toBeInTheDocument();
   });
 
@@ -530,7 +556,7 @@ describe("task detail sheet", () => {
 
     const dialog = await openSheet("Weekly status update");
     await waitFor(() => {
-      expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Done");
+      expect(combobox(dialog, "Status")).toHaveTextContent("Done");
     });
     expect(within(dialog).getByText("Completed", { selector: "span" })).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: /^Date/ })).not.toHaveTextContent(
@@ -540,7 +566,7 @@ describe("task detail sheet", () => {
     expect(within(dialog).getByText("Completed", { selector: "dt" })).toBeInTheDocument();
 
     fireEvent.change(field(dialog, "Content"), { target: { value: "Edited content" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledTimes(1));
     expect(updateTask).toHaveBeenCalledWith("a", { content: "Edited content" });
@@ -551,7 +577,7 @@ describe("task detail sheet", () => {
     });
 
     // the card renders the Completed state, not a timing-based deadline state
-    const card = await screen.findByRole("button", { name: "Open task Weekly status update" });
+    const card = await findCard("Weekly status update");
     expect(within(card).getByText("Completed")).toBeInTheDocument();
   });
 
@@ -567,18 +593,32 @@ describe("task detail sheet", () => {
     ]);
     renderPage(TasksPage);
 
-    let dialog = await openSheet("Recover the overdue task");
+    const dialog = await openSheet("Recover the overdue task");
     expect(within(dialog).getByText("Completed", { selector: "span" })).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("combobox", { name: "Status" }));
-    fireEvent.click(await screen.findByRole("option", { name: "Todo" }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    fireEvent.click(combobox(dialog, "Status"));
+    fireEvent.click(await findOption("Todo"));
+    fireEvent.click(saveButton(dialog));
 
     await waitFor(() => expect(updateTask).toHaveBeenCalledWith("a", { status: "todo" }));
     expect(requireTask("a")).toMatchObject({ status: "todo", completedAt: null });
-    const card = await screen.findByRole("button", { name: "Open task Recover the overdue task" });
+    const card = await findCard("Recover the overdue task");
     expect(within(card).getByText("Overdue")).toBeInTheDocument();
+  });
 
-    dialog = await openSheet("Recover the overdue task");
+  it("shows a To do task with a past deadline as overdue in the sheet, not as completed", async () => {
+    // the state the previous test saves, seeded directly instead of chaining a second dialog cycle
+    installClient([
+      makeTask({
+        id: "a",
+        title: "Recover the overdue task",
+        status: "todo",
+        deadlineAt: iso(-DAY),
+        completedAt: null,
+      }),
+    ]);
+    renderPage(TasksPage);
+
+    const dialog = await openSheet("Recover the overdue task");
     expect(within(dialog).getByText("Overdue", { selector: "span" })).toBeInTheDocument();
     expect(within(dialog).queryByText("Completed", { selector: "dt" })).not.toBeInTheDocument();
   });
@@ -588,19 +628,19 @@ describe("task detail sheet", () => {
     renderPage(TasksPage);
 
     const dialog = await openSheet("Ship it");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(textButton(dialog, "Delete"));
 
     const confirm = await screen.findByRole("alertdialog");
     expect(within(confirm).getByText(/Delete “Ship it”\?/)).toBeInTheDocument();
     expect(deleteTask).not.toHaveBeenCalled();
 
-    fireEvent.click(within(confirm).getByRole("button", { name: "Keep task" }));
+    fireEvent.click(textButton(confirm, "Keep task"));
     await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     expect(deleteTask).not.toHaveBeenCalled();
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    fireEvent.click(textButton(dialog, "Delete"));
     const confirmAgain = await screen.findByRole("alertdialog");
-    fireEvent.click(within(confirmAgain).getByRole("button", { name: "Delete task" }));
+    fireEvent.click(textButton(confirmAgain, "Delete task"));
     await waitFor(() => expect(deleteTask).toHaveBeenCalledWith("a"));
   });
 
@@ -711,7 +751,7 @@ describe("task detail sheet", () => {
     ]);
     renderPage(ArchivePage);
 
-    const card = await screen.findByRole("button", { name: "Open archived task Old report" });
+    const card = await findCard("Old report");
     expect(card).toHaveAccessibleName("Open archived task Old report");
     expect(card).toHaveAccessibleDescription(/Work/);
     expect(card).toHaveAccessibleDescription(/Low priority/);
@@ -734,7 +774,7 @@ describe("task detail sheet", () => {
     getArchivedTask.mockImplementationOnce(() => initial.promise);
     renderPage(ArchivePage);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    fireEvent.click(await findCard("Archived A"));
     const dialog = await screen.findByRole("dialog", { name: "Archived task" });
     expect(within(dialog).getByText("Loading archived task…")).toBeInTheDocument();
 
@@ -770,7 +810,7 @@ describe("task detail sheet", () => {
     getArchivedTask.mockImplementationOnce(() => pending.promise);
     renderPage(ArchivePage);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    fireEvent.click(await findCard("Archived A"));
     const dialog = await screen.findByRole("dialog");
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -811,7 +851,7 @@ describe("task detail sheet", () => {
     );
     renderPage(ArchivePage);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    fireEvent.click(await findCard("Archived A"));
     await screen.findByRole("dialog", { name: "Archived task" });
     fireEvent.click(hiddenButton("Open archived task Archived B"));
     const dialog = await screen.findByRole("dialog", { name: "Archived B" });
@@ -838,7 +878,7 @@ describe("task detail sheet", () => {
     getArchivedTask.mockRejectedValueOnce(new ApiError("NETWORK", "Connection lost"));
     renderPage(ArchivePage);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Open archived task Archived A" }));
+    fireEvent.click(await findCard("Archived A"));
     const dialog = await screen.findByRole("dialog", { name: "Archived task" });
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Connection lost");
     fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
