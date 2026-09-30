@@ -22,9 +22,6 @@ function uniqueTitle(label: string): string {
 
 async function signIn(page: Page) {
   await page.goto("/login");
-  // The dev server hydrates the form after the first paint; text typed before
-  // that is discarded when React takes over the inputs.
-  await page.waitForLoadState("networkidle");
   await page.getByLabel("Username").fill(USERNAME);
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();

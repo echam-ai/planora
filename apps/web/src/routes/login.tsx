@@ -37,10 +37,17 @@ function LoginPage() {
     if (session) navigate({ to: "/tasks", replace: true });
   }, [session, navigate]);
 
-  const form = useForm<Credentials>({
-    resolver: zodResolver(credentialsSchema),
-    defaultValues: { username: "", password: "" },
-  });
+  // The form is server-rendered, so the user (or a password manager) can fill
+  // it before hydration. No `defaultValues`: with one, react-hook-form writes
+  // it into each input as its ref attaches, erasing that text. Without one it
+  // reads the DOM value instead, so an untouched field still validates as "".
+  const form = useForm<Credentials>({ resolver: zodResolver(credentialsSchema) });
+
+  // Before hydration nothing handles a submit, so the browser would do a
+  // native GET and put the password in the URL. A disabled submit button
+  // blocks click and implicit (Enter) submission until React takes over.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
 
   const onSubmit = async (values: Credentials) => {
     setError(null);
@@ -100,7 +107,11 @@ function LoginPage() {
             </p>
           )}
 
-          <Button type="submit" className="min-h-11 w-full" disabled={form.formState.isSubmitting}>
+          <Button
+            type="submit"
+            className="min-h-11 w-full"
+            disabled={!hydrated || form.formState.isSubmitting}
+          >
             {form.formState.isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Sign in
           </Button>
