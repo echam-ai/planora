@@ -86,10 +86,13 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversation?.messages.length, send.isPending]);
 
-  const submit = (value: string) => {
+  // The one guard for every send path (Send, Enter, suggestions). A second mutate() on the
+  // same mutation would drop the first call's onError, losing the text it would restore.
+  // `fromInput` is true only when the text being sent is the input's own text.
+  const submit = (value: string, fromInput: boolean) => {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    setText("");
+    if (!trimmed || send.isPending) return;
+    if (fromInput) setText("");
     send.mutate(trimmed, {
       // A failed send persists nothing, so hand the text back rather than lose it —
       // unless the user has already started typing something else.
@@ -146,8 +149,9 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => submit(s)}
-                  className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 hover:bg-secondary"
+                  onClick={() => submit(s, false)}
+                  disabled={send.isPending}
+                  className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -213,7 +217,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         className="border-t border-border p-3"
         onSubmit={(e) => {
           e.preventDefault();
-          submit(text);
+          submit(text, true);
         }}
       >
         <label htmlFor="chat-input" className="sr-only">
@@ -229,7 +233,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                submit(text);
+                submit(text, true);
               }
             }}
           />
