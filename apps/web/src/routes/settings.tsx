@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettings, useSettingsMutations } from "@/features/settings/hooks";
+import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
 import { DemoDataSection } from "@/features/settings/components/DemoDataSection";
 import type { AppSettings } from "@/types";
@@ -109,6 +110,9 @@ function SettingsPage() {
 
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
+  // Fields are usable before hydration; keep whatever was typed then.
+  const currentRef = useAdoptDomValue<HTMLInputElement>(setCurrent);
+  const nextRef = useAdoptDomValue<HTMLInputElement>(setNext);
   const [pwError, setPwError] = useState<string | null>(null);
 
   const onChangePassword = (e: React.FormEvent) => {
@@ -166,6 +170,7 @@ function SettingsPage() {
             <Label htmlFor="cur">Current password</Label>
             <Input
               id="cur"
+              ref={currentRef}
               type="password"
               autoComplete="current-password"
               value={current}
@@ -176,6 +181,7 @@ function SettingsPage() {
             <Label htmlFor="new">New password</Label>
             <Input
               id="new"
+              ref={nextRef}
               type="password"
               autoComplete="new-password"
               value={next}
