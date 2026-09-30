@@ -1,9 +1,11 @@
 # Routes
 
-TanStack Start uses **file-based routing**. Every `.tsx` file in this directory
-defines a route. Do **not** create `src/pages/`, `src/routes/_app/index.tsx`, or
-`app/layout.tsx` — those are Next.js / Remix conventions. The only root layout
-is `src/routes/__root.tsx`.
+TanStack Start uses **file-based routing**. Route modules in this directory
+define routes. Colocated `*.test.ts` and `*.test.tsx` files are excluded from
+route generation by `routeFileIgnorePattern` in `vite.config.ts`.
+Do **not** create `src/pages/`, `src/routes/_app/index.tsx`, or `app/layout.tsx` —
+those are Next.js / Remix conventions. The only root layout is
+`src/routes/__root.tsx`.
 
 ## Conventions
 
