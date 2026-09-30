@@ -468,6 +468,64 @@ describe("mock API client characterization", () => {
     expect(await resolve(mockApiClient.getSettings())).toMatchObject({ modelName: "kimi-k3" });
   });
 
+  describe("settings mirror the API (stale model, trimming, atomic rejection)", () => {
+    const seed = (value: unknown) =>
+      window.localStorage.setItem("planora.settings", JSON.stringify(value));
+    const stored = () => JSON.parse(window.localStorage.getItem("planora.settings") ?? "{}");
+
+    it("falls back to the default model when the stored one is not listed", async () => {
+      seed({ timezone: "Asia/Tokyo", modelName: "planora-pro" });
+      expect(await resolve(mockApiClient.getSettings())).toStrictEqual({
+        timezone: "Asia/Tokyo",
+        modelName: "kimi-k3",
+        availableModels: ["kimi-k3"],
+      });
+    });
+
+    it("never lets a stored list widen the built-in one", async () => {
+      seed({ modelName: "planora-pro", availableModels: ["kimi-k3", "planora-pro"] });
+      const settings = await resolve(mockApiClient.getSettings());
+      expect(settings.availableModels).toStrictEqual(["kimi-k3"]);
+      expect(settings.modelName).toBe("kimi-k3");
+    });
+
+    it("saves a timezone-only patch while a stale model is stored", async () => {
+      seed({ timezone: "Asia/Tokyo", modelName: "planora-pro" });
+      const expected = { timezone: "UTC", modelName: "kimi-k3", availableModels: ["kimi-k3"] };
+      expect(await resolve(mockApiClient.updateSettings({ timezone: "UTC" }))).toStrictEqual(
+        expected,
+      );
+      expect(await resolve(mockApiClient.getSettings())).toStrictEqual(expected);
+      expect(stored()).not.toHaveProperty("availableModels");
+    });
+
+    it("trims the model name before validating and storing it", async () => {
+      const saved = await resolve(mockApiClient.updateSettings({ modelName: "  kimi-k3  " }));
+      expect(saved.modelName).toBe("kimi-k3");
+      expect(stored().modelName).toBe("kimi-k3");
+      expect(stored()).not.toHaveProperty("availableModels");
+    });
+
+    it("rejects a blank model name", async () => {
+      await expectApiError(
+        mockApiClient.updateSettings({ modelName: "   " }),
+        "VALIDATION_ERROR",
+        "Choose one of the available models.",
+      );
+    });
+
+    it("stores nothing when the model is rejected, timezone included", async () => {
+      seed({ timezone: "Asia/Tokyo", modelName: "kimi-k3" });
+      const before = window.localStorage.getItem("planora.settings");
+      await expectApiError(
+        mockApiClient.updateSettings({ timezone: "UTC", modelName: "planora-pro" }),
+        "VALIDATION_ERROR",
+        "Choose one of the available models.",
+      );
+      expect(window.localStorage.getItem("planora.settings")).toBe(before);
+    });
+  });
+
   it("uses browser-less storage fallbacks without throwing", async () => {
     vi.stubGlobal("window", undefined);
     try {

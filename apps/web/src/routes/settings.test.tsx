@@ -362,3 +362,41 @@ describe("Settings route — change password", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 });
+
+describe("Settings route — stale stored model (mock client)", () => {
+  it("shows the default model and saves a timezone change instead of failing", async () => {
+    window.localStorage.setItem(
+      "planora.settings",
+      JSON.stringify({ timezone: "Asia/Tokyo", modelName: "planora-pro" }),
+    );
+    try {
+      vi.spyOn(api, "getSession").mockResolvedValue({
+        username: "demo",
+        signedInAt: new Date().toISOString(),
+      });
+      const update = vi.spyOn(api, "updateSettings"); // passthrough to the real mock
+      renderWithToaster();
+
+      const model = await screen.findByRole("combobox", { name: "Assistant model" });
+      await waitFor(() => expect(model).toHaveTextContent("kimi-k3"), { timeout: 3000 });
+      expect(screen.getByRole("combobox", { name: "Timezone" })).toHaveTextContent("Asia/Tokyo");
+
+      await pickTimezone("Europe/London");
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+      expect((await screen.findAllByText("Settings saved", {}, { timeout: 3000 })).length).toBe(1);
+      expect(update).toHaveBeenCalledWith({ timezone: "Europe/London", modelName: "kimi-k3" });
+      await expect(update.mock.results[0]!.value).resolves.toMatchObject({
+        timezone: "Europe/London",
+        modelName: "kimi-k3",
+      });
+      expect(await api.getSettings()).toStrictEqual({
+        timezone: "Europe/London",
+        modelName: "kimi-k3",
+        availableModels: ["kimi-k3"],
+      });
+    } finally {
+      window.localStorage.clear();
+    }
+  });
+});

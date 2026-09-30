@@ -3,13 +3,28 @@ import type { ApiClient } from "../ApiClient";
 import { KEYS, delay, ensureTasks, hasWindow, nowIso, read, write } from "./store";
 
 const AVAILABLE_MODELS = ["kimi-k3"];
+const DEFAULT_MODEL = "kimi-k3";
 const DEFAULT_SETTINGS: AppSettings = {
   timezone: "Asia/Singapore",
-  modelName: "kimi-k3",
+  modelName: DEFAULT_MODEL,
   availableModels: AVAILABLE_MODELS,
 };
 const DEMO_USER = "demo";
 const DEFAULT_PASSWORD = "focusboard";
+
+/**
+ * The settings the API would serve: the list is deployment configuration, never
+ * stored, and a stored model that is no longer listed falls back to the default.
+ */
+function effectiveSettings(): AppSettings {
+  const stored = read<Partial<AppSettings>>(KEYS.settings, {});
+  const merged = { ...DEFAULT_SETTINGS, ...stored };
+  return {
+    timezone: merged.timezone,
+    modelName: AVAILABLE_MODELS.includes(merged.modelName) ? merged.modelName : DEFAULT_MODEL,
+    availableModels: AVAILABLE_MODELS,
+  };
+}
 
 /** The Settings timezone the mock currently holds. */
 export function currentTimezone(): string {
@@ -42,24 +57,26 @@ export function createAuthClient(): Pick<
     },
     async getSettings() {
       await delay();
-      return { ...DEFAULT_SETTINGS, ...read<Partial<AppSettings>>(KEYS.settings, {}) };
+      return effectiveSettings();
     },
     async updateSettings(patch) {
       await delay();
       if (read<boolean>(KEYS.forceError, false)) {
         throw new ApiError("SIMULATED_FAILURE", "Simulated failure while trying to save settings.");
       }
-      if (patch.modelName !== undefined && !AVAILABLE_MODELS.includes(patch.modelName.trim())) {
+      const modelName = patch.modelName?.trim();
+      if (modelName !== undefined && !AVAILABLE_MODELS.includes(modelName)) {
         throw new ApiError("VALIDATION_ERROR", "Choose one of the available models.");
       }
-      // The list is read-only: never taken from the patch or from storage.
+      const current = effectiveSettings();
       const next: AppSettings = {
-        ...DEFAULT_SETTINGS,
-        ...read<Partial<AppSettings>>(KEYS.settings, {}),
-        ...patch,
-        availableModels: AVAILABLE_MODELS,
+        ...current,
+        ...(patch.timezone !== undefined && { timezone: patch.timezone }),
+        ...(modelName !== undefined && { modelName }),
       };
-      write(KEYS.settings, next);
+      // The list is deployment configuration: return it, never persist it.
+      const { availableModels: _list, ...persisted } = next;
+      write(KEYS.settings, persisted);
       return next;
     },
     async changePassword(currentPassword, newPassword) {
