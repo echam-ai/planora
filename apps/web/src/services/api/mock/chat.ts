@@ -304,7 +304,7 @@ export function createChatClient(
       await delay(600, 1200);
       // Like the API, a failed send persists nothing — not even the user's message.
       if (read<boolean>(KEYS.forceError, false))
-        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable. Try again.", {
+        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {
           status: 503,
         });
       const conversation =

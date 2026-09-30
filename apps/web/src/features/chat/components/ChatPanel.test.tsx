@@ -49,6 +49,20 @@ function renderPanel() {
   return { invalidate };
 }
 
+const UNAVAILABLE = "The assistant is unavailable right now. Try again.";
+const unavailable = () => new ApiError("AI_UNAVAILABLE", UNAVAILABLE, { status: 503 });
+
+function deferredSend() {
+  let resolve!: (c: Conversation) => void;
+  let reject!: (e: Error) => void;
+  const promise = new Promise<Conversation>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  const send = vi.spyOn(api, "sendChatMessage").mockReturnValue(promise);
+  return { send, resolve, reject };
+}
+
 const emptyConversation: Conversation = { id: "c1", messages: [] };
 const replied: Conversation = {
   id: "c1",
@@ -61,9 +75,7 @@ const replied: Conversation = {
 describe("ChatPanel", () => {
   it("keeps the submitted text and shows the notice when a send fails", async () => {
     vi.spyOn(api, "getCurrentConversation").mockResolvedValue({ id: "c1", messages: [] });
-    vi.spyOn(api, "sendChatMessage").mockRejectedValue(
-      new ApiError("AI_UNAVAILABLE", "The assistant is unavailable. Try again.", { status: 503 }),
-    );
+    vi.spyOn(api, "sendChatMessage").mockRejectedValue(unavailable());
     renderPanel();
     const input = await screen.findByLabelText("Message the assistant");
 
@@ -215,6 +227,104 @@ describe("ChatPanel", () => {
       await waitFor(() =>
         expect(screen.queryByText(/The assistant didn't respond\./)).not.toBeInTheDocument(),
       );
+    });
+  });
+
+  describe("while a send is pending", () => {
+    async function startPending() {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const d = deferredSend();
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: "first" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(d.send).toHaveBeenCalledTimes(1));
+      return { ...d, input };
+    }
+
+    it("ignores Enter, keeps the typed text and keeps it when the send fails", async () => {
+      const { send, reject, input } = await startPending();
+
+      fireEvent.change(input, { target: { value: "second" } });
+      expect(input).toHaveValue("second");
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send).toHaveBeenCalledWith("first");
+      expect(input).toHaveValue("second");
+
+      reject(unavailable());
+
+      expect(await screen.findByText(/The assistant didn't respond\./)).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith(UNAVAILABLE);
+      expect(input).toHaveValue("second");
+    });
+
+    it("disables Send and every suggestion, and clicking a suggestion sends nothing", async () => {
+      const { send } = await startPending();
+
+      expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+      const suggestions = screen.getAllByRole("button", { name: /^(What|Show|Add|Move)/ });
+      expect(suggestions).toHaveLength(4);
+      for (const s of suggestions) expect(s).toBeDisabled();
+      fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
+
+      expect(send).toHaveBeenCalledTimes(1);
+    });
+
+    it("restores the text after a failure with no new typing, then Enter retries it", async () => {
+      const { send, reject, input } = await startPending();
+      expect(input).toHaveValue("");
+
+      reject(unavailable());
+
+      await waitFor(() => expect(input).toHaveValue("first"));
+      send.mockResolvedValue(replied);
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+      expect(send).toHaveBeenLastCalledWith("first");
+    });
+  });
+
+  describe("suggestions with a draft typed", () => {
+    it("sends the suggestion, leaves the draft alone while pending and after success", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const { send, resolve } = deferredSend();
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: "draft" } });
+
+      fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
+
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+      expect(send).toHaveBeenCalledWith("What is overdue?");
+      expect(input).toHaveValue("draft");
+      resolve(replied);
+      expect(await screen.findByText("hello")).toBeInTheDocument();
+      expect(input).toHaveValue("draft");
+    });
+
+    it("keeps the draft when the suggestion send fails", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      vi.spyOn(api, "sendChatMessage").mockRejectedValue(unavailable());
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: "draft" } });
+
+      fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
+
+      expect(await screen.findByText(/The assistant didn't respond\./)).toBeInTheDocument();
+      expect(input).toHaveValue("draft");
+    });
+
+    it("puts a failed suggestion's text in an empty input", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      vi.spyOn(api, "sendChatMessage").mockRejectedValue(unavailable());
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+
+      fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
+
+      await waitFor(() => expect(input).toHaveValue("What is overdue?"));
     });
   });
 

@@ -219,7 +219,7 @@ describe("mock API client characterization", () => {
     await expectApiError(
       mockApiClient.sendChatMessage("hello"),
       "AI_UNAVAILABLE",
-      "The assistant is unavailable. Try again.",
+      "The assistant is unavailable right now. Try again.",
     );
   });
 
@@ -407,7 +407,7 @@ describe("mock API client characterization", () => {
       await expectApiError(
         mockApiClient.sendChatMessage("hello"),
         "AI_UNAVAILABLE",
-        "The assistant is unavailable. Try again.",
+        "The assistant is unavailable right now. Try again.",
       );
       mockDevTools.setErrorMode(false);
       expect(window.localStorage.getItem("planora.conversation")).toBe(before);
