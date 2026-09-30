@@ -108,7 +108,7 @@ test("restores a seeded archived task to the end of To do", async ({ page }) => 
   await signIn(page);
 
   await page.getByRole("link", { name: "Archive" }).first().click();
-  await expect(page.getByRole("heading", { name: "Archive" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Archive", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: `Open archived task ${archived}` })).toBeVisible();
   await page.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByRole("button", { name: `Open archived task ${archived}` })).toHaveCount(0);
