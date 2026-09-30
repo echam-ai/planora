@@ -368,6 +368,50 @@ describe("mock API client characterization", () => {
       expect(await resolve(mockApiClient.listTasks())).toEqual(tasksBefore);
     });
 
+    describe("a proposal whose task is no longer active", () => {
+      const STALE =
+        "This task changed after the proposal, so nothing was applied. Ask for an up-to-date preview.";
+
+      it.each([
+        ["deleted", async (id: string) => resolve(mockApiClient.deleteTask(id))],
+        [
+          "archived",
+          async (id: string) => {
+            window.localStorage.setItem(
+              "planora.tasks",
+              JSON.stringify(
+                storedTasks().map((task) =>
+                  task.id === id ? { ...task, archivedAt: "2026-09-24T07:00:00.000Z" } : task,
+                ),
+              ),
+            );
+          },
+        ],
+      ])(
+        "confirm fails 409 ACTION_STALE when the task was %s and writes nothing",
+        async (_, gone) => {
+          const action = await propose("move 'Tidy the garage shelves' to done");
+          await gone(action.payload.taskId!);
+          const before = await resolve(mockApiClient.getCurrentConversation());
+          const tasksBefore = storedTasks();
+
+          await expectStatus(
+            mockApiClient.confirmChatAction(action.id),
+            "ACTION_STALE",
+            409,
+            STALE,
+          );
+
+          const after = await resolve(mockApiClient.getCurrentConversation());
+          expect(after).toEqual(before);
+          expect(after.messages.find((m) => m.action?.id === action.id)?.action?.status).toBe(
+            "pending",
+          );
+          expect(storedTasks()).toEqual(tasksBefore);
+        },
+      );
+    });
+
     it("rejecting an applied action fails 409 ACTION_ALREADY_APPLIED", async () => {
       const action = await propose("create task to buy jam");
       await resolve(mockApiClient.confirmChatAction(action.id));

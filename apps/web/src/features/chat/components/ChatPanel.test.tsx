@@ -162,6 +162,86 @@ describe("ChatPanel", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("boom"));
     expect(read).toHaveBeenCalledTimes(1);
   });
+  describe("a stale proposal", () => {
+    const STALE_MESSAGE =
+      "This task changed after the proposal, so nothing was applied. Ask for an up-to-date preview.";
+    const STALE_COPY =
+      "This task changed after the proposal. Ask the assistant for an up-to-date preview.";
+    const stale = () => new ApiError("ACTION_STALE", STALE_MESSAGE, { status: 409 });
+
+    it("drops Confirm, keeps Cancel and explains after ACTION_STALE, even if the refetch is still pending", async () => {
+      const read = vi.spyOn(api, "getCurrentConversation").mockResolvedValue(proposal("pending"));
+      vi.spyOn(api, "confirmChatAction").mockRejectedValue(stale());
+      renderPanel();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+      expect(await screen.findByText(STALE_COPY)).toBeInTheDocument();
+      expect(toast.error).toHaveBeenCalledWith(STALE_MESSAGE);
+      await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+      expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    });
+
+    it("shows Cancelled and no stale text after cancelling the stale proposal", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(proposal("pending"));
+      vi.spyOn(api, "confirmChatAction").mockRejectedValue(stale());
+      const reject = vi.spyOn(api, "rejectChatAction").mockResolvedValue(proposal("rejected"));
+      renderPanel();
+      fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+      await screen.findByText(STALE_COPY);
+
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+      expect(await screen.findByText("Cancelled")).toBeInTheDocument();
+      expect(reject).toHaveBeenCalledWith("a1");
+      expect(screen.queryByText(STALE_COPY)).not.toBeInTheDocument();
+    });
+
+    it("only affects the failing action; another pending card keeps Confirm", async () => {
+      const two = proposal("pending");
+      const second = structuredClone(two.messages[0]!);
+      second.id = "m2";
+      second.action!.id = "a2";
+      two.messages.push(second);
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(two);
+      vi.spyOn(api, "confirmChatAction").mockRejectedValue(stale());
+      renderPanel();
+
+      fireEvent.click((await screen.findAllByRole("button", { name: "Confirm" }))[0]!);
+
+      await screen.findByText(STALE_COPY);
+      const confirms = screen.getAllByRole("button", { name: "Confirm" });
+      expect(confirms).toHaveLength(1);
+      expect(confirms[0]).toBeEnabled();
+    });
+
+    it("shows the final state, not the stale copy, when the refetch says rejected", async () => {
+      vi.spyOn(api, "getCurrentConversation")
+        .mockResolvedValueOnce(proposal("pending"))
+        .mockResolvedValue(proposal("rejected"));
+      vi.spyOn(api, "confirmChatAction").mockRejectedValue(stale());
+      renderPanel();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+      expect(await screen.findByText("Cancelled")).toBeInTheDocument();
+      expect(screen.queryByText(STALE_COPY)).not.toBeInTheDocument();
+    });
+
+    it("keeps Confirm after a transient failure", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(proposal("pending"));
+      vi.spyOn(api, "confirmChatAction").mockRejectedValue(unavailable());
+      renderPanel();
+
+      fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(UNAVAILABLE));
+      expect(screen.getByRole("button", { name: "Confirm" })).toBeEnabled();
+      expect(screen.queryByText(STALE_COPY)).not.toBeInTheDocument();
+    });
+  });
+
   describe("sending", () => {
     it("sends a clicked suggestion", async () => {
       vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
