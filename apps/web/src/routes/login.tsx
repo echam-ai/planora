@@ -43,9 +43,9 @@ function LoginPage() {
   // reads the DOM value instead, so an untouched field still validates as "".
   const form = useForm<Credentials>({ resolver: zodResolver(credentialsSchema) });
 
-  // Before hydration nothing handles a submit, so the browser would do a
-  // native GET and put the password in the URL. A disabled submit button
-  // blocks click and implicit (Enter) submission until React takes over.
+  // A disabled submit button blocks click and implicit (Enter) submission
+  // until React takes over. A direct native form.submit() falls back to the
+  // server's clean POST /login redirect.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
@@ -74,6 +74,8 @@ function LoginPage() {
         </div>
 
         <form
+          method="post"
+          action="/login"
           onSubmit={form.handleSubmit(onSubmit)}
           className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-card"
           noValidate

@@ -108,6 +108,28 @@ describe("server entry: ordinary responses", () => {
   });
 });
 
+describe("server entry: native login submission", () => {
+  it("discards POST /login before TanStack without reading or logging credentials", async () => {
+    const entry = await importServerEntry();
+    const credential = "distinctive-secret-114";
+    const post = new Request("https://example.test/login?ignored=1", {
+      method: "POST",
+      body: `username=test&password=${credential}`,
+    });
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await entry.fetch(post, {}, {});
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.text()).toBe("");
+    expect(post.bodyUsed).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(consoleSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("server entry: h3-swallowed errors are normalized to the generic error page", () => {
   it("logs the previously-captured error and hides it from the response body", async () => {
     const entry = await importServerEntry();

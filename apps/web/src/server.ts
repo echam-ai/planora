@@ -46,6 +46,13 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (request.method === "POST" && new URL(request.url).pathname === "/login") {
+      return new Response(null, {
+        status: 303,
+        headers: { Location: "/login", "Cache-Control": "no-store" },
+      });
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
