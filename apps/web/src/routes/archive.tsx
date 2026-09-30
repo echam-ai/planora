@@ -22,6 +22,7 @@ import {
 import { useArchive, useArchivedTask, useTaskMutations } from "@/features/tasks/hooks";
 import { useSettings } from "@/features/settings/hooks";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
 import { ApiError, type Task } from "@/types";
 
 export const Route = createFileRoute("/archive")({
@@ -50,6 +51,11 @@ function ArchivePage() {
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<Task | null>(null);
+  const updateSearch = (value: string) => {
+    setSearch(value);
+    setPage(1);
+  };
+  const searchRef = useAdoptDomValue<HTMLInputElement>(updateSearch);
 
   const { data: settings } = useSettings();
   const { data, isLoading, isError, refetch } = useArchive(search, page);
@@ -86,11 +92,9 @@ function ArchivePage() {
             aria-hidden
           />
           <Input
+            ref={searchRef}
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => updateSearch(e.target.value)}
             placeholder="Search archived tasks"
             aria-label="Search archived tasks"
             className="pl-9"

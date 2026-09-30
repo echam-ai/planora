@@ -7,6 +7,7 @@ import {
   type BoardFiltersState,
 } from "@/features/tasks/boardFilters";
 import { deadlineLabels } from "@/features/tasks/deadline";
+import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
 import type { TaskCategory, TaskPriority } from "@/types";
 
 export type { BoardDeadlineFilter, BoardFiltersState } from "@/features/tasks/boardFilters";
@@ -72,6 +73,7 @@ function FilterGroup<T extends string>({
 }
 
 export function BoardFilters({ search, filters, onSearchChange, onFiltersChange }: Props) {
+  const searchRef = useAdoptDomValue<HTMLInputElement>(onSearchChange);
   return (
     <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-3 shadow-card">
       <div className="relative min-w-52 flex-1">
@@ -80,6 +82,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
           aria-hidden
         />
         <Input
+          ref={searchRef}
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search tasks"
