@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@/types";
+import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
 import { mockApiClient, mockDevTools } from "../mockApiClient";
 
 async function resolve<T>(promise: Promise<T>): Promise<T> {
@@ -114,6 +115,17 @@ describe("mock chat: category and priority questions", () => {
     expect((await ask("Show work tasks")).text).not.toContain(
       "Ship the search-quality review deck",
     );
+  });
+});
+
+describe("mock chat: panel suggestions", () => {
+  it.each([...CHAT_SUGGESTIONS])("answers %j without the generic fallback", async (suggestion) => {
+    const reply = await ask(suggestion);
+    expect(reply.text).not.toMatch(/^Right now you have/);
+  });
+
+  it("answers the near-deadline suggestion with the task due in 5 hours", async () => {
+    expect((await ask("What is near deadline?")).text).toMatch(/^Due within 24 hours:/);
   });
 });
 
