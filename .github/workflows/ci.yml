@@ -5,7 +5,7 @@ on: push
 permissions:
   contents: read
 
-# Two independent jobs, no `needs:`: a failure in one still reports the other.
+# Independent jobs, no `needs:`: a failure in one still reports the other.
 jobs:
   web:
     name: Web
@@ -77,3 +77,43 @@ jobs:
         run: |
           uv run python -m planora_api.openapi
           git diff --exit-code -- openapi.json
+
+  # The HTTP-mode smoke suite (#88): a real uvicorn API plus the web dev server
+  # in HTTP mode, so it needs both toolchains. The Chromium install, browser
+  # cache and failure report repeat the web job's steps exactly.
+  e2e-http:
+    name: E2E (HTTP)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          working-directory: apps/api
+      - uses: oven-sh/setup-bun@v2.2.0
+      - name: Install API dependencies
+        run: uv sync --frozen
+        working-directory: apps/api
+      - name: Install web dependencies
+        run: bun install --frozen-lockfile
+        working-directory: apps/web
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/bun.lock') }}
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+        working-directory: apps/web
+      - name: E2E (HTTP)
+        run: bun run e2e:http
+        working-directory: apps/web
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: playwright-report-http
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

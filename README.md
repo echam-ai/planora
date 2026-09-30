@@ -27,6 +27,12 @@ node .output/server/index.mjs
 Ignore Nitro's own `npx vite preview` hint printed after `bun run build` —
 it previews the client build only, not the server entry above.
 
+To check the web tier against a real API, run `bun run e2e:http` from
+`apps/web`. It is a five-test HTTP-mode smoke suite: it starts its own
+uvicorn API and web dev server on free ports, on a fresh migrated SQLite
+database under `.tmp/`, and never reads `apps/api/.env`. It needs `uv sync`
+in `apps/api` first, and it runs in CI as the `e2e-http` job.
+
 ## API tier
 
 See [`apps/api/README.md`](apps/api/README.md) for setup with `uv`,

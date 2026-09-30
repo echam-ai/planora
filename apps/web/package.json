@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json",
     "verify": "vitest run --coverage && bun run lint && bun run typecheck && vite build",
     "e2e": "bun e2e/run.ts",
+    "e2e:http": "bun e2e-http/run.ts",
     "gen:api-types": "openapi-typescript ../api/openapi.json -o src/shared/api/schema.gen.ts",
     "format": "prettier --write ."
   },

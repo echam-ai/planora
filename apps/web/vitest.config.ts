@@ -11,7 +11,7 @@ export default defineConfig({
     environment: "jsdom",
     pool: "threads",
     maxWorkers: 1,
-    exclude: [...configDefaults.exclude, "e2e/**"],
+    exclude: [...configDefaults.exclude, "e2e/**", "e2e-http/**"],
     setupFiles: ["./src/test/setup.ts"],
     coverage: {
       provider: "v8",
