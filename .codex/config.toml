@@ -1,9 +1,18 @@
 # Project-local Codex defaults. AGENTS.md remains the source of project rules.
 developer_instructions = """
-Follow AGENTS.md and docs/PROCESS.md. Keep questions, reviews, and status work read-only; do not start an issue pipeline for them. For change/build requests, use the smallest applicable PROCESS lane. Read only the issue, affected files, and relevant spec/process sections; read the browser-verification guide only for browser work. Avoid repeated discovery and raw large outputs: use rg, bounded output, and summaries. Use subagents only for required role gates or truly independent work; proceed sequentially by default and never duplicate exploration. Run targeted checks while iterating and the required full gates once on the final state, unless a later change invalidates them; for web that is `bun run verify` plus `bun run e2e` when UI code changed. Follow the browser evidence ladder in docs/PROCESS.md: committed Playwright specs first, text/ARIA snapshots second, screenshots only when an issue changes appearance, captured and read once by the tester and reused by later roles. Behavior-preserving refactors take the light lane and need no screenshots. The orchestrator commits reviewed work itself; continue an existing subagent for rework instead of spawning a new one. Never use git stash in a worktree; compare against the base in the main checkout. Preserve the independent tester gate and all AGENTS.md/PROCESS rules. Do not modify Claude-specific files or another agent's in-progress work unless explicitly requested.
+Follow AGENTS.md and docs/PROCESS.md. Keep questions, reviews, and status work read-only; do not start an issue pipeline for them. For change/build requests, use the smallest applicable PROCESS lane. Read only the issue, affected files, and relevant spec/process sections; read the browser-verification guide only for browser work. Avoid repeated discovery and raw large outputs: use rg, bounded output, and summaries. Use subagents only for required role gates or truly independent work; proceed sequentially by default and never duplicate exploration. Engineers run targeted iteration checks; the independent tester runs required full gates once on the final state, repeating affected checks only after invalidating changes. Web gates are `bun run verify`, `bun run e2e` for browser changes, and `bun run e2e:http` for HTTP integration triggers in PROCESS. Use the shared host suite lock protocol there for every suite. Follow the browser evidence ladder in docs/PROCESS.md: committed Playwright specs first, text/ARIA snapshots second, screenshots only when an issue changes appearance, captured and read once by the tester and reused by later roles. Behavior-preserving refactors take the light lane and need no screenshots. The orchestrator commits reviewed work itself; continue an existing subagent for rework instead of spawning a new one. Never use git stash in a worktree; compare against the base in the main checkout. For explicit dispatch use bounded context (fork_turns="none" with the full handoff): PM/designer gpt-6.1-sol high, engineers gpt-6.1-sol medium, tester gpt-6-luna high, on-call gpt-6-luna low. Continue existing agents for rework. Escalate a specific unresolved tester interpretation or CI diagnosis to gpt-6.1-sol medium with existing evidence; do not routinely duplicate reviews or rerun unchanged suites. Preserve the independent tester gate and all AGENTS.md/PROCESS rules. Do not modify Claude-specific files or another agent's in-progress work unless explicitly requested.
 """
 
+# Explicit dispatch keeps role policy in .agents/, never TOML copies in its symlink.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+
 [agents]
-default_subagent_model = "gpt-5.6-terra"
+default_subagent_model = "gpt-6.1-sol"
 default_subagent_reasoning_effort = "medium"
 max_concurrent_threads_per_session = 2
+
+# Native footer, ordered like the user's Claude statusline; no script execution.
+[tui]
+status_line = ["current-dir", "git-branch", "model-with-reasoning", "context-used", "five-hour-limit", "weekly-limit"]
+status_line_use_colors = true
