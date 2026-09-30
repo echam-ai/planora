@@ -15,14 +15,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useChatMutations, useConversation } from "@/features/chat/hooks";
 import { ApiError, type ChatAction } from "@/types";
+import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
 import { cn } from "@/lib/utils";
-
-const SUGGESTIONS = [
-  "What is overdue?",
-  "Show high-priority study tasks",
-  "Add a task to review my notes tomorrow at 8 PM",
-  "Move 'Prepare the search-quality review deck' to In Progress",
-];
 
 function ActionCard({
   action,
@@ -156,7 +150,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
               anything without your confirmation.
             </div>
             <div className="flex flex-col gap-2">
-              {SUGGESTIONS.map((s) => (
+              {CHAT_SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   type="button"

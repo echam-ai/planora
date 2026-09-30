@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/services/api";
 import { qk } from "@/shared/queryKeys";
 import { ApiError, type Conversation } from "@/types";
+import { createSeedTasks } from "@/data/seed";
+import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
 import { ChatPanel } from "./ChatPanel";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -242,6 +244,40 @@ describe("ChatPanel", () => {
     });
   });
 
+  describe("suggestions", () => {
+    it("shows exactly four, in order, with no quotation marks or seed task titles", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      renderPanel();
+
+      await screen.findByRole("button", { name: "What is overdue?" });
+      const names = screen
+        .getAllByRole("button", { name: /^(What|Show|Add)/ })
+        .map((b) => b.textContent);
+      expect(names).toEqual([
+        "What is overdue?",
+        "Show high-priority study tasks",
+        "Add a task to review my notes tomorrow at 8 PM",
+        "What is near deadline?",
+      ]);
+      expect(names).toEqual([...CHAT_SUGGESTIONS]);
+      for (const name of names) {
+        expect(name).not.toMatch(/['"\u2018\u2019\u201c\u201d]/);
+        for (const task of createSeedTasks()) expect(name).not.toContain(task.title);
+      }
+    });
+
+    it("sends the near-deadline suggestion once, verbatim", async () => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const send = vi.spyOn(api, "sendChatMessage").mockResolvedValue(replied);
+      renderPanel();
+
+      fireEvent.click(await screen.findByRole("button", { name: "What is near deadline?" }));
+
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+      expect(send).toHaveBeenCalledWith("What is near deadline?");
+    });
+  });
+
   describe("sending", () => {
     it("sends a clicked suggestion", async () => {
       vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
@@ -343,7 +379,7 @@ describe("ChatPanel", () => {
       const { send } = await startPending();
 
       expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
-      const suggestions = screen.getAllByRole("button", { name: /^(What|Show|Add|Move)/ });
+      const suggestions = screen.getAllByRole("button", { name: /^(What|Show|Add)/ });
       expect(suggestions).toHaveLength(4);
       for (const s of suggestions) expect(s).toBeDisabled();
       fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
@@ -490,7 +526,7 @@ describe("ChatPanel", () => {
       expect(await screen.findByRole("button", { name: "What is overdue?" })).toBeInTheDocument();
       expect(start).toHaveBeenCalledTimes(1);
       expect(screen.queryByText("I can move this task.")).not.toBeInTheDocument();
-      expect(screen.getAllByRole("button", { name: /^(What|Show|Add|Move)/ })).toHaveLength(4);
+      expect(screen.getAllByRole("button", { name: /^(What|Show|Add)/ })).toHaveLength(4);
     });
   });
 });
