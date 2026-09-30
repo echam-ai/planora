@@ -24,6 +24,7 @@ export default defineConfig(({ command, mode }) => {
       tanstackStart({
         // Keep the existing SSR error wrapper as TanStack Start's server entry.
         server: { entry: "server" },
+        router: { routeFileIgnorePattern: "\\.test\\.tsx?$" },
       }),
       viteReact(),
       tailwindcss(),
