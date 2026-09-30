@@ -15,10 +15,14 @@ import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { emptyDraft } from "@/features/tasks/formMapping";
 import { useTaskMutations } from "@/features/tasks/hooks";
 import { api } from "@/services/api";
-import type { TaskDraft } from "@/types";
+import { AI_TEXT_LIMIT } from "@/shared/api/textLimits";
+import { ApiError, type TaskDraft } from "@/types";
 
 const EXAMPLE =
   "Prepare the search-quality review by Friday at 4 PM. This is high-priority work. Use https://example.com/dashboard.";
+const LIMIT_MESSAGE =
+  "Quick capture takes up to 4,000 characters. Shorten the text, or continue in the form.";
+const LIMIT_MESSAGE_ID = "quick-capture-limit-message";
 
 export function CreateTaskDialog({
   open,
@@ -33,6 +37,9 @@ export function CreateTaskDialog({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [reviewDraft, setReviewDraft] = useState<TaskDraft | null>(null);
+  const characterCount = [...text.trim()].length;
+  const overLimit = characterCount > AI_TEXT_LIMIT;
+  const visibleError = overLimit ? LIMIT_MESSAGE : parseError;
 
   const close = () => {
     onOpenChange(false);
@@ -45,14 +52,20 @@ export function CreateTaskDialog({
   };
 
   const parse = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() || overLimit) return;
     setParsing(true);
     setParseError(null);
     try {
       const draft = await api.parseTaskText(text);
       setReviewDraft(draft);
     } catch (e) {
-      setParseError((e as Error).message);
+      setParseError(
+        e instanceof ApiError &&
+          e.code === "VALIDATION_ERROR" &&
+          e.details?.some((detail) => detail.field === "text")
+          ? LIMIT_MESSAGE
+          : (e as Error).message,
+      );
     } finally {
       setParsing(false);
     }
@@ -92,14 +105,25 @@ export function CreateTaskDialog({
                 <Textarea
                   rows={6}
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    setParseError(null);
+                  }}
                   placeholder={EXAMPLE}
                   aria-label="Describe the task in your own words"
+                  aria-invalid={overLimit || parseError === LIMIT_MESSAGE ? true : undefined}
+                  aria-describedby={visibleError ? LIMIT_MESSAGE_ID : undefined}
                 />
                 <p className="text-xs text-muted-foreground">Example: “{EXAMPLE}”</p>
-                {parseError && (
+                {overLimit && (
+                  <p className="text-xs text-muted-foreground">
+                    {characterCount.toLocaleString("en-US")} /{" "}
+                    {AI_TEXT_LIMIT.toLocaleString("en-US")} characters
+                  </p>
+                )}
+                {visibleError && (
                   <div className="space-y-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-                    <p>{parseError}</p>
+                    <p id={LIMIT_MESSAGE_ID}>{visibleError}</p>
                     <Button variant="outline" size="sm" onClick={() => setTab("form")}>
                       Continue in the form instead
                     </Button>
@@ -109,7 +133,7 @@ export function CreateTaskDialog({
                   <Button variant="outline" onClick={close}>
                     Cancel
                   </Button>
-                  <Button onClick={parse} disabled={parsing || !text.trim()}>
+                  <Button onClick={parse} disabled={parsing || !text.trim() || overLimit}>
                     {parsing ? (
                       <>
                         <Sparkles className="h-4 w-4 animate-pulse" /> Reading your note…

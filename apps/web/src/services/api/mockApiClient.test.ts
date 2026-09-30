@@ -188,7 +188,7 @@ describe("mock API client characterization", () => {
     await expectApiError(
       mockApiClient.parseTaskText("fail to parse"),
       "AI_UNAVAILABLE",
-      "The assistant couldn't parse that right now.",
+      "The assistant is unavailable right now. Try again.",
     );
 
     const conversation = await resolve(mockApiClient.sendChatMessage("create task to buy milk"));
@@ -221,6 +221,29 @@ describe("mock API client characterization", () => {
       "AI_UNAVAILABLE",
       "The assistant is unavailable right now. Try again.",
     );
+  });
+
+  it("validates trimmed parse text by Unicode code points and uses the API error envelope", async () => {
+    const rejected = expect(mockApiClient.parseTaskText("😀".repeat(4001))).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      message: "Request validation failed.",
+      status: 422,
+      details: [{ field: "text", code: "VALUE_ERROR", message: expect.any(String) }],
+    });
+    await vi.runAllTimersAsync();
+    await rejected;
+    expect(await resolve(mockApiClient.parseTaskText(` ${"😀".repeat(4000)} `))).toBeTruthy();
+
+    mockDevTools.setErrorMode(true);
+    const unavailable = expect(
+      mockApiClient.parseTaskText("Plan the offsite"),
+    ).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "The assistant is unavailable right now. Try again.",
+      status: 503,
+    });
+    await vi.runAllTimersAsync();
+    await unavailable;
   });
 
   it("confirms move, schedule, and update proposals only after confirmation", async () => {

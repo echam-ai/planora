@@ -2,6 +2,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
 import { zonedDateTimeToIso } from "@/features/tasks/formMapping";
 import { uid } from "@/lib/id";
+import { AI_TEXT_LIMIT } from "@/shared/api/textLimits";
 import {
   ApiError,
   type ChatAction,
@@ -290,8 +291,15 @@ export function createChatClient(
   return {
     async parseTaskText(text) {
       await delay(700, 1400);
+      if ([...text.trim()].length > AI_TEXT_LIMIT)
+        throw new ApiError("VALIDATION_ERROR", "Request validation failed.", {
+          status: 422,
+          details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
+        });
       if (read<boolean>(KEYS.forceError, false) || /\bfail\b/i.test(text))
-        throw new ApiError("AI_UNAVAILABLE", "The assistant couldn't parse that right now.");
+        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {
+          status: 503,
+        });
       return parseText(text, currentTimezone());
     },
     async getCurrentConversation() {
