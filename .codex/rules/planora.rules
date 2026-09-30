@@ -1,0 +1,217 @@
+# Trusted project-local policy. See docs/PROCESS.md for startup and prefix limits.
+
+prefix_rule(
+    pattern = ["gh", "pr", ["create", "merge"]],
+    decision = "forbidden",
+    justification = "Use the local reviewed issue pipeline; no pull requests.",
+    match = ["gh pr create", "gh pr merge 1"],
+    not_match = ["gh pr view 1"],
+)
+
+prefix_rule(
+    pattern = [["npm", "npx", "pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use bun/bunx for web or uv for API.",
+    match = ["npm install", "npx install", "pip install", "pip3 install"],
+    not_match = ["bun install", "uv sync"],
+)
+
+prefix_rule(
+    pattern = ["git", "stash"],
+    decision = "forbidden",
+    justification = "Preserve worktree state; compare against the base in the main checkout.",
+    match = ["git stash", "git stash push"],
+    not_match = ["git status"],
+)
+
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve user edits; report conflicts instead of destructive reset.",
+    match = ["git reset --hard HEAD"],
+    not_match = ["git reset --soft HEAD"],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Only the orchestrator pushes reviewed work; require command approval rather than inheriting a broad allow.",
+    match = ["git push origin main"],
+    not_match = ["git status", "git -C checkout push origin main"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["git push --force", "git push --force-with-lease", "git push -f"],
+    not_match = ["git push origin main", "git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "origin", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["git push origin --force", "git push origin --force-with-lease", "git push origin -f"],
+    not_match = ["git push origin main", "git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["git", "push", "origin", "main", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["git push origin main --force", "git push origin main --force-with-lease", "git push origin main -f"],
+    not_match = ["git push origin main", "git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "gh", "pr", ["create", "merge"]],
+    decision = "forbidden",
+    justification = "Use the local reviewed issue pipeline; no pull requests.",
+    match = ["rtk gh pr create", "rtk gh pr merge 1"],
+    not_match = ["rtk gh pr view 1"],
+)
+
+prefix_rule(
+    pattern = ["rtk", ["npm", "npx", "pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use bun/bunx for web or uv for API.",
+    match = ["rtk npm install", "rtk npx install", "rtk pip install", "rtk pip3 install"],
+    not_match = ["rtk bun install", "rtk uv sync"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "stash"],
+    decision = "forbidden",
+    justification = "Preserve worktree state; compare against the base in the main checkout.",
+    match = ["rtk git stash", "rtk git stash push"],
+    not_match = ["rtk git status"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve user edits; report conflicts instead of destructive reset.",
+    match = ["rtk git reset --hard HEAD"],
+    not_match = ["rtk git reset --soft HEAD"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "push"],
+    decision = "prompt",
+    justification = "Only the orchestrator pushes reviewed work; require command approval rather than inheriting a broad allow.",
+    match = ["rtk git push origin main"],
+    not_match = ["rtk git status", "rtk git -C checkout push origin main"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "push", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk git push --force", "rtk git push --force-with-lease", "rtk git push -f"],
+    not_match = ["rtk git push origin main", "rtk git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "push", "origin", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk git push origin --force", "rtk git push origin --force-with-lease", "rtk git push origin -f"],
+    not_match = ["rtk git push origin main", "rtk git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "git", "push", "origin", "main", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk git push origin main --force", "rtk git push origin main --force-with-lease", "rtk git push origin main -f"],
+    not_match = ["rtk git push origin main", "rtk git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "gh", "pr", ["create", "merge"]],
+    decision = "forbidden",
+    justification = "Use the local reviewed issue pipeline; no pull requests.",
+    match = ["rtk proxy gh pr create", "rtk proxy gh pr merge 1"],
+    not_match = ["rtk proxy gh pr view 1"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", ["npm", "npx", "pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use bun/bunx for web or uv for API.",
+    match = ["rtk proxy npm install", "rtk proxy npx install", "rtk proxy pip install", "rtk proxy pip3 install"],
+    not_match = ["rtk proxy bun install", "rtk proxy uv sync"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "stash"],
+    decision = "forbidden",
+    justification = "Preserve worktree state; compare against the base in the main checkout.",
+    match = ["rtk proxy git stash", "rtk proxy git stash push"],
+    not_match = ["rtk proxy git status"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve user edits; report conflicts instead of destructive reset.",
+    match = ["rtk proxy git reset --hard HEAD"],
+    not_match = ["rtk proxy git reset --soft HEAD"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "push"],
+    decision = "prompt",
+    justification = "Only the orchestrator pushes reviewed work; require command approval rather than inheriting a broad allow.",
+    match = ["rtk proxy git push origin main"],
+    not_match = ["rtk proxy git status", "rtk proxy git -C checkout push origin main"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "push", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk proxy git push --force", "rtk proxy git push --force-with-lease", "rtk proxy git push -f"],
+    not_match = ["rtk proxy git push origin main", "rtk proxy git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "push", "origin", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk proxy git push origin --force", "rtk proxy git push origin --force-with-lease", "rtk proxy git push origin -f"],
+    not_match = ["rtk proxy git push origin main", "rtk proxy git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", "git", "push", "origin", "main", ["--force", "--force-with-lease", "-f"]],
+    decision = "forbidden",
+    justification = "No agent force-pushes; history rewrite requires the separate human procedure.",
+    match = ["rtk proxy git push origin main --force", "rtk proxy git push origin main --force-with-lease", "rtk proxy git push origin main -f"],
+    not_match = ["rtk proxy git push origin main", "rtk proxy git push origin main --tags --force"],
+)
+
+prefix_rule(
+    pattern = [["python", "python3"], "-m", ["pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use uv for API dependencies, not pip module invocation.",
+    match = ["python -m pip install example", "python3 -m pip3 install example"],
+    not_match = ["uv run python -m planora_api.openapi"],
+)
+
+prefix_rule(
+    pattern = ["rtk", ["python", "python3"], "-m", ["pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use uv for API dependencies, not pip module invocation.",
+    match = ["rtk python -m pip install example", "rtk python3 -m pip3 install example"],
+    not_match = ["rtk uv run python -m planora_api.openapi"],
+)
+
+prefix_rule(
+    pattern = ["rtk", "proxy", ["python", "python3"], "-m", ["pip", "pip3"]],
+    decision = "forbidden",
+    justification = "Use uv for API dependencies, not pip module invocation.",
+    match = ["rtk proxy python -m pip install example", "rtk proxy python3 -m pip3 install example"],
+    not_match = ["rtk proxy uv run python -m planora_api.openapi"],
+)

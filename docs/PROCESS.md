@@ -16,7 +16,7 @@ Not every issue earns the same ceremony. Pick the lane from what the issue touch
 | **Light** | Behavior-preserving refactors (moves, splits, renames, extractions) proven by the existing suites; documentation, agent/role definitions, harness, process, CI, lint/format config | Orchestrator writes criteria on the issue → engineer → tester → orchestrator commits and merges |
 | **Direct** | A typo, a dead link, a stale sentence in a doc — no behavior, no configuration | Orchestrator edits, commits, merges. No dispatch. |
 
-The lane follows **what the user could notice**, not which directory changes. A refactor qualifies for the light lane only when it changes no observable behavior, weakens or deletes no test assertion, and the existing unit and e2e suites cover the moved code. A PM acceptance review of an unchanged screen checks nothing, so it is skipped. The tester gate is never skipped.
+The lane follows **what the user could notice**, not which directory changes. A refactor qualifies for the light lane only when it changes no observable behavior, weakens or deletes no test assertion, and the existing unit and e2e suites cover the moved code. A PM acceptance review of an unchanged screen checks nothing, so it is skipped. The independent tester gate applies to full and light lanes; Direct is the explicit exception for documentation typos, dead links and stale sentences with no configuration change.
 
 If light-lane work turns out to change behavior, copy, the contract or configuration an application depends on, stop and re-run it as full lane. Escalate when in doubt; never quietly downgrade — state the lane and the reason in the first handoff.
 
@@ -33,7 +33,7 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 4. **Tester** runs the applicable checks below and verifies every automated criterion. PASS or FAIL.
 5. **PM accepts** (full lane) from the user's perspective: flow, copy, empty/loading/error states, accessibility, spec consistency.
 6. **Orchestrator commits** the reviewed state on the issue branch, using the subject the engineer proposed in its handoff, only after the lane's gates cover that exact state; then it merges and pushes. Re-dispatching an engineer only to run `git commit` costs a cold agent start and adds no review.
-7. **On-call** observes CI. Dormant until #10 creates the workflow.
+7. **On-call** observes CI. Active when `.github/workflows/ci.yml` exists.
 
 ## Agents
 
@@ -54,15 +54,37 @@ Definitions live in `.agents/` — the single source of role policy. Both tracke
 
 Shared roles do not override host models, tools, permissions or sandbox settings. See the [Claude subagent format](https://code.claude.com/docs/en/sub-agents), [Claude instruction import](https://code.claude.com/docs/en/memory#agentsmd), and [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
-Nothing here pins a model or a tool list — those are harness vocabulary and belong in harness-specific configuration, not in `.agents/`. Each role needs:
+Shared roles pin no model or tool list — those are harness vocabulary and belong in harness-specific configuration, not in `.agents/`. Each role needs:
 
 | Role | File access | Reasoning |
 | --- | --- | --- |
-| `product-manager` | read/write — issue bodies, not code | strongest available |
-| `designer` | read-only application source; may save screenshots under `.tmp/` | strongest available |
+| `product-manager` | read/write — issue bodies, not code | configured review model |
+| `designer` | read-only application source; reuses tester screenshots | configured review model |
 | all others | read/write | standard |
 
-Use the strongest available model for grooming, acceptance and design audits, where misreading the spec is expensive; a standard model is fine for implementation, testing and CI triage. Map these onto whatever your harness calls them — Claude Code's mapping is in `CLAUDE.md`.
+Use the configured review model for grooming, acceptance and design audits, where misreading the spec is expensive. Map implementation, routine verification and observation to the approved harness settings, with bounded escalation for unresolved diagnosis. Claude Code's mapping is in `CLAUDE.md`; Codex's is below.
+
+### Codex dispatch
+
+The approved project-local mapping is `.codex/config.toml`; shared Markdown roles stay harness-neutral. Explicitly dispatch with `model` and `reasoning_effort`:
+
+| Role | Model | Effort |
+| --- | --- | --- |
+| Orchestrator | `gpt-6.1-sol` | medium |
+| PM / designer | `gpt-6.1-sol` | high |
+| Web / API engineer | `gpt-6.1-sol` | medium |
+| Independent tester | `gpt-6-luna` | high |
+| On-call CI observation | `gpt-6-luna` | low |
+
+Use `fork_turns="none"` and provide the complete handoff, scoped criteria, affected paths and relevant spec sections. Each role reads its policy and the issue itself. Keep at most two concurrent child threads plus the orchestrator; proceed sequentially unless work is independent. Continue the existing role agent for rework. For a specific unresolved tester interpretation or CI diagnosis, escalate to `gpt-6.1-sol` medium with the existing commands/evidence and a bounded question; do not routinely commission duplicate reviews or repeat unchanged suites. Preserve independent tester judgment. See [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+
+The project config also sets a colored native footer: directory, branch, model/reasoning, context used, five-hour usage and weekly usage. This is the closest native equivalent to the user's Claude statusline; it does not run the Claude script or reproduce its multiline bars/reset formatting. See [Codex footer items](https://learn.chatgpt.com/docs/developer-commands#configure-footer-items-with-statusline).
+
+### Codex command policy
+
+`.codex/rules/planora.rules` covers the documented raw, `rtk`, and `rtk proxy` prefixes. Start a fresh Codex session with the project `.codex/` layer trusted for the config and rules to load; this change does not edit global trust/configuration or hot-reload the current session. Validate with `rtk codex execpolicy check --rules .codex/rules/planora.rules -- <command tokens>` without executing the prohibited command. Rules contain matching/nonmatching examples. The most restrictive matching decision wins, so the local push `prompt` supersedes an inherited `git push` allow and the specific force-push `forbidden` supersedes both. A push prompt is a command-policy approval, separate from the user's task authorization; never weaken the rule to suppress it.
+
+Prefix rules match argument positions, not arbitrary command semantics. Alternate ordering (including `git -C`, global options before subcommands, or force flags at unlisted positions), executable paths, aliases and scripts can evade these patterns. Complex shell scripts may be evaluated as the shell invocation rather than split into commands. They are not universal enforcement: the binding process prohibitions still apply and agents must not use alternate forms to bypass them. See [Codex rules](https://learn.chatgpt.com/docs/agent-configuration/rules). Allowed `bun`, `bunx`, `uv` and generated-file commands remain available under the host's normal sandbox policy.
 
 ### Routing
 
@@ -80,10 +102,35 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 - It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, commits reviewed states, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
 - File intake immediately, with a concrete reproduction or quoted context. Do not wait for the user to ask.
 - Launch agents non-blocking unless the result blocks the next action. Continue an agent that still holds the context (Claude `SendMessage`, a Codex follow-up) instead of spawning a fresh one for the same role and issue — for example, return a FAIL to the engineer who wrote the code.
-- Cap three active agents. Serialize suites on the host: at most one `bun run e2e` runs at a time, and no other suite (`bun run verify`, `vitest`, `pytest`) overlaps it. `verify`/`vitest` and `pytest` may still overlap each other. Before an e2e run, `pgrep -fa '[p]laywright|[v]itest|[p]ytest' | grep -v "$PWD"` must print nothing; processes from other projects count. An e2e run that overlapped another suite is **void**: it counts as neither a pass nor a failure and is repeated in an exclusive window. The e2e suite is stable on a quiet host (230/230 at `--repeat-each=5`) and fails only under shared load ([#84](https://github.com/hgiang/planora/issues/84#issuecomment-5891442727)).
+- Cap three active agents (orchestrator plus two children). Every local suite uses the shared host lock protocol below. Mock and HTTP e2e require exclusive access; verify/Vitest/pytest take shared access and may overlap one another. An e2e run that overlaps any other suite is **void**, repeated in an exclusive window. The e2e suite is stable on a quiet host ([#84](https://github.com/hgiang/planora/issues/84#issuecomment-5891442727)).
 - Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
 - Respect dependencies: API issues need #1, `apps/web/` paths need #7, database writes need #21 and #22, LLM calls need #37.
 - Route failures: code and test failures back to the engineer, CI and infrastructure failures to on-call.
+
+### Shared host suite lock
+
+Every Planora worktree and every cooperating project on this host uses the same absolute lock file in the main checkout: `/home/hamster/code/planora/.tmp/host-suites.lock`. Create its parent once with `rtk mkdir -p /home/hamster/code/planora/.tmp`. Do not derive the path from the current worktree, unlink the lock, or use a per-project lock. On another host, agree on one main-checkout path and share that exact path with all participants.
+
+Run from the tier directory. A subshell keeps the lock open for the entire suite and releases it on exit, including failure:
+
+```bash
+# Shared: use the same form for targeted Vitest or pytest and full API gates.
+(rtk flock --shared 9 && rtk bun run verify) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+```
+
+For either mock or HTTP e2e, acquire an exclusive lock and check for nonparticipating processes. A successful `pgrep` stops the run: inspect the processes and wait for unrelated suites to finish. Do not filter by `$PWD`; other projects count. A `pgrep` error also stops the run; only its no-match exit status 1 proceeds. Use `e2e:http` in place of `e2e` for the real-backend suite:
+
+```bash
+(
+  rtk flock --exclusive 9 || exit 1
+  rtk pgrep -fa '[p]laywright|[v]itest|[p]ytest'
+  suite_process_status=$?
+  [ "$suite_process_status" -eq 1 ] || exit 1
+  rtk bun run e2e
+) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+```
+
+Cooperating projects must hold this same lock for their entire suites, even when running outside Planora. `flock` prevents acquisition races among participants. `pgrep` is only a snapshot for nonparticipating processes: it cannot prevent another project from starting after the check. Coordinate a quiet window for nonparticipants and report suspected overlap; a process snapshot alone does not prove exclusivity. No application code or new lock runner is required.
 
 ## Handoffs and review state
 
@@ -126,9 +173,11 @@ Select checks from actual files, scripts and issue scope. Record each command, c
 | API | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected health/startup and integration checks. |
 | Database/migration work from #22 | Apply the history to disposable empty databases with `uv run alembic upgrade head`; verify affected upgrades and SQLite/PostgreSQL compatibility. Never point verification at production data. |
 
-Run web commands from `apps/web` and API commands from `apps/api`. Tests precede implementation for application changes. An issue creating a harness (#22) verifies its new commands in that same issue. Build/runtime configuration changes use their tier's checks — the documentation row is not a waiver for executable configuration. Cross-contract changes verify both tiers and check OpenAPI type drift. Launch only the affected services.
+Run web commands from `apps/web` and API commands from `apps/api`. Tests precede implementation for application changes. An issue creating a harness (#22) verifies its new commands in that same issue. Build/runtime and CI build configuration changes use their tier's checks — the documentation row is not a waiver for executable configuration. Cross-contract changes verify both tiers and check OpenAPI type drift. Launch only the affected services.
 
-**Run each gate once per role, on the final state.** While iterating, run targeted tests (`bun run test -- path`, `uv run pytest tests/x`). The engineer runs the full gate once before handing off and the tester runs it once independently. Re-run only what a later edit invalidates. A second run of an identical state is not more evidence.
+**Engineer targeted checks; tester final gates once.** Engineers iterate with targeted tests (`bun run test -- path`, `uv run pytest tests/x`) and relevant static/configuration checks. The independent tester owns the complete required gates once on the final review state, including coverage, lint, typecheck, build and applicable e2e. Re-run only checks invalidated by later edits or integration. A second run of an identical state is not more evidence. Engineers may run a full gate to diagnose a specific failure when targeted checks cannot resolve it; state why, and preserve the independent tester gate.
+
+Run local `bun run e2e:http` for HTTP-client/mapping changes, API endpoint/auth/CSRF/session integration, proxy/API-mode configuration, or HTTP harness/runner changes. Mock e2e alone does not cover those paths. Use the exclusive host lock for either suite. Documentation-only or unrelated CI drift checks do not trigger HTTP e2e.
 
 **Comparing against the base** — to show a warning or failure pre-exists, run the same command in the main checkout, which sits at the base SHA. Never `git stash` in a worktree: the stash stack is shared by every worktree and session.
 
@@ -138,13 +187,15 @@ Screenshots are the most expensive evidence an agent can collect. Each image cos
 
 1. **Committed Playwright specs are the evidence.** `bun run e2e` runs every flow on desktop (`chromium`) and mobile (`mobile-chromium`). For new or changed visible behavior, add or extend a spec that asserts roles, labels and visible text. Those assertions cover the deadline text and icons, the confirmation dialogs and empty states. The spec then keeps covering that behavior as a regression test.
 2. **Text snapshots for anything a spec cannot express.** An accessibility snapshot (`expect(locator).toMatchAriaSnapshot()` in a spec, or `snapshot`/`find` in the CLI) records structure, names and copy as a few hundred tokens of text.
-3. **Screenshots only when appearance is the point.** Capture them when the issue changes layout, color, spacing or responsive behavior, or when a spec fails and its failure screenshot needs reading. Capture only the screens that changed, one per viewport. Only the tester captures and reads them. The PM and designer reuse the tester's files under `.tmp/screenshots/` instead of recapturing.
+3. **Screenshots only when appearance is the point.** Capture them when the issue changes layout, color, spacing or responsive behavior, or when a spec fails and its failure screenshot needs reading. Capture only the screens that changed, one per viewport. Only the tester captures them and reads each image once. The PM and designer reuse the tester's files under `.tmp/screenshots/` instead of recapturing.
 
-A behavior-preserving refactor, API work, or documentation stops at step 1 and needs no ad hoc browser session. For steps 2 and 3 outside a spec, follow **`docs/BROWSER-VERIFICATION.md`**. Read it only when you actually reach those steps.
+A behavior-preserving refactor, API work, or documentation stops at step 1 and needs no ad hoc browser session. For a standalone designer audit before grooming, ask the orchestrator to dispatch the tester to capture and inspect the requested surfaces first; the designer then reuses that evidence. Neither PM nor designer recaptures it.
+
+For steps 2 and 3 outside a spec, follow **`docs/BROWSER-VERIFICATION.md`**. Read it only when you actually reach those steps.
 
 ## Merging — local only, no PRs
 
-Never `gh pr create` or `gh pr merge`. The agent flow *is* the review. (Both are denied in `.claude/settings.json` so the rule is enforced, not merely stated.)
+Never `gh pr create` or `gh pr merge`. The agent flow *is* the review. The tracked Codex rules forbid the documented command prefixes; their limitations are described above.
 
 Commit the reviewed state in the issue worktree, with the engineer's proposed subject and no attribution trailer (binding rule 11):
 
@@ -174,7 +225,7 @@ Parallel engineers need isolation or they overwrite each other.
   git worktree add .worktrees/issue-N -b agent/issue-N
   ```
 - A single sequential agent may instead use the main checkout after `git switch -c agent/issue-N`. Never implement or commit on `main`. After review and commit, switch back to `main` for the merge.
-- After the merge is pushed, all roles have finished and on-call is green, remove an isolated worktree from the main checkout. Before #10, record that no CI workflow exists and rely on the lane's verdicts; unavailable CI does not block cleanup. Once CI exists, a missing run is not this exemption.
+- After the merge is pushed, all roles have finished and on-call is green, remove an isolated worktree from the main checkout. If no CI workflow exists, record that fact and rely on the lane's verdicts; unavailable CI does not block cleanup. With the current workflow, a missing run is not this exemption.
   ```bash
   git worktree remove .worktrees/issue-N && git branch -d agent/issue-N
   ```
@@ -184,7 +235,7 @@ Parallel engineers need isolation or they overwrite each other.
 ## Never skipped
 
 - Every issue goes through its lane's stages, including "simple" ones. The lane may be small; it is never absent.
-- No commit without an independent tester PASS for the final reviewed state — and PM ACCEPTED as well on the full lane.
+- Full/light commits require independent tester PASS for the final reviewed state; full also requires PM ACCEPTED. Direct documentation-only edits are the explicit tester exception.
 - Agents post their own issue comments and tick their own acceptance-criteria checkboxes.
 - A verdict with no commands behind it is not a verdict.
 - Every commit references an issue: `Closes #N`, or `Refs #N` when a `[HUMAN]` criterion keeps it open.

@@ -17,8 +17,8 @@ Intake issues (above #49) have no settled scope. You write it. Missing readiness
 
 1. `gh issue view {N} --repo hgiang/planora`; for #1–#49 cross-check task `{N}` in `docs/tasks.md`. Later intake has no corresponding numbered task there.
 2. Read the spec sections the description cites. The spec is precise about thresholds — exactly 24 hours, exactly seven days, which filter options exist, what a Done task must never render as. A criterion that paraphrases a threshold loosely is useless.
-3. Check the paths the task names still exist. The repo is mid-restructure (see `AGENTS.md`); a criterion naming a path that won't exist is a defect.
-4. Find dependencies: `gh issue list --repo hgiang/planora --state all --limit 60 --json number,state`.
+3. Check the paths the task names still exist. The web root is `apps/web`; a criterion naming a stale path is a defect.
+4. Check only dependencies cited by the issue/spec or required by its scope: `gh issue view N --repo hgiang/planora --json number,state`. Do not enumerate the whole backlog for a targeted dependency check.
 5. Append to the body:
 
 ```markdown

@@ -1,6 +1,6 @@
 ---
 name: api-engineer
-description: Implements API-tier and deployment issues. Writes code and tests; commits only after the lane's gates pass.
+description: Implements API-tier and deployment issues. Writes code and tests; hands reviewed work to the orchestrator for commit.
 ---
 
 # API Engineer
@@ -12,7 +12,7 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 4 and 5
 ## Workflow
 
 1. **Read the issue.** `gh issue view {N} --repo hgiang/planora`. Read the spec sections cited. Section 5 is the authoritative field list; 7.3, 7.4 and 9.1 pin the derived rules to exact thresholds, and approximating one is the most common way this work fails review.
-2. **Select verification using `docs/PROCESS.md`.** For application changes, write the test first. From `apps/api`, run `uv run pytest tests/path/test_x.py -v` — watch it fail, then implement. #1 establishes its own harness; documentation-only work uses static checks and workflow walkthroughs.
+2. **Select verification using `docs/PROCESS.md`.** For application changes, write the test first. From `apps/api`, run `uv run pytest tests/path/test_x.py -v` — watch it fail, then implement. The existing harness handles application tests; documentation-only work uses static checks and workflow walkthroughs.
    - `tests/unit/` for the pure `domain/` modules. Highest value: deadline derivation, ordering and archive eligibility are I/O-free so you can hit the boundaries with no fixtures.
    - `tests/integration/` for endpoints and database work against a temporary database.
    - Test the boundaries the spec pins down, not just the happy path: exactly 24 hours remaining, exactly seven days elapsed, a Done task with a past deadline, moving into an empty column, a restored task's position.
@@ -24,11 +24,11 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 4 and 5
    - Never return or log a secret — not the LLM key, the database URL, or a password hash. Redaction covers prompts and task content too.
    - The model never writes. AI actions are persisted as proposals and applied only on explicit confirmation, and confirmation is idempotent.
    - Every persisted-model change needs a migration. Autogenerate it, then review and correct the new candidate revision before application. Never rewrite already-applied/shared history; add a revision. The same history must apply to SQLite and PostgreSQL with no model forks.
-4. **Verify** from `apps/api`, using the process's stage-aware gates:
+4. **Verify** with targeted tests and relevant static/configuration checks from `apps/api`. Use the shared host suite lock. The independent tester runs the complete final gates:
    ```bash
    uv run pytest --cov --cov-fail-under=80 && uv run ruff check .
    ```
-   For database/migration work from #22, run `uv run alembic upgrade head` against disposable empty databases and check relevant upgrades on SQLite and PostgreSQL. #1 is not blocked on #22. Record unavailable/not-applicable checks and their reason/milestone. If you touched schemas, regenerate the web tier's types and check for drift — a schema change that breaks the committed types is acceptance criterion 21 failing.
+   For database/migration work from #22, run `uv run alembic upgrade head` against disposable empty databases and check relevant upgrades on SQLite and PostgreSQL. The migration harness already exists. Record unavailable/not-applicable checks and their reason/milestone. If you touched schemas, regenerate the web tier's types and check for drift — a schema change that breaks the committed types is acceptance criterion 21 failing.
 5. **Update the issue.** Tick completed criteria, then comment with: files changed, migrations added, test counts, coverage, the commands you ran and their results, what works, known limitations.
 6. **Report to the orchestrator. Do not commit.** Send the handoff block from `docs/PROCESS.md`: issue and lane, absolute cwd, branch, base and head SHA, commands with results, pending `[HUMAN]` criteria, and a proposed `<type>: <subject>` commit line. That is git state — never copy a worktree, `.venv` or tarball into `.tmp/` as an artifact. Wait for the lane's reviewers.
 7. **Handle feedback** — fix, re-run the affected checks, report back. Repeat until PASS. The orchestrator commits the reviewed state with your proposed subject (`Closes #N`, or `Refs #N` while a `[HUMAN]` criterion is pending); you do not commit.
