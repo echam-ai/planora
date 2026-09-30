@@ -64,6 +64,77 @@ afterEach(() => {
 });
 
 describe("CreateTaskDialog", () => {
+  const limitMessage =
+    "Quick capture takes up to 4,000 characters. Shorten the text, or continue in the form.";
+
+  it("keeps an over-limit paste, explains the limit, and offers the full form", async () => {
+    const parseTaskText = vi.spyOn(api, "parseTaskText");
+    renderDialog();
+    const note = "a".repeat(4500);
+    const textarea = screen.getByLabelText("Describe the task in your own words");
+    fireEvent.change(textarea, { target: { value: note } });
+
+    const message = screen.getByText(limitMessage);
+    expect(screen.getByText("4,500 / 4,000 characters")).toBeVisible();
+    expect(textarea).toHaveValue(note);
+    expect(textarea).toHaveAttribute("aria-invalid", "true");
+    expect(textarea).toHaveAttribute("aria-describedby", message.id);
+    const parseButton = screen.getByRole("button", { name: "Parse task" });
+    expect(parseButton).toBeDisabled();
+    fireEvent.click(parseButton);
+    expect(parseTaskText).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue in the form instead" }));
+    expect(await screen.findByRole("tab", { name: "Task form", selected: true })).toBeVisible();
+    expect(await screen.findByLabelText("Content")).toHaveValue(note);
+  });
+
+  it("accepts exactly 4,000 trimmed characters, including surrounding whitespace", async () => {
+    const parseTaskText = vi.spyOn(api, "parseTaskText").mockResolvedValue(draft());
+    renderDialog();
+    const note = `  ${"a".repeat(4000)}\n`;
+    fireEvent.change(screen.getByLabelText("Describe the task in your own words"), {
+      target: { value: note },
+    });
+    expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    await waitFor(() => expect(parseTaskText).toHaveBeenCalledWith(note));
+  });
+
+  it("counts emoji as Unicode code points", () => {
+    renderDialog();
+    const textarea = screen.getByLabelText("Describe the task in your own words");
+    fireEvent.change(textarea, { target: { value: "😀".repeat(4000) } });
+    expect(screen.getByRole("button", { name: "Parse task" })).toBeEnabled();
+    expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
+
+    fireEvent.change(textarea, { target: { value: "😀".repeat(4001) } });
+    expect(screen.getByText(limitMessage)).toBeVisible();
+    expect(screen.getByText("4,001 / 4,000 characters")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Parse task" })).toBeDisabled();
+  });
+
+  it("explains a text validation error from the API and preserves manual entry", async () => {
+    vi.spyOn(api, "parseTaskText").mockRejectedValue(
+      new ApiError("VALIDATION_ERROR", "Request validation failed.", {
+        status: 422,
+        details: [{ field: "text", code: "VALUE_ERROR", message: "Too long." }],
+      }),
+    );
+    renderDialog();
+    const note = "Plan the offsite";
+    fireEvent.change(screen.getByLabelText("Describe the task in your own words"), {
+      target: { value: note },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+
+    expect(await screen.findByText(limitMessage)).toBeVisible();
+    expect(screen.queryByText("Request validation failed.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Describe the task in your own words")).toHaveValue(note);
+    fireEvent.click(screen.getByRole("button", { name: "Continue in the form instead" }));
+    expect(await screen.findByLabelText("Content")).toHaveValue(note);
+  });
+
   it("parses quick-capture text, then creates the reviewed draft and closes", async () => {
     vi.spyOn(api, "parseTaskText").mockResolvedValue(draft());
     const createTask = vi.spyOn(api, "createTask").mockResolvedValue(makeTask());
