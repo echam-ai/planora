@@ -1,6 +1,12 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["e2e/**/*.ts", "playwright.config.ts", "vitest.config.ts"],
+  "include": [
+    "e2e/**/*.ts",
+    "e2e-http/**/*.ts",
+    "playwright.config.ts",
+    "playwright.http.config.ts",
+    "vitest.config.ts"
+  ],
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
