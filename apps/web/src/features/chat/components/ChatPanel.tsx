@@ -14,7 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useChatMutations, useConversation } from "@/features/chat/hooks";
-import type { ChatAction } from "@/types";
+import { ApiError, type ChatAction } from "@/types";
 import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
@@ -29,11 +29,14 @@ function ActionCard({
   onConfirm,
   onReject,
   busy,
+  stale,
 }: {
   action: ChatAction;
   onConfirm: () => void;
   onReject: () => void;
   busy: boolean;
+  /** The API said the target task changed, so Confirm would only fail again. */
+  stale: boolean;
 }) {
   return (
     <div className="mt-2 rounded-xl border border-primary/30 bg-secondary/60 p-3">
@@ -53,10 +56,16 @@ function ActionCard({
         ))}
       </dl>
       {action.status === "pending" ? (
-        <div className="mt-3 flex gap-2">
-          <Button size="sm" onClick={onConfirm} disabled={busy}>
-            <Check className="h-4 w-4" /> Confirm
-          </Button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {stale ? (
+            <p className="w-full text-xs font-medium text-muted-foreground">
+              This task changed after the proposal. Ask the assistant for an up-to-date preview.
+            </p>
+          ) : (
+            <Button size="sm" onClick={onConfirm} disabled={busy}>
+              <Check className="h-4 w-4" /> Confirm
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={onReject} disabled={busy}>
             <X className="h-4 w-4" /> Cancel
           </Button>
@@ -80,6 +89,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { send, reset, confirm, reject } = useChatMutations();
   const [text, setText] = useState("");
   const [confirmNew, setConfirmNew] = useState(false);
+  // Actions whose Confirm failed with ACTION_STALE. Session state only; the API decides.
+  const [staleIds, setStaleIds] = useState<ReadonlySet<string>>(new Set());
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -178,10 +189,15 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                 <ActionCard
                   action={m.action}
                   busy={confirm.isPending || reject.isPending}
+                  stale={staleIds.has(m.action.id)}
                   onConfirm={() =>
                     confirm.mutate(m.action!.id, {
                       onSuccess: () => toast.success("Change applied"),
-                      onError: (e: Error) => toast.error(e.message),
+                      onError: (e: Error) => {
+                        if (e instanceof ApiError && e.code === "ACTION_STALE")
+                          setStaleIds((ids) => new Set(ids).add(m.action!.id));
+                        toast.error(e.message);
+                      },
                     })
                   }
                   onReject={() =>

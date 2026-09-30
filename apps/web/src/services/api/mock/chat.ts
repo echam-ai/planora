@@ -272,6 +272,8 @@ function buildAssistantReply(text: string, tasks: Task[], timezone: string): Cha
 
 const NOT_FOUND_MESSAGE = "That proposed change is no longer available.";
 const ALREADY_REJECTED_MESSAGE = "This change was cancelled, so it wasn't applied.";
+const STALE_MESSAGE =
+  "This task changed after the proposal, so nothing was applied. Ask for an up-to-date preview.";
 const ALREADY_APPLIED_MESSAGE = "This change has already been applied.";
 
 export function createChatClient(
@@ -331,6 +333,12 @@ export function createChatClient(
       if (proposed.status === "rejected")
         throw new ApiError("ACTION_ALREADY_REJECTED", ALREADY_REJECTED_MESSAGE, { status: 409 });
       if (proposed.status === "applied") return conversation;
+      // The mock keeps no snapshot, so only a target that is no longer active counts as stale.
+      if (proposed.kind !== "create" && proposed.payload.taskId) {
+        const target = ensureTasks().find((task) => task.id === proposed.payload.taskId);
+        if (!target || target.archivedAt)
+          throw new ApiError("ACTION_STALE", STALE_MESSAGE, { status: 409 });
+      }
       if (proposed.kind === "create" && proposed.payload.draft)
         await tasksClient.createTask(proposed.payload.draft);
       else if (proposed.kind === "move" && proposed.payload.taskId && proposed.payload.status)
