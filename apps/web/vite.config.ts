@@ -4,7 +4,6 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import { nitro } from "nitro/vite";
 import { defineConfig, loadEnv } from "vite";
-import tsConfigPaths from "vite-tsconfig-paths";
 import { assertValidApiMode } from "./src/services/api/apiMode";
 
 export default defineConfig(({ command, mode }) => {
@@ -19,6 +18,7 @@ export default defineConfig(({ command, mode }) => {
   assertValidApiMode(env["VITE_API_MODE"]);
 
   return {
+    resolve: { tsconfigPaths: true },
     plugins: [
       mode === "development" && devtools(),
       tanstackStart({
@@ -27,7 +27,6 @@ export default defineConfig(({ command, mode }) => {
       }),
       viteReact(),
       tailwindcss(),
-      tsConfigPaths({ projects: ["./tsconfig.json"] }),
       command === "build" && nitro({ preset: "node-server" }),
     ],
     server: {
