@@ -26,6 +26,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("server entry: service-local health", () => {
+  it("answers an unauthenticated health request without invoking the application", async () => {
+    const entry = await importServerEntry();
+    fetchMock.mockRejectedValue(new Error("application unavailable"));
+
+    const response = await entry.fetch(new Request("https://example.test/health"), {}, {});
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    expect(await response.json()).toEqual({ status: "ok" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves other methods and similarly named paths to the application", async () => {
+    const entry = await importServerEntry();
+    fetchMock.mockResolvedValue(new Response("application", { status: 404 }));
+
+    for (const healthRequest of [
+      new Request("https://example.test/health", { method: "POST" }),
+      new Request("https://example.test/health/other"),
+    ]) {
+      const response = await entry.fetch(healthRequest, {}, {});
+      expect(response.status).toBe(404);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("server entry: ordinary responses", () => {
   it("passes a successful response through unchanged", async () => {
     const entry = await importServerEntry();

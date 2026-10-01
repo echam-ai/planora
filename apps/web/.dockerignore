@@ -1,0 +1,38 @@
+# Allow only production build inputs. New local directories cannot accidentally
+# ship credentials, dependencies, database files, test output, or scratch.
+**
+!package.json
+!bun.lock
+!bunfig.toml
+!tsconfig.json
+!vite.config.ts
+!src/
+!src/**
+!public/
+!public/**
+
+# Exclude local residue even when it occurs inside an allowed source directory.
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+**/*.sqlite
+**/*.sqlite-*
+**/*.sqlite3
+**/*.sqlite3-*
+**/*.pem
+**/*.key
+**/secrets/**
+**/node_modules/**
+**/.venv/**
+**/.tmp/**
+**/.output/**
+**/.nitro/**
+**/.tanstack/**
+**/dist/**
+**/coverage/**
+**/test-results/**
+**/playwright-report/**
+**/*.test.ts
+**/*.test.tsx
+src/test/**

@@ -46,6 +46,10 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    if (request.method === "GET" && new URL(request.url).pathname === "/health") {
+      return Response.json({ status: "ok" });
+    }
+
     if (request.method === "POST" && new URL(request.url).pathname === "/login") {
       return new Response(null, {
         status: 303,
