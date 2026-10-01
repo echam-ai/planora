@@ -11,8 +11,8 @@ import asyncio
 import json
 import os
 import select
-import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -45,6 +45,12 @@ os.write(fd, (json.dumps(record) + "\\n").encode())
 os.close(fd)
 if name == "curl":
     time.sleep(0.1)
+    if os.environ.get("DELAY_WEB") and args[-1].startswith("http://localhost:"):
+        attempts = Path(os.environ["RECORDS"]).with_suffix(".attempts")
+        count = int(attempts.read_text()) if attempts.exists() else 0
+        attempts.write_text(str(count + 1))
+        if count < 2:
+            sys.exit(1)
     sys.exit(0)
 if args == ["run", "alembic", "upgrade", "head"]:
     from alembic import command
@@ -75,10 +81,21 @@ elif "uvicorn" in args or "dev" in args or "planora_api.jobs.scheduler" in args:
 class Launcher:
     def __init__(self, root: Path):
         self.root = root
+        # Exercise the unchanged launcher paths on available ports so this
+        # harness never interferes with an already-running user stack.
+        with socket.socket() as api, socket.socket() as web:
+            api.bind(("127.0.0.1", 0))
+            web.bind(("127.0.0.1", 0))
+            self.api_port = api.getsockname()[1]
+            self.web_port = web.getsockname()[1]
+        self.origin = f"http://localhost:{self.web_port}"
         (root / "scripts").mkdir()
         (root / "apps/api").mkdir(parents=True)
         (root / "apps/web").mkdir()
-        shutil.copyfile(REPO / "scripts/run-local.sh", root / "scripts/run-local.sh")
+        script = (REPO / "scripts/run-local.sh").read_text()
+        script = script.replace('API_PORT="8000"', f'API_PORT="{self.api_port}"')
+        script = script.replace("http://localhost:5173", self.origin)
+        (root / "scripts/run-local.sh").write_text(script)
         self.env_file = root / "apps/api/.env"
         self.records_path = root / "records.jsonl"
         bin_dir = root / "bin"
@@ -156,14 +173,14 @@ def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     secret = configured[0]["secret"]
     assert len(bytes.fromhex(secret)) >= 32
     assert all(r["secret"] == secret for r in configured)
-    assert all(r["origin"] == "http://localhost:5173" for r in configured)
+    assert all(r["origin"] == launcher.origin for r in configured)
     assert all(r["key"] == "placeholder" for r in configured)
     assert secret not in output
-    assert "Ready. Open http://localhost:5173" in output
+    assert f"Ready. Open {launcher.origin}" in output
     web = next(r for r in records if "dev" in r["args"])
-    assert web["args"] == ["run", "dev", "--", "--host", "localhost", "--port", "5173", "--strictPort"]
+    assert web["args"] == ["run", "dev", "--", "--host", "localhost", "--port", str(launcher.web_port), "--strictPort"]
     assert web["mode"] == "http"
-    assert web["proxy"] == "http://127.0.0.1:8000"
+    assert web["proxy"] == f"http://127.0.0.1:{launcher.api_port}"
     assert launcher.env_file.read_text() == original
     assert not any("planora_api.admin.reset_password" in r["args"] for r in records)
     code, output = launcher.run(ready=True)
@@ -174,8 +191,9 @@ def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     assert launcher.env_file.read_text() == original
 
 
-@pytest.mark.parametrize("origin", ["http://localhost:5199", "http://127.0.0.1:5199"])
-def test_overrides_are_preserved_without_shell_execution(launcher: Launcher, origin: str) -> None:
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
+def test_overrides_are_preserved_without_shell_execution(launcher: Launcher, host: str) -> None:
+    origin = f"http://{host}:{launcher.web_port}"
     secret = 'literal-$(touch SHOULD_NOT_EXIST)-`echo secret`'
     original = launcher.configure(f"SESSION_SECRET={secret}\nAPP_ORIGIN={origin}\n")
     code, output = launcher.run(ready=True)
@@ -228,10 +246,42 @@ def test_busy_web_port_stops_other_services_and_uses_strict_port(launcher: Launc
     assert "--strictPort" in web["args"]
 
 
-@pytest.mark.parametrize("origin", [None, "http://127.0.0.1:5199"])
-def test_setup_migrates_creates_account_then_login_and_csrf_work(
-    launcher: Launcher, monkeypatch: pytest.MonkeyPatch, origin: str | None,
+@pytest.mark.parametrize("service", ["API", "web"])
+def test_occupied_port_is_rejected_without_stopping_existing_listener(
+    launcher: Launcher, service: str,
 ) -> None:
+    launcher.configure()
+    port = launcher.api_port if service == "API" else launcher.web_port
+    with socket.socket() as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", port))
+        listener.listen()
+        code, output = launcher.run(ready=True)
+        assert code != 0, output
+        assert f"{service} port {port} is unavailable" in output
+        assert "Ready. Open" not in output
+        assert not any("uvicorn" in r["args"] or "dev" in r["args"]
+                       or "planora_api.jobs.scheduler" in r["args"]
+                       for r in launcher.records())
+        with socket.create_connection(("127.0.0.1", port), timeout=1):
+            pass
+
+
+def test_ready_waits_for_web_and_proxied_api(launcher: Launcher) -> None:
+    launcher.configure()
+    launcher.env["DELAY_WEB"] = "1"
+    code, output = launcher.run(ready=True)
+    assert code == 0, output
+    urls = [r["args"][-1] for r in launcher.records() if r["name"] == "curl"]
+    assert urls.count(f"{launcher.origin}/") >= 3
+    assert f"{launcher.origin}/api/v1/health" in urls
+
+
+@pytest.mark.parametrize("host", [None, "127.0.0.1"])
+def test_setup_migrates_creates_account_then_login_and_csrf_work(
+    launcher: Launcher, monkeypatch: pytest.MonkeyPatch, host: str | None,
+) -> None:
+    origin = None if host is None else f"http://{host}:{launcher.web_port}"
     # Follow README exactly: copy the template and fill in only the LLM key.
     template = (REPO / "apps/api/.env.example").read_text()
     content = template.replace("LLM_API_KEY=\n", "LLM_API_KEY=placeholder\n")
@@ -268,7 +318,8 @@ def test_setup_migrates_creates_account_then_login_and_csrf_work(
             assert login.status_code == 200
             assert client.cookies.get("planora_session")
             assert (await client.get("/api/v1/tasks")).status_code == 200
-            wrong = "http://127.0.0.1:5173" if origin is None else "http://localhost:5199"
+            wrong_host = "127.0.0.1" if origin is None else "localhost"
+            wrong = f"http://{wrong_host}:{launcher.web_port}"
             rejected = await client.post("/api/v1/auth/logout", headers={"Origin": wrong})
             assert rejected.status_code == 403
             token = client.cookies.get("planora_session")
