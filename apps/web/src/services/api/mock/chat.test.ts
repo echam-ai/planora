@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Task } from "@/types";
+import { ApiError, type Task } from "@/types";
 import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
 import { mockApiClient, mockDevTools } from "../mockApiClient";
 
@@ -261,4 +261,47 @@ describe("mock chat: create proposals", () => {
 
     expect(reply.action?.summary).toBe("New task");
   });
+});
+
+describe("mock chat: message limit", () => {
+  it.each(["a", "😀"])(
+    "rejects 4001 trimmed %s code points without changing storage",
+    async (character) => {
+      await ask("hello");
+      const before = window.localStorage.getItem("planora.conversation");
+      const result = mockApiClient
+        .sendChatMessage(` ${character.repeat(4001)}\n`)
+        .catch((error: unknown) => error);
+      await vi.runAllTimersAsync();
+      const error = await result;
+      expect(error).toBeInstanceOf(ApiError);
+      expect(error).toMatchObject({
+        code: "VALIDATION_ERROR",
+        status: 422,
+        details: [{ field: "text", code: "VALUE_ERROR", message: expect.any(String) }],
+      });
+      expect((error as ApiError).details?.[0]?.message).not.toBe("");
+      expect(window.localStorage.getItem("planora.conversation")).toBe(before);
+    },
+  );
+
+  it.each(["a", "😀"])(
+    "accepts and stores exactly 4000 trimmed %s code points",
+    async (character) => {
+      const text = character.repeat(4000);
+      const conversation = await resolve(mockApiClient.sendChatMessage(`  ${text}\n`));
+      expect(conversation.messages[0]).toMatchObject({ role: "user", text });
+      expect(JSON.parse(window.localStorage.getItem("planora.conversation")!)).toEqual(
+        conversation,
+      );
+    },
+  );
+});
+
+it("mock chat and quick capture accept Python whitespace at the API boundary", async () => {
+  const text = "a".repeat(4000);
+  const raw = `\u0085${text}\u001c`;
+  const conversation = await resolve(mockApiClient.sendChatMessage(raw));
+  expect(conversation.messages[0]).toMatchObject({ role: "user", text });
+  await expect(resolve(mockApiClient.parseTaskText(raw))).resolves.toBeDefined();
 });

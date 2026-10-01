@@ -530,3 +530,117 @@ describe("ChatPanel", () => {
     });
   });
 });
+
+describe("ChatPanel message limit", () => {
+  const limitMessage =
+    "Messages to the assistant take up to 4,000 characters. Shorten your message.";
+  const validationError = () =>
+    new ApiError("VALIDATION_ERROR", "Request validation failed.", {
+      status: 422,
+      details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
+    });
+
+  it("keeps a paste intact, describes the error and guards Enter until shortened", async () => {
+    vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+    const send = vi.spyOn(api, "sendChatMessage").mockResolvedValue(replied);
+    renderPanel();
+    const input = await screen.findByLabelText("Message the assistant");
+    fireEvent.change(input, { target: { value: "a".repeat(4500) } });
+    expect(input).toHaveValue("a".repeat(4500));
+    expect(input).not.toHaveAttribute("maxlength");
+    expect(screen.getByText("4,500 / 4,000 characters")).toBeInTheDocument();
+    const message = screen.getByText(limitMessage);
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")?.split(" ")).toContain(message.id);
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(send).not.toHaveBeenCalled();
+    expect(input).toHaveValue("a".repeat(4500));
+    fireEvent.change(input, { target: { value: "a".repeat(4001) } });
+    expect(screen.getByText("4,001 / 4,000 characters")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "a".repeat(4000) } });
+    expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\/ 4,000 characters/)).not.toBeInTheDocument();
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).not.toHaveAttribute("aria-describedby");
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith("a".repeat(4000)));
+  });
+
+  it.each(["a", "😀"])(
+    "accepts 4000 trimmed %s code points and rejects 4001",
+    async (character) => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const send = vi.spyOn(api, "sendChatMessage").mockResolvedValue(replied);
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: character.repeat(4001) } });
+      expect(screen.getByText("4,001 / 4,000 characters")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+      fireEvent.change(input, { target: { value: `  ${character.repeat(4000)}\n` } });
+      expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith(character.repeat(4000)));
+    },
+  );
+
+  it.each([false, true])(
+    "gives a readable backstop and preserves the draft typing rule (new typing: %s)",
+    async (typed) => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const { reject } = deferredSend();
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: "What is overdue?" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      if (typed) fireEvent.change(input, { target: { value: "New draft" } });
+      reject(validationError());
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith(limitMessage));
+      expect(toast.error).not.toHaveBeenCalledWith("Request validation failed.");
+      expect(screen.queryByText("Request validation failed.")).not.toBeInTheDocument();
+      expect(screen.queryByText(/The assistant didn't respond/)).not.toBeInTheDocument();
+      expect(input).toHaveValue(typed ? "New draft" : "What is overdue?");
+    },
+  );
+
+  it.each([
+    unavailable(),
+    new ApiError("VALIDATION_ERROR", "Another field is invalid.", {
+      status: 422,
+      details: [{ field: "other", code: "VALUE_ERROR", message: "Invalid." }],
+    }),
+    new ApiError("VALIDATION_ERROR", "Missing details."),
+    new Error("Connection lost."),
+  ])("preserves other send failures: $message", async (error) => {
+    vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+    vi.spyOn(api, "sendChatMessage").mockRejectedValue(error);
+    renderPanel();
+    const input = await screen.findByLabelText("Message the assistant");
+    fireEvent.change(input, { target: { value: "hi" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByText(/The assistant didn't respond/)).toBeInTheDocument();
+    expect(toast.error).toHaveBeenCalledWith(error.message);
+    expect(input).toHaveValue("hi");
+  });
+});
+
+describe("ChatPanel API whitespace parity", () => {
+  it.each(["\u0085", "\u001c", "\u001d", "\u001e", "\u001f"])(
+    "accepts the API boundary surrounded by Python whitespace %j",
+    async (whitespace) => {
+      vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+      const send = vi.spyOn(api, "sendChatMessage").mockResolvedValue(replied);
+      renderPanel();
+      const input = await screen.findByLabelText("Message the assistant");
+      const body = "a".repeat(4000);
+      const raw = `${whitespace}${body}${whitespace}`;
+      fireEvent.change(input, { target: { value: raw } });
+      expect(input).toHaveValue(raw);
+      expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+      expect(input).not.toHaveAttribute("aria-invalid");
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith(body));
+    },
+  );
+});
