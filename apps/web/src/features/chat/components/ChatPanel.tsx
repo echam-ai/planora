@@ -125,7 +125,12 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setConfirmNew(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-h-11 min-w-11"
+            onClick={() => setConfirmNew(true)}
+          >
             <RefreshCw className="h-4 w-4" /> New
           </Button>
           <Button

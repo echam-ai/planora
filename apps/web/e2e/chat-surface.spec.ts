@@ -291,3 +291,23 @@ test.describe("resize across the 1024px breakpoint", () => {
     await expect(page.getByText("Message survives the resize")).toBeVisible();
   });
 });
+
+test("scenario: chat New has a 44px target and asks before resetting", async ({ page }) => {
+  await signIn(page);
+  await chatButton(page).click();
+  const newChat = page.getByRole("button", { name: "New", exact: true });
+  await expect(newChat).toBeVisible();
+  const box = await newChat.boundingBox();
+  if (!box) throw new Error("New button has no bounding box");
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+
+  await newChat.click();
+  const confirmation = page.getByRole("alertdialog", { name: "Start a new conversation?" });
+  await expect(confirmation).toBeVisible();
+  await expect(confirmation).toContainText(
+    "The current chat history will be replaced. Your tasks are not affected.",
+  );
+  await confirmation.getByRole("button", { name: "Keep chat", exact: true }).click();
+  await expect(confirmation).toBeHidden();
+});
