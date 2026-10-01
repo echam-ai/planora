@@ -16,7 +16,20 @@ import {
 import { useChatMutations, useConversation } from "@/features/chat/hooks";
 import { ApiError, type ChatAction } from "@/types";
 import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
+import { AI_TEXT_LIMIT, countTrimmedCodePoints, trimApiText } from "@/shared/api/textLimits";
 import { cn } from "@/lib/utils";
+
+const LIMIT_MESSAGE =
+  "Messages to the assistant take up to 4,000 characters. Shorten your message.";
+const LIMIT_MESSAGE_ID = "chat-limit-message";
+
+function isTextValidationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.code === "VALIDATION_ERROR" &&
+    !!error.details?.some((detail) => detail.field === "text")
+  );
+}
 
 function ActionCard({
   action,
@@ -85,6 +98,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const [confirmNew, setConfirmNew] = useState(false);
   // Actions whose Confirm failed with ACTION_STALE. Session state only; the API decides.
   const [staleIds, setStaleIds] = useState<ReadonlySet<string>>(new Set());
+  const characterCount = countTrimmedCodePoints(text);
+  const overLimit = characterCount > AI_TEXT_LIMIT;
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,15 +110,15 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   // same mutation would drop the first call's onError, losing the text it would restore.
   // `fromInput` is true only when the text being sent is the input's own text.
   const submit = (value: string, fromInput: boolean) => {
-    const trimmed = value.trim();
-    if (!trimmed || send.isPending) return;
+    const trimmed = trimApiText(value);
+    if (!trimmed || send.isPending || countTrimmedCodePoints(trimmed) > AI_TEXT_LIMIT) return;
     if (fromInput) setText("");
     send.mutate(trimmed, {
       // A failed send persists nothing, so hand the text back rather than lose it —
       // unless the user has already started typing something else.
       onError: (e: Error) => {
         setText((current) => (current === "" ? trimmed : current));
-        toast.error(e.message);
+        toast.error(isTextValidationError(e) ? LIMIT_MESSAGE : e.message);
       },
     });
   };
@@ -217,7 +232,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:240ms]" />
           </div>
         )}
-        {send.isError && (
+        {send.isError && !isTextValidationError(send.error) && (
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             The assistant didn't respond.{" "}
             <button className="underline" onClick={() => send.reset()}>
@@ -243,6 +258,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             id="chat-input"
             rows={2}
             value={text}
+            aria-invalid={overLimit ? true : undefined}
+            aria-describedby={overLimit ? LIMIT_MESSAGE_ID : undefined}
             placeholder="Ask about your tasks…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -256,12 +273,23 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             type="submit"
             size="icon"
             className="h-11 w-11"
-            disabled={send.isPending}
+            disabled={send.isPending || overLimit}
             aria-label="Send"
           >
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        {overLimit && (
+          <div className="mt-2 space-y-1 text-sm" aria-live="polite">
+            <p id={LIMIT_MESSAGE_ID} className="text-destructive">
+              {LIMIT_MESSAGE}
+            </p>
+            <p className="text-muted-foreground">
+              {characterCount.toLocaleString("en-US")} / {AI_TEXT_LIMIT.toLocaleString("en-US")}{" "}
+              characters
+            </p>
+          </div>
+        )}
       </form>
 
       <AlertDialog open={confirmNew} onOpenChange={setConfirmNew}>

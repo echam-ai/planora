@@ -15,7 +15,7 @@ import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { emptyDraft } from "@/features/tasks/formMapping";
 import { useTaskMutations } from "@/features/tasks/hooks";
 import { api } from "@/services/api";
-import { AI_TEXT_LIMIT } from "@/shared/api/textLimits";
+import { AI_TEXT_LIMIT, countTrimmedCodePoints, trimApiText } from "@/shared/api/textLimits";
 import { ApiError, type TaskDraft } from "@/types";
 
 const EXAMPLE =
@@ -37,7 +37,7 @@ export function CreateTaskDialog({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [reviewDraft, setReviewDraft] = useState<TaskDraft | null>(null);
-  const characterCount = [...text.trim()].length;
+  const characterCount = countTrimmedCodePoints(text);
   const overLimit = characterCount > AI_TEXT_LIMIT;
   const visibleError = overLimit ? LIMIT_MESSAGE : parseError;
 
@@ -52,7 +52,7 @@ export function CreateTaskDialog({
   };
 
   const parse = async () => {
-    if (!text.trim() || overLimit) return;
+    if (!trimApiText(text) || overLimit) return;
     setParsing(true);
     setParseError(null);
     try {
@@ -133,7 +133,7 @@ export function CreateTaskDialog({
                   <Button variant="outline" onClick={close}>
                     Cancel
                   </Button>
-                  <Button onClick={parse} disabled={parsing || !text.trim() || overLimit}>
+                  <Button onClick={parse} disabled={parsing || !trimApiText(text) || overLimit}>
                     {parsing ? (
                       <>
                         <Sparkles className="h-4 w-4 animate-pulse" /> Reading your note…

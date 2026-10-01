@@ -2,7 +2,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { formatInZone, getDeadlineState } from "@/features/tasks/deadline";
 import { zonedDateTimeToIso } from "@/features/tasks/formMapping";
 import { uid } from "@/lib/id";
-import { AI_TEXT_LIMIT } from "@/shared/api/textLimits";
+import { AI_TEXT_LIMIT, countTrimmedCodePoints, trimApiText } from "@/shared/api/textLimits";
 import {
   ApiError,
   type ChatAction,
@@ -291,7 +291,7 @@ export function createChatClient(
   return {
     async parseTaskText(text) {
       await delay(700, 1400);
-      if ([...text.trim()].length > AI_TEXT_LIMIT)
+      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT)
         throw new ApiError("VALIDATION_ERROR", "Request validation failed.", {
           status: 422,
           details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
@@ -312,6 +312,12 @@ export function createChatClient(
     },
     async sendChatMessage(text) {
       await delay(600, 1200);
+      text = trimApiText(text);
+      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT)
+        throw new ApiError("VALIDATION_ERROR", "Request validation failed.", {
+          status: 422,
+          details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
+        });
       // Like the API, a failed send persists nothing — not even the user's message.
       if (read<boolean>(KEYS.forceError, false))
         throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {

@@ -286,3 +286,17 @@ describe("CreateTaskDialog", () => {
     });
   });
 });
+
+it("quick capture accepts Python whitespace at the API boundary without changing the draft", async () => {
+  const parse = vi.spyOn(api, "parseTaskText").mockResolvedValue(draft());
+  renderDialog();
+  const raw = `\u0085${"a".repeat(4000)}\u001c`;
+  const input = screen.getByLabelText("Describe the task in your own words");
+  fireEvent.change(input, { target: { value: raw } });
+  expect(input).toHaveValue(raw);
+  expect(input).not.toHaveAttribute("aria-invalid");
+  const button = screen.getByRole("button", { name: "Parse task" });
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  await waitFor(() => expect(parse).toHaveBeenCalledWith(raw));
+});
