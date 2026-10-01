@@ -121,3 +121,30 @@ test("scenario 8: a Done task without a deadline remains completed", async ({ pa
   await expect(dialog.locator('span:text-is("Completed")')).toBeVisible();
   await expect(dialog.locator('dt:has-text("Completed") + dd')).not.toHaveText("—");
 });
+
+test("scenario: task detail Close has a 44px target clear of the title", async ({ page }) => {
+  const title = "Read chapter 4 of the distributed systems book";
+  await signIn(page);
+  const dialog = await openTaskSheet(page, title);
+  await dialog.evaluate((el) =>
+    Promise.all(el.getAnimations().map((animation) => animation.finished)).then(() => undefined),
+  );
+
+  const close = dialog.getByRole("button", { name: "Close", exact: true });
+  const heading = dialog.getByRole("heading", { name: title, exact: true });
+  await expect(close).toBeVisible();
+  const closeBox = await close.boundingBox();
+  const titleBox = await heading.boundingBox();
+  if (!closeBox || !titleBox) throw new Error("sheet header has no bounding box");
+  expect(closeBox.width).toBeGreaterThanOrEqual(44);
+  expect(closeBox.height).toBeGreaterThanOrEqual(44);
+  const overlaps =
+    closeBox.x < titleBox.x + titleBox.width &&
+    closeBox.x + closeBox.width > titleBox.x &&
+    closeBox.y < titleBox.y + titleBox.height &&
+    closeBox.y + closeBox.height > titleBox.y;
+  expect(overlaps, "Close must not overlap the task title").toBe(false);
+
+  await close.click();
+  await expect(dialog).toBeHidden();
+});

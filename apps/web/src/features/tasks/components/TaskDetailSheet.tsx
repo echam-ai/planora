@@ -65,8 +65,8 @@ export function TaskDetailSheet({
     return (
       <Sheet open onOpenChange={(value) => !value && onClose()}>
         <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle className="pr-6 text-left">Archived task</SheetTitle>
+          <SheetHeader className="pr-12">
+            <SheetTitle className="text-left">Archived task</SheetTitle>
             <SheetDescription className="text-left">Archived task (read only)</SheetDescription>
           </SheetHeader>
           <div className="space-y-4 px-4 pb-8">
@@ -114,8 +114,8 @@ export function TaskDetailSheet({
   return (
     <Sheet open={!!task} onOpenChange={(v) => !v && onClose()}>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
-          <SheetTitle className="pr-6 text-left">{task.title}</SheetTitle>
+        <SheetHeader className="pr-12">
+          <SheetTitle className="text-left">{task.title}</SheetTitle>
           <SheetDescription className="text-left">
             {readOnly ? "Archived task (read only)" : "Edit any field and save your changes."}
           </SheetDescription>
