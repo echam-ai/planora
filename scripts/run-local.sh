@@ -10,6 +10,7 @@
 #
 # Usage (from anywhere in the repository, or by absolute path):
 #   scripts/run-local.sh
+#   scripts/run-local.sh --setup-account  # explicitly create/reset account
 #
 # Configuration lives entirely in apps/api/.env (copy from
 # apps/api/.env.example — see README.md, "Run locally on macOS"). This
@@ -58,6 +59,13 @@ log() { printf 'planora: %s\n' "$*"; }
 err() { printf 'planora: %s\n' "$*" >&2; }
 die() { err "$*"; exit 1; }
 
+SETUP_ACCOUNT=0
+case "$#:${1:-}" in
+    0:) ;;
+    1:--setup-account) SETUP_ACCOUNT=1 ;;
+    *) die "Usage: scripts/run-local.sh [--setup-account]" ;;
+esac
+
 # Reads one KEY=value line from the env file, ignoring comment and blank
 # lines, and never `source`s the file — a value containing a shell
 # metacharacter can never be executed. Prints the last matching value, or
@@ -73,23 +81,30 @@ is_alive() {
     [ -n "$1" ] && kill -0 "$1" 2>/dev/null
 }
 
+is_blank() {
+    case "$1" in
+        *[![:space:]]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
 # --- Configuration checks: fail before any process starts ------------------
 
 if [ ! -f "$ENV_FILE" ]; then
-    die "apps/api/.env not found. Copy apps/api/.env.example to apps/api/.env and fill in SESSION_SECRET, LLM_API_KEY and APP_ORIGIN, then re-run this script."
+    die "apps/api/.env not found. Copy apps/api/.env.example to apps/api/.env and fill in LLM_API_KEY, then re-run this script."
 fi
 
 SESSION_SECRET_VALUE="$(env_get SESSION_SECRET "$ENV_FILE")"
-if [ -z "$SESSION_SECRET_VALUE" ]; then
-    die "SESSION_SECRET is blank in apps/api/.env. Generate one with: openssl rand -hex 32"
-fi
 
 LLM_API_KEY_VALUE="$(env_get LLM_API_KEY "$ENV_FILE")"
-if [ -z "$LLM_API_KEY_VALUE" ]; then
+if is_blank "$LLM_API_KEY_VALUE"; then
     die "LLM_API_KEY is blank in apps/api/.env. A placeholder value is fine locally (AI features will report unavailable), but it must be non-blank."
 fi
 
 APP_ORIGIN_VALUE="$(env_get APP_ORIGIN "$ENV_FILE")"
+if is_blank "$APP_ORIGIN_VALUE"; then
+    APP_ORIGIN_VALUE="http://localhost:5173"
+fi
 WEB_HOST=""
 WEB_PORT=""
 case "$APP_ORIGIN_VALUE" in
@@ -103,10 +118,13 @@ case "$APP_ORIGIN_VALUE" in
         ;;
 esac
 case "$WEB_PORT" in
-    '' | *[!0-9]*) WEB_HOST="" ;;
+    '' | *[!0-9]* | 0*) WEB_HOST="" ;;
 esac
+if [ -n "$WEB_HOST" ] && { [ "${#WEB_PORT}" -gt 5 ] || [ "$WEB_PORT" -gt 65535 ]; }; then
+    WEB_HOST=""
+fi
 if [ -z "$WEB_HOST" ]; then
-    die "APP_ORIGIN in apps/api/.env must be exactly http://localhost:<port> or http://127.0.0.1:<port> (got '${APP_ORIGIN_VALUE}')."
+    die "APP_ORIGIN in apps/api/.env must be exactly http://localhost:<port> or http://127.0.0.1:<port>, with a port from 1 to 65535."
 fi
 
 # --- Install dependencies and apply migrations, still before any service --
@@ -117,12 +135,30 @@ if ! (cd "$API_DIR" && uv sync --locked); then
     die "uv sync --locked failed in apps/api."
 fi
 
-if ! (cd "$WEB_DIR" && bun install --frozen-lockfile); then
+# Generate once, keep it only in this invocation's environment, and share
+# identical values with migrations, administration and every service. Export
+# explicit file values too, so inherited shell settings cannot override them.
+if is_blank "$SESSION_SECRET_VALUE"; then
+    if ! SESSION_SECRET_VALUE="$(cd "$API_DIR" && uv run python -c 'import secrets; print(secrets.token_hex(32))')"; then
+        die "Could not generate a local SESSION_SECRET."
+    fi
+fi
+export SESSION_SECRET="$SESSION_SECRET_VALUE"
+export APP_ORIGIN="$APP_ORIGIN_VALUE"
+export LLM_API_KEY="$LLM_API_KEY_VALUE"
+
+if [ "$SETUP_ACCOUNT" -eq 0 ] && ! (cd "$WEB_DIR" && bun install --frozen-lockfile); then
     die "bun install --frozen-lockfile failed in apps/web."
 fi
 
 if ! (cd "$API_DIR" && uv run alembic upgrade head); then
     die "alembic upgrade head failed in apps/api."
+fi
+
+if [ "$SETUP_ACCOUNT" -eq 1 ]; then
+    log "Creating or resetting the local account through the interactive prompts..."
+    cd "$API_DIR"
+    exec uv run python -m planora_api.admin.reset_password
 fi
 
 # --- Start the three supervised services ------------------------------------
@@ -251,7 +287,7 @@ if ! wait_for_health; then
 fi
 
 log "Ready. Open ${APP_ORIGIN_VALUE} in your browser."
-log "First time only, from apps/api: uv run python -m planora_api.admin.reset_password"
+log "First time only: scripts/run-local.sh --setup-account"
 log "Press Ctrl-C to stop."
 
 while true; do

@@ -50,34 +50,29 @@ never used by this path.
 
 ```sh
 cp apps/api/.env.example apps/api/.env
-openssl rand -hex 32   # paste the output into apps/api/.env as SESSION_SECRET
 ```
 
-Edit `apps/api/.env` and set `APP_ORIGIN=http://localhost:5173` (the web
-dev server's default port). `LLM_API_KEY` ships blank in the template and
-startup fails on a blank value, so set it too — `LLM_API_KEY=placeholder`
+Edit `apps/api/.env` and fill in **only `LLM_API_KEY`** — use `LLM_API_KEY=placeholder`
 if you don't have a real key yet, which leaves AI parsing and chat
-unavailable (see the note below for a real key). Then apply migrations,
-which also creates the local database on first run:
+unavailable (see the note below for a real key). Leave `SESSION_SECRET`
+and `APP_ORIGIN` blank. The local launcher generates a private random
+session secret and uses `http://localhost:5173` automatically.
+
+**One-time account creation**, from the repository root:
 
 ```sh
-cd apps/api
-uv run alembic upgrade head
+scripts/run-local.sh --setup-account
 ```
 
-**One-time account creation**, from `apps/api`:
+This installs API dependencies and applies migrations to the local database,
+then runs the existing interactive account command with the same local defaults.
+Follow the prompts to set the single account's username and password. Run this
+mode again only when you want to reset the password; normal launch keeps your
+account credentials.
+
+**Launch**, from the repository root:
 
 ```sh
-uv run python -m planora_api.admin.reset_password
-```
-
-Follow the prompts to set the single account's username and password.
-
-**Launch**, from the repository root (the previous step left you in
-`apps/api`):
-
-```sh
-cd ../..
 scripts/run-local.sh
 ```
 
@@ -85,6 +80,18 @@ This installs dependencies, applies migrations, then starts the API, the
 web dev server (in HTTP mode, regardless of `apps/web/.env`) and the
 archive scheduler, and prints the URL to open once the API is healthy.
 Press `Ctrl-C` to stop all three cleanly.
+
+Optional overrides belong in `apps/api/.env`: set `APP_ORIGIN` to
+`http://localhost:<port>` or `http://127.0.0.1:<port>` (port 1–65535) to
+choose the exact web address. A busy port fails rather than selecting another.
+Set a stable `SESSION_SECRET` (for example, generate one with
+`openssl rand -hex 32`) to keep sessions usable across restarts. When it is
+blank, each launcher invocation uses a new secret: sign in again after
+restarting. Generated secrets are never printed, saved or written to `.env`.
+
+These defaults apply only to `scripts/run-local.sh` and its account setup mode.
+Direct API, scheduler and administrative commands, and deployment, still
+require explicit nonblank `SESSION_SECRET`, `APP_ORIGIN` and `LLM_API_KEY`.
 
 A placeholder `LLM_API_KEY` (e.g. `LLM_API_KEY=placeholder`) is enough to
 start everything — the board, tasks and archive all work — but AI parsing
