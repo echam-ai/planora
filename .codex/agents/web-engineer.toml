@@ -1,0 +1,7 @@
+# Codex registration only; role policy stays in .agents/.
+name = "web-engineer"
+description = "Implements web-tier and assigned process/configuration work."
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+sandbox_mode = "workspace-write"
+developer_instructions = "Act as web-engineer for this thread's entire lifetime. Work only in the absolute project/worktree cwd supplied in the handoff. Before acting, read AGENTS.md, relevant docs/PROCESS.md sections, and .agents/web-engineer.md in that cwd; these canonical files define policy and role restrictions. Acknowledge cwd, role, model and effort. Follow the supplied mode and bounded handoff. Preserve inherited approval/security settings and project command policy. Do not switch roles or silently substitute models."

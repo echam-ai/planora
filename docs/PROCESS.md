@@ -2,6 +2,8 @@
 
 Work is tracked as GitHub Issues with labels — no project boards, no pull requests. Role agents handle the lifecycle; an orchestrator (the top-level session, human supervising) drives it and does no role work itself.
 
+When the user explicitly declines issue creation, use their local request and scoped criteria as the issue reference throughout the handoff and reviews; do not create an issue or post GitHub updates. Required lane gates still apply. Questions, reviews and status requests stay read-only and do not start an issue pipeline.
+
 Project facts and the binding engineering rules live in `AGENTS.md`. This document is only the pipeline.
 
 Original issues #1–#49 map to tasks 1–49 in `docs/tasks.md`. Later issues are intake; GitHub assigns their numbers and they get no phase label. README cleanup is intake #50.
@@ -27,7 +29,7 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
           (criteria + tests)     (code + tests)      (runs suites)       (user POV)     (local, no PR)
 ```
 
-1. **Issue exists.** Anything not already filed — a bug, a change of mind, a gap found mid-work — the orchestrator files with `needs grooming`. It never grooms inline on the full lane.
+1. **Issue exists**, or a local user request is explicitly authorized without issue creation. Otherwise, anything not already filed — a bug, a change of mind, a gap found mid-work — the orchestrator files with `needs grooming`. It never grooms inline on the full lane.
 2. **PM grooms** (full lane). Backlog scope is settled by the spec, so grooming adds acceptance criteria, test scenarios, dependencies and labels. Intake issues get scope too.
 3. **Engineer implements** — code and tests, locally, no commit.
 4. **Tester** runs the applicable checks below and verifies every automated criterion. PASS or FAIL.
@@ -46,11 +48,11 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 | `designer` | Audits UI against the spec; reports only |
 | `oncall-engineer` | Sole CI observer after push |
 
-Definitions live in `.agents/` — the single source of role policy. Both tracked harness paths, `.claude/agents` and `.codex/agents`, are symlinks to `../.agents` and expose the same six files. Edit roles only in `.agents/`; keep no copies and no per-role adapters.
+Definitions live in `.agents/` — the single source of role policy. Edit shared policy only there. `.claude/agents` remains a symlink to `../.agents`. `.codex/agents/` is a real directory with six minimal native TOML registrations: name, description, model/effort, sandbox and instructions to read the canonical policy; do not copy role policy into them.
 
-- **Claude Code** registers these natively through the symlink; check `/agents` in a fresh session. `.claude/` also holds Claude-only plumbing (permissions, slash commands) that the shared files deliberately do not mention — see `CLAUDE.md`.
-- **Codex** shares the same path, but a Markdown symlink does not register Codex custom roles. Use explicit dispatch.
-- **Explicit dispatch (Codex, or Claude fallback):** spawn a generic subagent with: `Act as {role}. Work only in {absolute worktree cwd}. Before acting, read AGENTS.md, docs/PROCESS.md and .agents/{role}.md there, then handle issue #{N} in mode {implement|verify|groom|accept|audit|observe}.` Include the handoff fields below. Pointing a harness at a directory does not load role policy — have the agent acknowledge its cwd and role file before work. If subagents are unavailable, report that limitation; never replace independent review with self-approval.
+- **Claude Code** registers the Markdown roles through its existing symlink; check `/agents` in a fresh session. Claude-only plumbing remains separate — see `CLAUDE.md`. Do not modify Claude-specific files during Codex configuration work.
+- **Codex** prefers the named native roles in `.codex/agents/<role>.toml`. A Markdown symlink does not register Codex custom roles. Start a fresh trusted project session to load configuration; do not assume hot reload or that repository settings override the current chat's host cap.
+- **Explicit dispatch fallback:** when named roles are unavailable, spawn with the approved model/effort below and a bounded full handoff: `Act as {role} for this thread's lifetime. Work only in {absolute worktree cwd}. Before acting, read AGENTS.md, relevant docs/PROCESS.md sections and .agents/{role}.md there, then handle issue #{N} (or the authorized local request) in mode {implement|verify|groom|accept|audit|observe}.` Have the agent acknowledge cwd, role, model/effort and role file before work. If subagents are unavailable, follow the capacity recovery below; never replace independent review with self-approval.
 
 Shared roles do not override host models, tools, permissions or sandbox settings. See the [Claude subagent format](https://code.claude.com/docs/en/sub-agents), [Claude instruction import](https://code.claude.com/docs/en/memory#agentsmd), and [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
@@ -66,7 +68,7 @@ Use the configured review model for grooming, acceptance and design audits, wher
 
 ### Codex dispatch
 
-The approved project-local mapping is `.codex/config.toml`; shared Markdown roles stay harness-neutral. Explicitly dispatch with `model` and `reasoning_effort`:
+The project defaults live in `.codex/config.toml`; native roles pin the approved mapping in `.codex/agents/*.toml`. Shared Markdown roles stay harness-neutral. Named dispatch uses those pins; explicit fallback supplies `model` and `reasoning_effort` from this table:
 
 | Role | Model | Effort |
 | --- | --- | --- |
@@ -76,7 +78,19 @@ The approved project-local mapping is `.codex/config.toml`; shared Markdown role
 | Independent tester | `gpt-6-luna` | high |
 | On-call CI observation | `gpt-6-luna` | low |
 
-Use `fork_turns="none"` and provide the complete handoff, scoped criteria, affected paths and relevant spec sections. Each role reads its policy and the issue itself. Keep at most two concurrent child threads plus the orchestrator; proceed sequentially unless work is independent. Continue the existing role agent for rework. For a specific unresolved tester interpretation or CI diagnosis, escalate to `gpt-6.1-sol` medium with the existing commands/evidence and a bounded question; do not routinely commission duplicate reviews or repeat unchanged suites. Preserve independent tester judgment. See [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
+Use bounded context (`fork_turns="none"` for explicit dispatch) and provide the complete handoff, scoped criteria, affected paths and relevant spec sections. Each role reads its canonical policy and issue or authorized local request. Designer uses `read-only`; other native roles use `workspace-write`, subject to their canonical restrictions. Approval/security settings and project command policy remain inherited; never bypass them.
+
+`agents.enabled = true` and `agents.max_concurrent_threads_per_session = 6` allow six **open child threads**, excluding the primary. Completed but open threads can still consume capacity. This does not authorize six running children: keep at most **two actively running children plus the orchestrator**, and proceed sequentially unless work is independent.
+
+Keep each thread's role/model fixed for its lifetime. The tester is separate from engineer, PM and on-call; never silently reuse a different role/model to fill a gate. Retain engineer context for rework and PM context through acceptance, and continue the same role for feedback. Close finished role threads only when their context is no longer needed and the host exposes a native close tool. For a specific unresolved tester interpretation or CI diagnosis, request a bounded `gpt-6.1-sol` medium diagnostic session with existing commands/evidence; the original tester retains the verdict. Do not routinely duplicate reviews or repeat unchanged suites.
+
+On a spawn-limit error:
+
+1. Record the exact attempted role, model/effort and returned error; inspect available thread state once. Do not invent failed attempts.
+2. If a native close tool is available, close eligible completed threads whose context is no longer needed. Retry the intended role once after capacity changes; do not repeatedly spawn against an unchanged cap.
+3. If no close tool exists or the host limit persists, preserve completed work and the full git-state handoff. Use a fresh correctly configured session for the intended role if available; otherwise mark the required review pending and report the limitation. Never substitute engineer/PM/on-call approval for an independent tester PASS.
+
+The present chat may expose no close tool and retain completed children against its host limit. Repository configuration is for fresh sessions, not evidence that this chat's cap changed. See [Codex subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents).
 
 The project config also sets a colored native footer: directory, branch, model/reasoning, context used, five-hour usage and weekly usage. This is the closest native equivalent to the user's Claude statusline; it does not run the Claude script or reproduce its multiline bars/reset formatting. See [Codex footer items](https://learn.chatgpt.com/docs/developer-commands#configure-footer-items-with-statusline).
 
@@ -100,7 +114,7 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 ## Orchestrator
 
 - It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, commits reviewed states, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
-- File intake immediately, with a concrete reproduction or quoted context. Do not wait for the user to ask.
+- File intake immediately, with a concrete reproduction or quoted context, unless the user explicitly declines issue creation; then carry the local request and criteria through the same lane gates.
 - Launch agents non-blocking unless the result blocks the next action. Continue an agent that still holds the context (Claude `SendMessage`, a Codex follow-up) instead of spawning a fresh one for the same role and issue — for example, return a FAIL to the engineer who wrote the code.
 - Cap three active agents (orchestrator plus two children). Every local suite uses the shared host lock protocol below. Mock and HTTP e2e require exclusive access; verify/Vitest/pytest take shared access and may overlap one another. An e2e run that overlaps any other suite is **void**, repeated in an exclusive window. The e2e suite is stable on a quiet host ([#84](https://github.com/hgiang/planora/issues/84#issuecomment-5891442727)).
 - Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
@@ -137,7 +151,7 @@ Cooperating projects must hold this same lock for their entire suites, even when
 A handoff is **git state, not copied files.** Every engineering, testing and acceptance handoff carries exactly this:
 
 ```
-issue:    #N            lane: full | light
+issue:    #N or authorized local request    lane: full | light
 cwd:      /absolute/path/to/worktree
 branch:   agent/issue-N
 base:     <base SHA>    head: <HEAD SHA, or "uncommitted">
@@ -168,7 +182,7 @@ Select checks from actual files, scripts and issue scope. Record each command, c
 
 | Work | Required verification |
 | --- | --- |
-| Documentation and agent configuration only | Diff/whitespace checks, links and paths, role frontmatter and symlink targets, discovery where supported, and a walkthrough of each affected workflow. No application launch, coverage, or new harness. |
+| Documentation and agent configuration only | Diff/whitespace checks, links and paths, canonical role frontmatter, native TOML names/model/effort/policy paths/sandbox settings and symlink targets, discovery/strict config validation where supported, and a walkthrough of each affected workflow. No application launch, coverage, or new harness. |
 | Web application | `bun run verify` from `apps/web` — coverage run (it runs every Vitest test and enforces 80% coverage per file, as defined in `vitest.config.ts`), lint, typecheck and build in one command. `bun run e2e` whenever routes, components, hooks, the API client or browser flows change. Browser evidence beyond that follows the evidence ladder below. Use package scripts, not Bun's built-in test runner. |
 | API | `uv run pytest --cov --cov-fail-under=80` and `uv run ruff check .`; affected health/startup and integration checks. |
 | Database/migration work from #22 | Apply the history to disposable empty databases with `uv run alembic upgrade head`; verify affected upgrades and SQLite/PostgreSQL compatibility. Never point verification at production data. |
