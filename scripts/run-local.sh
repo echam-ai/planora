@@ -135,6 +135,33 @@ if ! (cd "$API_DIR" && uv sync --locked); then
     die "uv sync --locked failed in apps/api."
 fi
 
+# Probe every loopback address the services will use before starting any of
+# them. A response from an existing API is not evidence that ours started.
+# SO_REUSEADDR permits immediate restart after shutdown, without sharing an
+# active listener. Keep the probes open together to detect conflicting ports.
+if [ "$SETUP_ACCOUNT" -eq 0 ]; then
+    if ! (cd "$API_DIR" && uv run python -c '
+import socket
+import sys
+
+probes = []
+for service, host, port in (("API", sys.argv[1], sys.argv[2]),
+                          ("web", sys.argv[3], sys.argv[4])):
+    try:
+        addresses = socket.getaddrinfo(host, int(port), type=socket.SOCK_STREAM)
+        for family, kind, protocol, _, address in addresses:
+            probe = socket.socket(family, kind, protocol)
+            probes.append(probe)
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            probe.bind(address)
+    except OSError:
+        print(f"planora: {service} port {port} is unavailable. Stop the existing local launcher with Ctrl-C, or inspect the listener before retrying.", file=sys.stderr)
+        sys.exit(1)
+' "$API_HOST" "$API_PORT" "$WEB_HOST" "$WEB_PORT"); then
+        die "Required local ports are unavailable; no services were started."
+    fi
+fi
+
 # Generate once, keep it only in this invocation's environment, and share
 # identical values with migrations, administration and every service. Export
 # explicit file values too, so inherited shell settings cannot override them.
@@ -256,6 +283,7 @@ trap on_signal INT TERM
 
 wait_for_health() {
     waited=0
+    waiting_service="the API"
     while [ "$waited" -lt 60 ]; do
         if [ "$STOP_REQUESTED" -eq 1 ]; then
             shutdown_all 0
@@ -272,13 +300,20 @@ wait_for_health() {
             FAILURE_SERVICE="the archive scheduler"
             return 1
         fi
-        if curl -fsS -o /dev/null "http://${API_HOST}:${API_PORT}/api/v1/health" 2>/dev/null; then
-            return 0
+        waiting_service="the API"
+        if curl -fsS --connect-timeout 1 --max-time 2 -o /dev/null "http://${API_HOST}:${API_PORT}/api/v1/health" 2>/dev/null; then
+            waiting_service="the web dev server"
+            if curl -fsS --connect-timeout 1 --max-time 2 -o /dev/null "${APP_ORIGIN_VALUE}/" 2>/dev/null \
+                && curl -fsS --connect-timeout 1 --max-time 2 -o /dev/null "${APP_ORIGIN_VALUE}/api/v1/health" 2>/dev/null; then
+                if is_alive "$API_PID" && is_alive "$WEB_PID" && is_alive "$SCHEDULER_PID"; then
+                    return 0
+                fi
+            fi
         fi
         sleep 1
         waited=$((waited + 1))
     done
-    FAILURE_SERVICE="the API (health check did not return 200 within 60 seconds)"
+    FAILURE_SERVICE="${waiting_service} (readiness checks timed out)"
     return 1
 }
 

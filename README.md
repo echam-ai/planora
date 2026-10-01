@@ -78,8 +78,13 @@ scripts/run-local.sh
 
 This installs dependencies, applies migrations, then starts the API, the
 web dev server (in HTTP mode, regardless of `apps/web/.env`) and the
-archive scheduler, and prints the URL to open once the API is healthy.
-Press `Ctrl-C` to stop all three cleanly.
+archive scheduler, and prints the URL once the web app, API and API proxy
+respond successfully. Press `Ctrl-C` to stop all three cleanly.
+If a required port is occupied, launch fails before starting services. Stop
+the existing launcher with `Ctrl-C` in its terminal, then retry. If that
+terminal is gone, inspect the listeners with
+`lsof -nP -iTCP:8000 -iTCP:5173 -sTCP:LISTEN` (use your selected web port
+if overridden) and identify the owning process before stopping it.
 
 Optional overrides belong in `apps/api/.env`: set `APP_ORIGIN` to
 `http://localhost:<port>` or `http://127.0.0.1:<port>` (port 1–65535) to
