@@ -60,28 +60,11 @@ function cardInColumn(page: Page, title: string, toColumn: string): Locator {
   return column(page, toColumn).getByRole("button", { name: `Open task ${title}`, exact: true });
 }
 
-/**
- * Mouse-drag a card by its grip handle into a column.
- *
- * Two races make this fiddly: dnd-kit's auto-scroll keeps scrolling while the
- * pointer rests in a scroll zone (which slides the columns out from under a
- * precomputed drop point), and focus-driven refetches can re-render — and
- * re-parent — the cards mid-interaction. So the drag parks the pointer
- * mid-viewport, measures, moves to the target and re-checks before releasing,
- * and each retry waits for the board to settle and for the drop to land.
- */
+/** Mouse-drag once by the grip, synchronizing on geometry rather than timed pauses. */
 export async function dragCardToColumn(page: Page, title: string, toColumn: string) {
-  const landed = cardInColumn(page, title, toColumn);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await settleBoard(page);
-    if ((await landed.count()) > 0) {
-      await expect(landed).toBeVisible();
-      return;
-    }
-    await dragOnce(page, title, toColumn);
-    if (await eventuallyVisible(landed)) return;
-  }
-  throw new Error(`could not drag "${title}" into "${toColumn}"`);
+  await settleBoard(page);
+  await dragOnce(page, title, toColumn);
+  await expect(cardInColumn(page, title, toColumn)).toBeVisible();
 }
 
 /** The board is not being refetched right now. */
@@ -89,20 +72,35 @@ export async function settleBoard(page: Page) {
   await expect(page.locator('img[aria-label="Refreshing"]')).toBeHidden();
 }
 
-async function eventuallyVisible(locator: Locator, timeout = 4_000): Promise<boolean> {
-  return await locator
-    .first()
-    .waitFor({ state: "visible", timeout })
-    .then(() => true)
-    .catch(() => false);
+/** Scroll/auto-scroll and layout transitions must stop moving the measured element. */
+async function waitForStableBox(locator: Locator) {
+  await locator.evaluate(
+    (el) =>
+      new Promise<void>((resolve) => {
+        let previous = el.getBoundingClientRect();
+        let stableFrames = 0;
+        const measure = () => {
+          const current = el.getBoundingClientRect();
+          stableFrames =
+            current.x === previous.x &&
+            current.y === previous.y &&
+            current.width === previous.width &&
+            current.height === previous.height
+              ? stableFrames + 1
+              : 0;
+          previous = current;
+          if (stableFrames >= 2) resolve();
+          else requestAnimationFrame(measure);
+        };
+        requestAnimationFrame(measure);
+      }),
+  );
 }
 
 async function dragOnce(page: Page, title: string, toColumn: string) {
   const handle = page.getByRole("button", { name: `Drag ${title}`, exact: true });
   await handle.scrollIntoViewIfNeeded();
-  // Let the scroll settle before measuring: pressing a stale box never
-  // activates the drag.
-  await page.waitForTimeout(350);
+  await waitForStableBox(handle);
   const from = await handle.boundingBox();
   const viewport = page.viewportSize();
   if (!from || !viewport) throw new Error("drag handle or viewport has no box");
@@ -110,42 +108,28 @@ async function dragOnce(page: Page, title: string, toColumn: string) {
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 8, { steps: 4 });
-
+  // Park outside auto-scroll's edge zones, then wheel the target into view.
+  // One pointer gesture stays active across the scroll, including on mobile.
+  await page.mouse.move(viewport.width / 2, viewport.height / 2, { steps: 4 });
   const target = column(page, toColumn);
-  for (let i = 0; i < 40; i += 1) {
-    // Park mid-viewport so auto-scroll settles before measuring the target.
-    await page.mouse.move(viewport.width / 2, viewport.height / 2, { steps: 4 });
-    await page.waitForTimeout(150);
-
-    const to = await target.boundingBox();
-    if (to) {
-      const dropX = to.x + to.width / 2;
-      const dropY = to.y + Math.min(to.height - 20, Math.max(56, to.height * 0.25));
-      const safe =
-        dropX > 8 && dropX < viewport.width - 8 && dropY > 110 && dropY < viewport.height - 130;
-      if (safe) {
-        await page.mouse.move(dropX, dropY, { steps: 8 });
-        await page.waitForTimeout(120);
-        const settled = await target.boundingBox();
-        const stillInside =
-          settled &&
-          dropX >= settled.x &&
-          dropX <= settled.x + settled.width &&
-          dropY >= settled.y &&
-          dropY <= settled.y + settled.height;
-        if (stillInside) {
-          await page.mouse.up();
-          return;
-        }
-        continue;
-      }
-      // Nudge toward the target so auto-scroll brings it into the safe zone.
-      const edge = to.y + to.height / 2 < viewport.height / 2 ? 80 : viewport.height - 80;
-      await page.mouse.move(viewport.width / 2, edge, { steps: 6 });
-    } else {
-      await page.mouse.move(viewport.width / 2, viewport.height - 80, { steps: 6 });
-    }
-    await page.waitForTimeout(250);
+  const heading = target.getByRole("heading", { name: toColumn, exact: true });
+  const initialHeading = await heading.boundingBox();
+  if (!initialHeading) throw new Error("target column heading has no box");
+  if (initialHeading.y < 110 || initialHeading.y > viewport.height - 200) {
+    const previousScroll = await page.evaluate(() => window.scrollY);
+    await page.mouse.wheel(0, initialHeading.y - 150);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).not.toBe(previousScroll);
   }
+  await waitForStableBox(target);
+  const to = await target.boundingBox();
+  if (!to) throw new Error("target column has no box");
+  const dropX = to.x + to.width / 2;
+  const dropY = Math.max(150, to.y + 64);
+  expect(dropX).toBeGreaterThan(8);
+  expect(dropX).toBeLessThan(viewport.width - 8);
+  expect(dropY).toBeGreaterThan(to.y);
+  expect(dropY).toBeLessThan(Math.min(to.y + to.height, viewport.height - 100));
+  await page.mouse.move(dropX, dropY, { steps: 8 });
+  await waitForStableBox(target);
   await page.mouse.up();
 }

@@ -32,7 +32,7 @@ test("scenario 8: a confirmed chat write is shown and not reverted by Save", asy
   await chat.locator("textarea").fill(`Set priority low for "${TASK}"`);
   await chat.locator("textarea").press("Enter");
 
-  await expect(chat.getByRole("button", { name: "Confirm" })).toBeVisible({ timeout: 15_000 });
+  await expect(chat.getByRole("button", { name: "Confirm" })).toBeVisible();
   await chat.getByRole("button", { name: "Confirm" }).click();
   await chat.getByRole("button", { name: "Close assistant" }).click();
   await expect(chat).toBeHidden();

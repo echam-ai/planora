@@ -235,7 +235,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         {send.isError && !isTextValidationError(send.error) && (
           <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
             The assistant didn't respond.{" "}
-            <button className="underline" onClick={() => send.reset()}>
+            <button className="min-h-11 min-w-11 underline" onClick={() => send.reset()}>
               Dismiss
             </button>
           </div>

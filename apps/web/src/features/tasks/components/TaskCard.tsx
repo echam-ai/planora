@@ -16,6 +16,7 @@ export function TaskCardContent({
   timezone,
   dragging,
   detailsId,
+  reserveDragHandle,
 }: {
   task: Task;
   timezone: string;
@@ -23,6 +24,7 @@ export function TaskCardContent({
   /** Id for the badge/meta block, so the wrapping button can reference it as its
    * accessible description. Omit for copies that must not add a duplicate id (drag overlay). */
   detailsId?: string;
+  reserveDragHandle?: boolean;
 }) {
   const state = getDeadlineState(task);
   return (
@@ -32,7 +34,14 @@ export function TaskCardContent({
         dragging && "rotate-1 shadow-lg",
       )}
     >
-      <h3 className="text-sm font-semibold leading-snug text-card-foreground">{task.title}</h3>
+      <h3
+        className={cn(
+          "text-sm font-semibold leading-snug text-card-foreground",
+          reserveDragHandle && "mr-12",
+        )}
+      >
+        {task.title}
+      </h3>
       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.content}</p>
       <div id={detailsId}>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -91,11 +100,16 @@ export function SortableTaskCard({
         aria-label={`Open task ${task.title}`}
         aria-describedby={taskCardDetailsId(task.id)}
       >
-        <TaskCardContent task={task} timezone={timezone} detailsId={taskCardDetailsId(task.id)} />
+        <TaskCardContent
+          task={task}
+          timezone={timezone}
+          detailsId={taskCardDetailsId(task.id)}
+          reserveDragHandle
+        />
       </button>
       <button
         type="button"
-        className="absolute right-2 top-2 flex h-11 w-8 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+        className="absolute right-2 top-2 flex h-11 w-11 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
         aria-label={`Drag ${task.title}`}
         {...attributes}
         {...listeners}

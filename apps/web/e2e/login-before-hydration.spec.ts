@@ -44,8 +44,9 @@ test.describe("forms typed into before hydration", () => {
     // also stops the browser's implicit (Enter) submission.
     await expect(page.getByRole("button", { name: "Sign in" })).toBeDisabled();
     await page.getByLabel("Password").press("Enter");
-    // Give a native submit its chance to navigate before scripts are released.
-    await page.waitForTimeout(500);
+    // The real key press has completed; observe that the disabled form kept us
+    // on the login page while scripts are still held, then allow hydration.
+    await expect(page).toHaveURL(/\/login$/);
     release();
     await expectHydrated(page, "#username");
 

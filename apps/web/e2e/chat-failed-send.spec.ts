@@ -15,7 +15,7 @@ test("a failed send keeps the typed text and shows the notice", async ({ page })
   await input.fill("What is overdue?");
   await input.press("Enter");
 
-  await expect(page.getByText("The assistant didn't respond.")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("The assistant didn't respond.")).toBeVisible();
   await expect(input).toHaveValue("What is overdue?");
   // Nothing was saved, so the conversation is still empty.
   await expect(page.getByText(/I never change anything without your confirmation/)).toBeVisible();
