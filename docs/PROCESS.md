@@ -35,7 +35,17 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 4. **Tester** runs the applicable checks below and verifies every automated criterion. PASS or FAIL.
 5. **PM accepts** (full lane) from the user's perspective: flow, copy, empty/loading/error states, accessibility, spec consistency.
 6. **Orchestrator commits** the reviewed state on the issue branch, using the subject the engineer proposed in its handoff, only after the lane's gates cover that exact state; then it merges and pushes. Re-dispatching an engineer only to run `git commit` costs a cold agent start and adds no review.
-7. **On-call** observes CI. Active when `.github/workflows/ci.yml` exists.
+7. **On-call** observes CI for the exact merge SHA. Active when `.github/workflows/ci.yml` exists; use the observation rules below.
+
+### CI observation
+
+The on-call agent is the sole observer. Match the run's `headSha` to the supplied merge SHA, then use one active blocking `gh run watch {RUN_ID} --repo hgiang/planora --interval 30 --exit-status` (use the interval flag where supported). No polling loop, duplicate watch or second watcher. A matched watch exiting 0 is PASS.
+
+A nonzero watch is not automatically failed CI. Record its exit/error and make one bounded `gh run view {RUN_ID} --repo hgiang/planora --json headSha,status,conclusion,jobs`. PASS requires this command to exit 0, the exact expected SHA, `status=completed`, `conclusion=success`, and no failed/cancelled/timed-out jobs. Report both the watcher error and authoritative terminal success; exit 0 alone is insufficient. Startup permission/transport errors may require standard approval escalation for this read-only check; preserve security and report the error.
+
+Confirmed terminal failure/cancellation/timeout or another non-success terminal conclusion goes through on-call diagnosis and the repair pipeline. Queued/in-progress, missing/mismatched or unretrievable results are pending, never green; do not reopen an issue solely because a watcher connection failed. If pending, the same observer may make a single terminal-status follow-up on orchestrator request, with no second watch or autonomous polling. A newer SHA requires a new handoff. Never rerun suites merely because observation transport failed.
+
+Repairs retain stage-aware checks and independent tester review (plus PM acceptance on the full lane) before orchestrator commit/merge/push. The original confirmed CI failure and a confirmed failure after the reviewed replacement merge are the two failed attempts; stop and report after the second. Transport errors and pending observations do not consume repair attempts. The canonical workflow and evidence handoff are in `.agents/oncall-engineer.md`.
 
 ## Agents
 
