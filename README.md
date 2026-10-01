@@ -79,12 +79,10 @@ scripts/run-local.sh
 This installs dependencies, applies migrations, then starts the API, the
 web dev server (in HTTP mode, regardless of `apps/web/.env`) and the
 archive scheduler, and prints the URL once the web app, API and API proxy
-respond successfully. Press `Ctrl-C` to stop all three cleanly.
+respond successfully. Follow [Stop local Planora](#stop-local-planora) below
+to shut down all three services.
 If a required port is occupied, launch fails before starting services. Stop
-the existing launcher with `Ctrl-C` in its terminal, then retry. If that
-terminal is gone, inspect the listeners with
-`lsof -nP -iTCP:8000 -iTCP:5173 -sTCP:LISTEN` (use your selected web port
-if overridden) and identify the owning process before stopping it.
+the existing launcher using the shutdown steps below, then retry.
 
 Optional overrides belong in `apps/api/.env`: set `APP_ORIGIN` to
 `http://localhost:<port>` or `http://127.0.0.1:<port>` (port 1–65535) to
@@ -113,6 +111,71 @@ Done tasks are archived only while the launcher is running: once at
 start, then again every hour. A task reaches its seven full days either
 while the launcher is up (archived within the hour) or is picked up at
 the next start.
+
+### Stop local Planora
+
+For a stack started with `scripts/run-local.sh`, press **Ctrl+C once in the
+original launcher terminal**. Wait for `planora: Stopped.` before closing
+that terminal. The launcher sends `SIGTERM` to all three service process
+groups (API, web dev server and archive scheduler), including their child
+processes. It allows a shutdown grace period of up to 10 seconds, then
+forcibly stops any groups still running with `SIGKILL`.
+
+**If the original terminal is gone**, open another terminal and find the
+launcher:
+
+```sh
+pgrep -fl 'run-local[.]sh'
+```
+
+Identify the launcher for your Planora checkout in the output. Replace the
+example PID `12345` below with that launcher's actual PID, then send it
+`SIGTERM` to trigger the same shutdown sequence:
+
+```sh
+kill -TERM 12345
+```
+
+Allow the grace period to finish, then check the ports as shown below.
+
+**If no launcher remains and port 8000 is still occupied**, inspect its
+listener:
+
+```sh
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+```
+
+Take the listener's PID from the output. Replace the example PID `23456`
+in both commands below with that actual PID. First inspect the process:
+
+```sh
+ps -p 23456 -o pid,ppid,command
+```
+
+Confirm that the command belongs to Planora's API (for example, it includes
+`uvicorn planora_api.main:create_app` and your checkout's API environment).
+Only after confirming it is Planora, send `SIGTERM` to that specific PID:
+
+```sh
+kill -TERM 23456
+```
+
+Do not kill every matching process or an unidentified listener. Without the
+launcher, stopping the API alone does not stop the web server or scheduler;
+identify and confirm any remaining Planora processes before stopping their
+specific PIDs.
+
+**Verify the ports are free** before restarting:
+
+```sh
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+lsof -nP -iTCP:5173 -sTCP:LISTEN
+```
+
+No listener output means those ports are free. If you set a custom web port
+through `APP_ORIGIN` in `apps/api/.env`, replace `5173` in the second command
+with that port; the API still uses `8000`. If a listener remains, inspect and
+confirm its owning process before sending any signal.
 
 ## Project documents
 
