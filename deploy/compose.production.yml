@@ -1,0 +1,16 @@
+# Always combine with compose.yml. Setup HTTP remains the base-only mode.
+services:
+  caddy:
+    environment:
+      PLANORA_DOMAIN: ${PLANORA_DOMAIN:?Set the production FQDN without scheme or port}
+    ports: !override
+      - "${CADDY_BIND_ADDRESS:?Set public bind address}:80:80"
+      - "${CADDY_BIND_ADDRESS:?Set public bind address}:443:443"
+    volumes:
+      - ./Caddyfile.production:/etc/caddy/Caddyfile:ro
+  api:
+    environment:
+      APP_ORIGIN: https://${PLANORA_DOMAIN:?Set the production FQDN without scheme or port}
+  scheduler:
+    environment:
+      APP_ORIGIN: https://${PLANORA_DOMAIN:?Set the production FQDN without scheme or port}

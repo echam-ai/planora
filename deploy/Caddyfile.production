@@ -1,0 +1,9 @@
+{
+	admin off
+}
+
+# A public FQDN enables Caddy's automatic ACME issuance, renewal, and redirects.
+# No manual certificate files and no production test-CA override.
+{$PLANORA_DOMAIN} {
+	import /etc/caddy/Caddyfile.routes
+}

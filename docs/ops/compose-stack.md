@@ -3,7 +3,7 @@
 This stack runs Caddy, the #42 web/API images, the existing hourly scheduler,
 PostgreSQL 17, and a real daily backup worker. Run commands from the repository
 root. Plain HTTP is for loopback/setup checks only; regular public access needs
-#46's domain/HTTPS configuration. Caddy alone publishes a port. API, web, and
+[the production domain/HTTPS configuration](deploy.md). Caddy alone publishes a port. API, web, and
 workers have no host port bindings, and PostgreSQL uses an internal data network.
 The proxy bridge allows the API to contact its configured LLM endpoint.
 
