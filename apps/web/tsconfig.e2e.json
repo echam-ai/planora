@@ -5,6 +5,7 @@
     "e2e-http/**/*.ts",
     "playwright.config.ts",
     "playwright.http.config.ts",
+    "playwright.compose.config.ts",
     "vitest.config.ts"
   ],
   "compilerOptions": {

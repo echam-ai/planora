@@ -14,6 +14,7 @@ const WEB_SERVER_TIMEOUT_MS = 30_000;
 
 export default defineConfig({
   testDir: "./e2e-http",
+  testIgnore: "compose.spec.ts",
   fullyParallel: false,
   workers: 1,
   reporter: "html",
