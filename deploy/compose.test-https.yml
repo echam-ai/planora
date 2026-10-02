@@ -1,0 +1,15 @@
+# Disposable loopback fixture only. Never combine this overlay with production.
+# .localhost uses Caddy's automatically managed local CA, not public ACME.
+services:
+  caddy:
+    environment:
+      PLANORA_DOMAIN: planora.localhost
+    ports: !override
+      - "127.0.0.1:${PLANORA_TLS_HTTP_PORT:-18046}:80"
+      - "127.0.0.1:${PLANORA_TLS_HTTPS_PORT:-18446}:443"
+  api:
+    environment:
+      APP_ORIGIN: https://planora.localhost
+  scheduler:
+    environment:
+      APP_ORIGIN: https://planora.localhost

@@ -15,6 +15,9 @@ services:
       - "${CADDY_BIND_ADDRESS:?Set bind address}:${CADDY_HTTP_PORT:?Set HTTP port}:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.routes:/etc/caddy/Caddyfile.routes:ro
+      - caddy-data:/data
+      - caddy-config:/config
     networks:
       proxy:
         ipv4_address: ${CADDY_IP:?Set Caddy peer IP in PROXY_SUBNET}
@@ -114,3 +117,5 @@ networks:
 volumes:
   postgres-data:
   backups:
+  caddy-data:
+  caddy-config:
