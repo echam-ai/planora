@@ -1,7 +1,7 @@
 """Integration tests for the `app_user`, `auth_session` and `login_failure`
 tables and their Alembic revision (issue #25).
 
-Every test here uses `migrated_session_factory`/`migrated_db_path` (see
+Every test here uses `migrated_session_factory`/`migrated_database_url` (see
 `conftest.py`), which apply the Alembic migration to a disposable SQLite
 file under the repo's `.tmp/` — never `metadata.create_all` and never
 `pytest`'s `tmp_path` — so these exercise exactly what
@@ -11,7 +11,6 @@ file under the repo's `.tmp/` — never `metadata.create_all` and never
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
 from alembic.config import Config
@@ -28,8 +27,8 @@ _EXPECTED_AUTH_SESSION_COLUMNS = {"token_digest", "created_at", "expires_at"}
 _EXPECTED_LOGIN_FAILURE_COLUMNS = {"id", "client_ip", "failed_at"}
 
 
-def test_upgrade_head_creates_all_three_auth_tables(migrated_db_path: Path) -> None:
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+def test_upgrade_head_creates_all_three_auth_tables(migrated_database_url: str) -> None:
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
     table_names = set(inspector.get_table_names())
 
@@ -48,17 +47,17 @@ def test_upgrade_head_creates_all_three_auth_tables(migrated_db_path: Path) -> N
 
 
 def test_downgrade_then_upgrade_recreates_the_auth_tables(
-    migrated_db_path: Path, alembic_config: Config
+    migrated_database_url: str, alembic_config: Config
 ) -> None:
     command.downgrade(alembic_config, "7c8527c2816c")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     table_names = set(inspect(engine).get_table_names())
     assert not {"app_user", "auth_session", "login_failure"} & table_names
     assert "task" in table_names  # the prior revision's table is untouched
     engine.dispose()
 
     command.upgrade(alembic_config, "head")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     table_names = set(inspect(engine).get_table_names())
     assert {"app_user", "auth_session", "login_failure"} <= table_names
     engine.dispose()
