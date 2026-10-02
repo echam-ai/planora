@@ -4,6 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from planora_api.config import load_settings
+from planora_api.db.migration_compat import historical_postgresql_checks
 from planora_api.db.models import Base
 
 # this is the Alembic Config object, which provides
@@ -31,7 +32,9 @@ target_metadata = Base.metadata
 # The database URL comes from `Settings.database_url` (planora_api/config.py,
 # fixed by #21) — never from `sqlalchemy.url` in alembic.ini. This is the
 # only place besides `db/session.py` that names the database.
-config.set_main_option("sqlalchemy.url", load_settings().database_url)
+# ConfigParser treats '%' as interpolation syntax; URL-encoded credentials
+# contain literal percent signs. Escape for storage; reads recover the URL.
+config.set_main_option("sqlalchemy.url", load_settings().database_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
@@ -78,7 +81,8 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+with historical_postgresql_checks():
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()

@@ -1,0 +1,116 @@
+x-api-environment: &api-environment
+  DATABASE_URL: ${DATABASE_URL:?Set postgresql+psycopg://...@db:5432/...}
+  SESSION_SECRET: ${SESSION_SECRET:?Set an explicit session secret}
+  LLM_API_KEY: ${LLM_API_KEY:?Set an explicit LLM key (fake for smoke)}
+  LLM_BASE_URL: ${LLM_BASE_URL:?Set the OpenAI-compatible LLM endpoint}
+  LLM_MODEL: ${LLM_MODEL:?Set the model}
+  APP_ORIGIN: ${APP_ORIGIN:?Set the browser-facing origin}
+  DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:?Set an IANA timezone}
+
+services:
+  caddy:
+    image: caddy:2.11.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${CADDY_BIND_ADDRESS:?Set bind address}:${CADDY_HTTP_PORT:?Set HTTP port}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      proxy:
+        ipv4_address: ${CADDY_IP:?Set Caddy peer IP in PROXY_SUBNET}
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
+  web:
+    image: planora-web:${IMAGE_TAG:-local}
+    build:
+      context: ../apps/web
+    restart: unless-stopped
+    networks: [proxy]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/health').then(async r => {if (!r.ok || (await r.json()).status !== 'ok') process.exit(1)}).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+
+  api:
+    image: planora-api:${IMAGE_TAG:-local}
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    environment: *api-environment
+    command: [uvicorn, "planora_api.main:create_app", --factory, --host, 0.0.0.0, --port, "8000", --proxy-headers, --forwarded-allow-ips, "${CADDY_IP:?Set Caddy peer IP}"]
+    networks: [proxy, data]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    image: planora-api:${IMAGE_TAG:-local}
+    build:
+      context: ../apps/api
+    restart: unless-stopped
+    environment: *api-environment
+    command: [python, -m, planora_api.jobs.scheduler]
+    healthcheck:
+      disable: true
+    networks: [data]
+    stop_grace_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set database name}
+      POSTGRES_USER: ${POSTGRES_USER:?Set database user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backup:
+    image: planora-backup:${IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: backup.Dockerfile
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: ${POSTGRES_DB:?Set database name}
+      PGUSER: ${POSTGRES_USER:?Set database user}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set database password}
+      DEFAULT_TIMEZONE: ${DEFAULT_TIMEZONE:?Set an IANA timezone}
+    volumes:
+      - backups:/backups
+    networks: [data]
+    stop_grace_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+networks:
+  # Non-published bridge permits the API's outbound LLM requests. Caddy has
+  # one fixed peer address, so uvicorn never trusts the entire network.
+  proxy:
+    ipam:
+      config:
+        - subnet: ${PROXY_SUBNET:?Set an unused private proxy subnet}
+          ip_range: ${PROXY_DYNAMIC_RANGE:?Set a dynamic pool excluding CADDY_IP}
+  data:
+    internal: true
+
+volumes:
+  postgres-data:
+  backups:
