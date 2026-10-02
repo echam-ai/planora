@@ -1,3 +1,5 @@
+import { ApiError } from "@/types";
+
 export const AI_TEXT_LIMIT = 4000;
 
 function isApiWhitespace(character: string): boolean {
@@ -18,4 +20,13 @@ export function trimApiText(text: string): string {
 /** Match Python len after stripping, rather than counting UTF-16 code units. */
 export function countTrimmedCodePoints(text: string): number {
   return [...trimApiText(text)].length;
+}
+
+/** True when the API rejected the request because its `text` field failed validation. */
+export function isTextValidationError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.code === "VALIDATION_ERROR" &&
+    !!error.details?.some((detail) => detail.field === "text")
+  );
 }

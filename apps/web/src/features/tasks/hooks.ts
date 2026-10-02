@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { qk } from "@/shared/queryKeys";
-import type { TaskDraft, TaskStatus } from "@/types";
+import type { Task, TaskDraft, TaskStatus } from "@/types";
 
 export const useTasks = () => useQuery({ queryKey: qk.tasks, queryFn: () => api.listTasks() });
 
@@ -23,15 +23,16 @@ export const useArchivedTask = (id: string | null) =>
 
 export function useTaskMutations() {
   const qc = useQueryClient();
-  const invalidate = () => {
-    qc.invalidateQueries({ queryKey: qk.tasks });
-    qc.invalidateQueries({ queryKey: ["archive"] });
-  };
+  const invalidateTasks = () => qc.invalidateQueries({ queryKey: qk.tasks });
+  // move/reorder already return the full ordered active task list.
+  const setTasks = (tasks: Task[]) => qc.setQueryData(qk.tasks, tasks);
+  // Only restore and purge change what the archive holds.
+  const invalidateArchive = () => qc.invalidateQueries({ queryKey: qk.archiveAll });
 
   return {
     create: useMutation({
       mutationFn: (draft: TaskDraft) => api.createTask(draft),
-      onSuccess: invalidate,
+      onSuccess: invalidateTasks,
     }),
     update: useMutation({
       mutationFn: ({
@@ -41,9 +42,12 @@ export function useTaskMutations() {
         id: string;
         patch: Partial<TaskDraft> & { status?: TaskStatus };
       }) => api.updateTask(id, patch),
-      onSuccess: invalidate,
+      onSuccess: invalidateTasks,
     }),
-    remove: useMutation({ mutationFn: (id: string) => api.deleteTask(id), onSuccess: invalidate }),
+    remove: useMutation({
+      mutationFn: (id: string) => api.deleteTask(id),
+      onSuccess: invalidateTasks,
+    }),
     move: useMutation({
       mutationFn: ({
         id,
@@ -54,20 +58,23 @@ export function useTaskMutations() {
         status: TaskStatus;
         position: number;
       }) => api.moveTask(id, status, position),
-      onSuccess: invalidate,
+      onSuccess: setTasks,
     }),
     reorder: useMutation({
       mutationFn: ({ status, orderedIds }: { status: TaskStatus; orderedIds: string[] }) =>
         api.reorderTasks(status, orderedIds),
-      onSuccess: invalidate,
+      onSuccess: setTasks,
     }),
     restore: useMutation({
       mutationFn: (id: string) => api.restoreTask(id),
-      onSuccess: invalidate,
+      onSuccess: () => {
+        invalidateTasks();
+        invalidateArchive();
+      },
     }),
     purge: useMutation({
       mutationFn: (id: string) => api.permanentlyDeleteTask(id),
-      onSuccess: invalidate,
+      onSuccess: invalidateArchive,
     }),
   };
 }

@@ -58,3 +58,25 @@ def local_wall_clock_to_utc(local_dt: datetime, timezone_name: str) -> datetime:
     zone = ZoneInfo(timezone_name)
     aware = local_dt.replace(tzinfo=zone, fold=0)
     return aware.astimezone(UTC)
+
+
+def validate_deadline_string(value: str | None) -> str | None:
+    """Pass `None` or a well-formed local deadline string through; raise a
+    `ValueError` (the message pydantic validators surface) otherwise."""
+    if value is None:
+        return None
+    try:
+        parse_local_wall_clock(value)
+    except ValueError as exc:
+        raise ValueError(
+            "deadline must be a real calendar YYYY-MM-DD or YYYY-MM-DDTHH:MM value"
+        ) from exc
+    return value
+
+
+def resolve_deadline(deadline: str | None, timezone_name: str) -> datetime | None:
+    """`None` for no deadline; otherwise the UTC instant of the local
+    wall-clock `deadline` in `timezone_name` (a bare date means 23:59)."""
+    if deadline is None:
+        return None
+    return local_wall_clock_to_utc(parse_local_wall_clock(deadline), timezone_name)

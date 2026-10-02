@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettings } from "@/features/settings/hooks";
+import { categoryOptions, priorityOptions } from "@/features/tasks/labels";
 import { uid } from "@/lib/id";
 import { MarkdownPreview } from "@/lib/markdown";
 import {
@@ -25,8 +26,6 @@ import {
   emptyDraft,
   draftToValues,
   valuesToDraft,
-  zonedDateTimeToIso,
-  toZonedDateTime,
 } from "@/features/tasks/formMapping";
 import { taskFormSchema, type TaskFormValues } from "@/shared/domain/task";
 import type { TaskCategory, TaskDraft, TaskPriority, TaskStatus } from "@/types";
@@ -182,10 +181,11 @@ function TaskFormFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="work">Work</SelectItem>
-              <SelectItem value="personal">Personal</SelectItem>
-              <SelectItem value="study">Study</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
+              {categoryOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -202,9 +202,11 @@ function TaskFormFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
+              {priorityOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

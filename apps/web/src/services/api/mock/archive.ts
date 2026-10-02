@@ -1,12 +1,6 @@
 import { ApiError } from "@/types";
 import type { ApiClient, ArchivePage } from "../ApiClient";
-import { KEYS, delay, ensureTasks, normalisePositions, nowIso, read, saveTasks } from "./store";
-
-function maybeFail(action: string) {
-  if (read<boolean>(KEYS.forceError, false)) {
-    throw new ApiError("SIMULATED_FAILURE", `Simulated failure while trying to ${action}.`);
-  }
-}
+import { delay, ensureTasks, maybeFail, normalisePositions, nowIso, saveTasks } from "./store";
 
 export function createArchiveClient(): Pick<
   ApiClient,

@@ -30,6 +30,8 @@ class ErrorResponse(BaseModel):
 
 ERROR_RESPONSE = {"model": ErrorResponse, "description": "API error envelope"}
 VALIDATION_RESPONSE = {"model": ErrorResponse, "description": "Invalid request fields"}
+AUTH_RESPONSES = {401: ERROR_RESPONSE}
+WRITE_RESPONSES = {**AUTH_RESPONSES, 403: ERROR_RESPONSE}
 
 
 class ApiError(Exception):
@@ -42,6 +44,11 @@ class ApiError(Exception):
         self.message = message
         self.field = field
         self.headers = headers or {}
+
+
+def not_found(message: str) -> ApiError:
+    """The standard `404 NOT_FOUND` envelope with a caller-specific message."""
+    return ApiError(404, "NOT_FOUND", message)
 
 
 _STATUS_ERRORS: dict[int, tuple[str, str]] = {

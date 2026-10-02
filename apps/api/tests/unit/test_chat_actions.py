@@ -97,7 +97,7 @@ def test_changed_update_keys_preserves_fixed_field_order() -> None:
 
 def test_update_fields_formats_category_and_priority_labels() -> None:
     proposed = {"category": "personal", "priority": "high"}
-    fields = chat_actions.update_fields(current=_CURRENT, proposed=proposed, timezone_name=TZ)
+    fields = chat_actions.update_fields(current=_CURRENT, proposed=proposed)
     by_label = {f.label: f for f in fields}
     assert by_label["Category"].from_value == "Work"
     assert by_label["Category"].to_value == "Personal"
@@ -106,7 +106,7 @@ def test_update_fields_formats_category_and_priority_labels() -> None:
 
 
 def test_update_fields_empty_when_no_change() -> None:
-    assert chat_actions.update_fields(current=_CURRENT, proposed={}, timezone_name=TZ) == []
+    assert chat_actions.update_fields(current=_CURRENT, proposed={}) == []
 
 
 # --- move_field / schedule_field -----------------------------------------------

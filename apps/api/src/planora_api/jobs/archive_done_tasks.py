@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from planora_api.config import ConfigurationError, load_settings
 from planora_api.db import task_repository
 from planora_api.db.models import Task, TaskStatus
-from planora_api.db.session import create_session_factory
+from planora_api.db.session import create_session_factory, session_scope
 from planora_api.domain.archive_policy import is_eligible_for_archive
 from planora_api.logging import configure_logging
 
@@ -112,8 +112,7 @@ def archive_done_tasks(
         raise ValueError("now must be a timezone-aware datetime, not a naive one")
 
     started = time.perf_counter()
-    session = session_factory()
-    try:
+    with session_scope(session_factory) as session:
         candidates = task_repository.list_done_unarchived_tasks(session)
         # Extract plain values now, while they're fresh — `session.commit()`
         # just below expires every loaded ORM object (`expire_on_commit=
@@ -138,12 +137,7 @@ def archive_done_tasks(
         for task_id, completed_at in eligible:
             if _archive_one(session, task_id, completed_at, now):
                 archived_count += 1
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+        # `session_scope` commits this write phase on a clean exit.
 
     duration_ms = round((time.perf_counter() - started) * 1000, 3)
     logger.info(

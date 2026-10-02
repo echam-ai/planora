@@ -1,6 +1,6 @@
 import { ApiError, type AppSettings, type Session } from "@/types";
 import type { ApiClient } from "../ApiClient";
-import { KEYS, delay, ensureTasks, hasWindow, nowIso, read, write } from "./store";
+import { KEYS, delay, ensureTasks, hasWindow, maybeFail, nowIso, read, write } from "./store";
 
 const AVAILABLE_MODELS = ["kimi-k3"];
 const DEFAULT_MODEL = "kimi-k3";
@@ -61,9 +61,7 @@ export function createAuthClient(): Pick<
     },
     async updateSettings(patch) {
       await delay();
-      if (read<boolean>(KEYS.forceError, false)) {
-        throw new ApiError("SIMULATED_FAILURE", "Simulated failure while trying to save settings.");
-      }
+      maybeFail("save settings");
       const modelName = patch.modelName?.trim();
       if (modelName !== undefined && !AVAILABLE_MODELS.includes(modelName)) {
         throw new ApiError("VALIDATION_ERROR", "Choose one of the available models.");

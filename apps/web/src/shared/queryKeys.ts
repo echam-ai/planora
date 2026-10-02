@@ -7,6 +7,7 @@ export const qk = {
   session: ["session"] as const,
   settings: ["settings"] as const,
   tasks: ["tasks"] as const,
+  archiveAll: ["archive"] as const,
   archive: (search: string, page: number) => ["archive", search, page] as const,
   archivedTask: (id: string) => ["archive", "task", id] as const,
   conversation: ["conversation"] as const,

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -35,7 +35,7 @@ from planora_api.ai.prompts import (
     build_parse_task_user_message,
 )
 from planora_api.db.models import TaskCategory, TaskPriority
-from planora_api.domain.local_time import local_wall_clock_to_utc
+from planora_api.domain.local_time import resolve_deadline, validate_deadline_string
 
 # spec §6.2: "Generated short title when no clear title exists", truncated
 # at 120 characters when the model's own title runs longer.
@@ -44,22 +44,6 @@ _TITLE_MAX_LENGTH = 120
 _LABEL_MAX_LENGTH = 200
 
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
-
-_DATE_ONLY_FORMAT = "%Y-%m-%d"
-_DATE_TIME_FORMAT = "%Y-%m-%dT%H:%M"
-# A bare date means end of day local time (pinned at grooming; spec gives
-# no other rule for "by Friday" with no time).
-_END_OF_DAY = time(23, 59)
-
-
-def _parse_local_datetime(value: str) -> datetime:
-    """Raises `ValueError` for anything not exactly `YYYY-MM-DD` or
-    `YYYY-MM-DDTHH:MM`, including a calendar-impossible date/time
-    (`strptime` itself rejects e.g. `2026-02-30` or hour `25`)."""
-    if "T" in value:
-        return datetime.strptime(value, _DATE_TIME_FORMAT)  # noqa: DTZ007 - deliberately naive local wall-clock
-    date_only = datetime.strptime(value, _DATE_ONLY_FORMAT)  # noqa: DTZ007 - deliberately naive local wall-clock
-    return datetime.combine(date_only.date(), _END_OF_DAY)
 
 
 class _ParsedUrl(BaseModel):
@@ -87,15 +71,7 @@ class _ParsedTaskOutput(BaseModel):
     @field_validator("deadline")
     @classmethod
     def _deadline_is_a_real_local_timestamp(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        try:
-            _parse_local_datetime(value)
-        except ValueError as exc:
-            raise ValueError(
-                "deadline must be a real calendar YYYY-MM-DD or YYYY-MM-DDTHH:MM value"
-            ) from exc
-        return value
+        return validate_deadline_string(value)
 
 
 @dataclass(frozen=True)
@@ -160,16 +136,6 @@ def filter_urls(parsed_urls: list[_ParsedUrl], text: str) -> list[dict[str, str 
             label = stripped_label or None
         result.append({"url": url, "label": label})
     return result
-
-
-def resolve_deadline(deadline: str | None, timezone_name: str) -> datetime | None:
-    """`None` if the model gave no deadline; otherwise the UTC instant for
-    the model's local wall-clock value, via `domain.local_time` (a bare
-    date means 23:59 local — see `_END_OF_DAY`)."""
-    if deadline is None:
-        return None
-    local_dt = _parse_local_datetime(deadline)
-    return local_wall_clock_to_utc(local_dt, timezone_name)
 
 
 def _response_format() -> dict[str, object]:

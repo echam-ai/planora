@@ -27,7 +27,13 @@ from planora_api.api.deps import (
 from planora_api.config import Settings
 from planora_api.db import auth_repository, settings_repository
 from planora_api.db.models import AuthSession
-from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE, ApiError
+from planora_api.errors import (
+    AUTH_RESPONSES,
+    ERROR_RESPONSE,
+    VALIDATION_RESPONSE,
+    WRITE_RESPONSES,
+    ApiError,
+)
 from planora_api.schemas.settings import (
     PasswordChangeRequest,
     SettingsResponse,
@@ -40,9 +46,8 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 _WRONG_PASSWORD_MESSAGE = "The current password is incorrect."
 
-_AUTH_RESPONSES = {401: ERROR_RESPONSE}
-_WRITE_RESPONSES = {**_AUTH_RESPONSES, 403: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
-_PASSWORD_RESPONSES = {**_WRITE_RESPONSES, 400: ERROR_RESPONSE}
+_VALIDATED_WRITE_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
+_PASSWORD_RESPONSES = {**_VALIDATED_WRITE_RESPONSES, 400: ERROR_RESPONSE}
 
 
 def _effective_response(db: DbSession, settings: Settings) -> SettingsResponse:
@@ -54,7 +59,7 @@ def _effective_response(db: DbSession, settings: Settings) -> SettingsResponse:
     )
 
 
-@router.get("", response_model=SettingsResponse, responses=_AUTH_RESPONSES)
+@router.get("", response_model=SettingsResponse, responses=AUTH_RESPONSES)
 def read_settings(
     db: DbSession,
     settings: Annotated[Settings, Depends(get_settings)],
@@ -63,7 +68,7 @@ def read_settings(
     return _effective_response(db, settings)
 
 
-@router.patch("", response_model=SettingsResponse, responses=_WRITE_RESPONSES)
+@router.patch("", response_model=SettingsResponse, responses=_VALIDATED_WRITE_RESPONSES)
 def update_settings(
     body: SettingsUpdate,
     db: DbSession,

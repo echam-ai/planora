@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from planora_api.db.models import Task, TaskStatus
 from planora_api.domain import ordering
 from planora_api.domain.completion import resolve_completed_at
-from planora_api.schemas.task import TaskCreate, TaskMove, TaskUpdate
+from planora_api.schemas.task import TaskCreate, TaskMove, TaskReorder, TaskUpdate
 
 # Board column order (spec §7.1): Todo, In Progress, Done. Used only to
 # order `list_active_tasks`'s single flat list; a query scoped to one status
@@ -109,7 +109,7 @@ def delete_task(db: Session, task: Task) -> None:
 # --- Shared write path: create, update, move (issue #28, #29, #41) ---------
 
 
-def _apply_column_changes(
+def apply_column_changes(
     changes: dict[uuid.UUID, float], others_by_id: dict[uuid.UUID, Task]
 ) -> None:
     """Write every position `ordering` returned back onto the loaded ORM
@@ -120,16 +120,44 @@ def _apply_column_changes(
             other.position = position
 
 
+def _move_to_other_column(
+    db: Session, task: Task, new_status: TaskStatus, index: int | None
+) -> None:
+    """Move `task` out of its current column into `new_status` at `index`
+    (`None` appends), writing every resulting position and `task.status`.
+    Raises `ValueError` for a bad `index` (from `ordering.move_to_column`)."""
+    source = [
+        (t.id, t.position) for t in list_active_tasks_by_status(db, task.status)
+    ]
+    target_tasks = list_active_tasks_by_status(db, new_status, exclude_id=task.id)
+    target = [(t.id, t.position) for t in target_tasks]
+    changes = ordering.move_to_column(
+        source, target, task.id, len(target) if index is None else index
+    )
+    task.position = changes[task.id]
+    # `target_tasks` excludes `task`, so its own entry is skipped by lookup.
+    apply_column_changes(changes, {t.id: t for t in target_tasks})
+    task.status = new_status
+
+
+def _append_to_column(db: Session, status: TaskStatus, task_id: uuid.UUID) -> float:
+    """Position for `task_id` appended to the end of `status`'s active
+    column; shifts the column's other rows if `ordering` says so. The task
+    is not (yet) a member of the column — a new or restored task."""
+    column_tasks = list_active_tasks_by_status(db, status)
+    target = [(t.id, t.position) for t in column_tasks]
+    changes = ordering.move_to_column([(task_id, 0.0)], target, task_id, len(target))
+    apply_column_changes(changes, {t.id: t for t in column_tasks})
+    return changes[task_id]
+
+
 def create_task_from_request(db: Session, body: TaskCreate, now: datetime) -> Task:
     """`POST /tasks`'s full create logic (spec §6.1 defaults): appends to
     the end of `body.status`'s column (Todo by default — issue #41's
     chat-created tasks rely on this same default) and resolves
     `completed_at` through the one shared rule."""
     task_id = uuid.uuid4()
-
-    column_tasks = list_active_tasks_by_status(db, body.status)
-    target = [(task.id, task.position) for task in column_tasks]
-    changes = ordering.move_to_column([(task_id, 0.0)], target, task_id, len(target))
+    position = _append_to_column(db, body.status, task_id)
 
     task = Task(
         id=task_id,
@@ -141,7 +169,7 @@ def create_task_from_request(db: Session, body: TaskCreate, now: datetime) -> Ta
         deadline_at=body.deadline_at,
         urls=[url.model_dump() for url in body.urls],
         markdown_note=body.markdown_note,
-        position=changes[task_id],
+        position=position,
         created_at=now,
         updated_at=now,
         completed_at=resolve_completed_at(
@@ -152,9 +180,30 @@ def create_task_from_request(db: Session, body: TaskCreate, now: datetime) -> Ta
         ),
         archived_at=None,
     )
-    _apply_column_changes(changes, {t.id: t for t in column_tasks})
 
     return create_task(db, task)
+
+
+def restore_archived_task(db: Session, task: Task, now: datetime) -> Task:
+    """Restore an archived `task` to the end of the active Todo column
+    (spec §9.2): clears `completed_at` and `archived_at`."""
+    task.position = _append_to_column(db, TaskStatus.TODO, task.id)
+    task.status = TaskStatus.TODO
+    task.completed_at = None
+    task.archived_at = None
+    task.updated_at = now
+    db.flush()
+    return task
+
+
+def apply_task_reorder(db: Session, body: TaskReorder) -> None:
+    """`POST /tasks/reorder`'s write-back: re-position one column to
+    `body.ordered_ids`. Raises `ValueError` for a stale/invalid id list."""
+    column_tasks = list_active_tasks_by_status(db, body.status)
+    column = [(t.id, t.position) for t in column_tasks]
+    changes = ordering.reorder_column(column, body.ordered_ids)
+    apply_column_changes(changes, {t.id: t for t in column_tasks})
+    db.flush()
 
 
 def apply_task_update(db: Session, task: Task, body: TaskUpdate, now: datetime) -> Task:
@@ -185,20 +234,7 @@ def apply_task_update(db: Session, task: Task, body: TaskUpdate, now: datetime) 
         assert new_status is not None  # rejected as null by the schema
 
         if new_status != previous_status:
-            source = [
-                (t.id, t.position)
-                for t in list_active_tasks_by_status(db, previous_status)
-            ]
-            target_tasks = list_active_tasks_by_status(
-                db, new_status, exclude_id=task.id
-            )
-            target = [(t.id, t.position) for t in target_tasks]
-            changes = ordering.move_to_column(source, target, task.id, len(target))
-            by_id = {t.id: t for t in target_tasks}
-            task.position = changes[task.id]
-            _apply_column_changes(
-                {k: v for k, v in changes.items() if k != task.id}, by_id
-            )
+            _move_to_other_column(db, task, new_status, None)
 
         task.completed_at = resolve_completed_at(
             new_status=new_status,
@@ -206,7 +242,6 @@ def apply_task_update(db: Session, task: Task, body: TaskUpdate, now: datetime) 
             previous_completed_at=task.completed_at,
             now=now,
         )
-        task.status = new_status
 
     task.updated_at = now
     db.flush()
@@ -228,19 +263,9 @@ def apply_task_move(db: Session, task: Task, body: TaskMove, now: datetime) -> T
         column_tasks = list_active_tasks_by_status(db, previous_status)
         column = [(t.id, t.position) for t in column_tasks]
         changes = ordering.reorder_within_column(column, task.id, body.index)
-        _apply_column_changes(changes, {t.id: t for t in column_tasks})
+        apply_column_changes(changes, {t.id: t for t in column_tasks})
     else:
-        source_tasks = list_active_tasks_by_status(db, previous_status)
-        source = [(t.id, t.position) for t in source_tasks]
-        target_tasks = list_active_tasks_by_status(db, new_status, exclude_id=task.id)
-        target = [(t.id, t.position) for t in target_tasks]
-        changes = ordering.move_to_column(source, target, task.id, body.index)
-        by_id = {t.id: t for t in target_tasks}
-        task.position = changes[task.id]
-        _apply_column_changes(
-            {k: v for k, v in changes.items() if k != task.id}, by_id
-        )
-        task.status = new_status
+        _move_to_other_column(db, task, new_status, body.index)
 
     task.completed_at = resolve_completed_at(
         new_status=new_status,

@@ -17,15 +17,9 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from planora_api.db.models import TaskCategory, TaskPriority, TaskStatus
+from planora_api.schemas.common import non_blank
 
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
-
-
-def _non_blank(value: str, field_name: str) -> str:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"{field_name} must not be blank")
-    return stripped
 
 
 def _to_utc(value: datetime | None) -> datetime | None:
@@ -78,7 +72,7 @@ class TaskCreate(BaseModel):
     @field_validator("title", "content")
     @classmethod
     def _required_non_blank(cls, value: str, info: Any) -> str:
-        return _non_blank(value, info.field_name)
+        return non_blank(value, info.field_name)
 
     @field_validator("deadline_at")
     @classmethod
@@ -120,7 +114,7 @@ class TaskUpdate(BaseModel):
     def _not_null_and_non_blank(cls, value: str | None, info: Any) -> str:
         if value is None:
             raise ValueError(f"{info.field_name} must not be null")
-        return _non_blank(value, info.field_name)
+        return non_blank(value, info.field_name)
 
     @field_validator("markdown_note", "status", "category", "priority", "urls")
     @classmethod

@@ -174,6 +174,27 @@ describe("mock API client characterization", () => {
     mockDevTools.setErrorMode(false);
   });
 
+  it("orders archived tasks without a completion date by archive date and rejects restoring a missing task", async () => {
+    const archived = ["a", "b"].map((id, index) => ({
+      ...draft,
+      id,
+      status: "done" as const,
+      position: index,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-01T00:00:00.000Z",
+      completedAt: null,
+      archivedAt: `2026-09-0${index + 1}T00:00:00.000Z`,
+    }));
+    window.localStorage.setItem("planora.tasks", JSON.stringify(archived));
+    const page = await resolve(mockApiClient.listArchive());
+    expect(page.items.map((task) => task.id)).toEqual(["b", "a"]);
+    await expectApiError(
+      mockApiClient.restoreTask("missing"),
+      "NOT_FOUND",
+      "That archived task no longer exists.",
+    );
+  });
+
   it("preserves parsing, chat proposal, confirmation, rejection, and failure behavior", async () => {
     const before = await resolve(mockApiClient.listTasks());
     const preview = await resolve(

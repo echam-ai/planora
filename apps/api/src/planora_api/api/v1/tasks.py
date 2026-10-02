@@ -22,8 +22,14 @@ from fastapi import APIRouter, Depends, Response
 from planora_api.api.deps import DbSession, get_current_time, require_session
 from planora_api.db import task_repository
 from planora_api.db.models import AuthSession, Task
-from planora_api.domain import ordering
-from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE, ApiError
+from planora_api.errors import (
+    AUTH_RESPONSES,
+    ERROR_RESPONSE,
+    VALIDATION_RESPONSE,
+    WRITE_RESPONSES,
+    ApiError,
+    not_found,
+)
 from planora_api.schemas.task import (
     TaskCreate,
     TaskMove,
@@ -36,17 +42,11 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 _NOT_FOUND_MESSAGE = "Task not found."
 
-_AUTH_RESPONSES = {401: ERROR_RESPONSE}
-_WRITE_RESPONSES = {**_AUTH_RESPONSES, 403: ERROR_RESPONSE}
-_VALIDATED_RESPONSES = {**_AUTH_RESPONSES, 422: VALIDATION_RESPONSE}
+_VALIDATED_RESPONSES = {**AUTH_RESPONSES, 422: VALIDATION_RESPONSE}
 _ITEM_RESPONSES = {**_VALIDATED_RESPONSES, 404: ERROR_RESPONSE}
-_CREATE_RESPONSES = {**_WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
-_MUTATE_ITEM_RESPONSES = {**_WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
-_REORDER_RESPONSES = {**_WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
-
-
-def _not_found() -> ApiError:
-    return ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
+_CREATE_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
+_MUTATE_ITEM_RESPONSES = {**WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
+_REORDER_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
 
 
 def _ordering_error(exc: ValueError) -> ApiError:
@@ -86,17 +86,10 @@ def reorder_tasks(
     db: DbSession,
     _session: Annotated[AuthSession, Depends(require_session)],
 ) -> list[Task]:
-    column_tasks = task_repository.list_active_tasks_by_status(db, body.status)
-    column = [(t.id, t.position) for t in column_tasks]
     try:
-        changes = ordering.reorder_column(column, body.ordered_ids)
+        task_repository.apply_task_reorder(db, body)
     except ValueError as exc:
         raise _ordering_error(exc) from exc
-
-    by_id = {t.id: t for t in column_tasks}
-    for task_id, position in changes.items():
-        by_id[task_id].position = position
-    db.flush()
     return task_repository.list_active_tasks(db)
 
 
@@ -110,7 +103,7 @@ def get_task(
 ) -> Task:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
     return task
 
 
@@ -126,7 +119,7 @@ def update_task(
 ) -> Task:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
     return task_repository.apply_task_update(db, task, body, now)
 
 
@@ -140,7 +133,7 @@ def delete_task(
 ) -> Response:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
     task_repository.delete_task(db, task)
     return Response(status_code=204)
 
@@ -163,7 +156,7 @@ def move_task(
     handled by that one rule, never re-implemented here."""
     task = task_repository.get_active_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
 
     try:
         task_repository.apply_task_move(db, task, body, now)

@@ -1,13 +1,7 @@
 import { ApiError, type Task, type TaskStatus } from "@/types";
 import { uid } from "@/lib/id";
 import type { ApiClient } from "../ApiClient";
-import { KEYS, delay, ensureTasks, normalisePositions, nowIso, saveTasks, read } from "./store";
-
-function maybeFail(action: string) {
-  if (read<boolean>(KEYS.forceError, false)) {
-    throw new ApiError("SIMULATED_FAILURE", `Simulated failure while trying to ${action}.`);
-  }
-}
+import { delay, ensureTasks, maybeFail, normalisePositions, nowIso, saveTasks } from "./store";
 
 export function createTasksClient(): Pick<
   ApiClient,

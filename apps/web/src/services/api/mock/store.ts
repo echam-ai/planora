@@ -1,3 +1,4 @@
+import { ApiError } from "@/types";
 import type { Task, TaskStatus } from "@/types";
 import { createSeedTasks } from "./seed";
 
@@ -60,4 +61,11 @@ export function normalisePositions(tasks: Task[]): Task[] {
       });
   });
   return tasks;
+}
+
+/** Throw a simulated failure when the mock's forced-error mode is on. */
+export function maybeFail(action: string) {
+  if (read<boolean>(KEYS.forceError, false)) {
+    throw new ApiError("SIMULATED_FAILURE", `Simulated failure while trying to ${action}.`);
+  }
 }
