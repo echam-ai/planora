@@ -18,9 +18,6 @@ from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-ActionKind = Literal["create", "update", "move", "schedule"]
-ActionStatus = Literal["pending", "applied", "rejected"]
-
 # spec §41: the fixed title string per proposal kind.
 ACTION_TITLES: dict[str, str] = {
     "create": "Create task",
@@ -114,10 +111,10 @@ def create_fields(
 
 
 _UPDATE_FORMATTERS = {
-    "title": lambda value, _tz: value,
-    "content": lambda value, _tz: value,
-    "category": lambda value, _tz: CATEGORY_LABELS[value],
-    "priority": lambda value, _tz: PRIORITY_LABELS[value],
+    "title": lambda value: value,
+    "content": lambda value: value,
+    "category": lambda value: CATEGORY_LABELS[value],
+    "priority": lambda value: PRIORITY_LABELS[value],
 }
 
 
@@ -137,7 +134,7 @@ def changed_update_keys(
 
 
 def update_fields(
-    *, current: Mapping[str, str], proposed: Mapping[str, str], timezone_name: str
+    *, current: Mapping[str, str], proposed: Mapping[str, str]
 ) -> list[ActionField]:
     """One entry per key `changed_update_keys` returns, formatted for
     display. Empty when nothing changed — the caller's "no proposal"
@@ -148,8 +145,8 @@ def update_fields(
         fields.append(
             ActionField(
                 FIELD_LABELS[key],
-                formatter(current[key], timezone_name),
-                formatter(proposed[key], timezone_name),
+                formatter(current[key]),
+                formatter(proposed[key]),
             )
         )
     return fields

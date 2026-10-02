@@ -2,13 +2,9 @@
 archived tasks (issue #30, spec §9.2).
 
 Thin by design, matching `api.v1.tasks`: this module validates the request,
-delegates every query to `db.task_repository`, and computes the restored
-task's position through the same pure `domain.ordering.move_to_column`
-`api.v1.tasks.create_task` already uses to append a new task to the end of
-a column — restoring is, position-wise, exactly that: inserting one task at
-the end of the active Todo column. `status`, `completed_at` and
-`archived_at` are set directly here since there is no cross-column move to
-reconcile (the archived task isn't a member of any active column).
+delegates every query and write to `db.task_repository`;
+`restore_archived_task` appends the restored task to the end of the active
+Todo column exactly like `create_task_from_request` appends a new one.
 """
 
 from __future__ import annotations
@@ -21,9 +17,14 @@ from fastapi import APIRouter, Depends, Query, Response
 
 from planora_api.api.deps import DbSession, get_current_time, require_session
 from planora_api.db import task_repository
-from planora_api.db.models import AuthSession, Task, TaskStatus
-from planora_api.domain import ordering
-from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE, ApiError
+from planora_api.db.models import AuthSession, Task
+from planora_api.errors import (
+    AUTH_RESPONSES,
+    ERROR_RESPONSE,
+    VALIDATION_RESPONSE,
+    WRITE_RESPONSES,
+    not_found,
+)
 from planora_api.schemas.archive import ArchiveListResponse
 from planora_api.schemas.task import TaskResponse
 
@@ -39,15 +40,9 @@ _NOT_FOUND_MESSAGE = "Archived task not found."
 _DEFAULT_PAGE_SIZE = 10
 _MAX_PAGE_SIZE = 100
 
-_AUTH_RESPONSES = {401: ERROR_RESPONSE}
-_WRITE_RESPONSES = {**_AUTH_RESPONSES, 403: ERROR_RESPONSE}
-_VALIDATED_RESPONSES = {**_AUTH_RESPONSES, 422: VALIDATION_RESPONSE}
+_VALIDATED_RESPONSES = {**AUTH_RESPONSES, 422: VALIDATION_RESPONSE}
 _ITEM_RESPONSES = {**_VALIDATED_RESPONSES, 404: ERROR_RESPONSE}
-_MUTATE_ITEM_RESPONSES = {**_WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
-
-
-def _not_found() -> ApiError:
-    return ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
+_MUTATE_ITEM_RESPONSES = {**WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
 
 
 @router.get("", response_model=ArchiveListResponse, responses=_VALIDATED_RESPONSES)
@@ -81,7 +76,7 @@ def get_archived_task(
 ) -> Task:
     task = task_repository.get_archived_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
     return task
 
 
@@ -98,31 +93,9 @@ def restore_task(
 ) -> Task:
     task = task_repository.get_archived_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
 
-    todo_tasks = task_repository.list_active_tasks_by_status(db, TaskStatus.TODO)
-    target = [(t.id, t.position) for t in todo_tasks]
-    # A single-entry "source" holding just the restored task, exactly like
-    # `create_task`'s use of the same function to append a brand-new task —
-    # there is no real source column here since an archived task belongs to
-    # none.
-    changes = ordering.move_to_column([(task_id, 0.0)], target, task_id, len(target))
-
-    by_id = {t.id: t for t in todo_tasks}
-    for other_id, position in changes.items():
-        if other_id == task_id:
-            continue
-        other = by_id.get(other_id)
-        if other is not None:
-            other.position = position
-
-    task.status = TaskStatus.TODO
-    task.position = changes[task_id]
-    task.completed_at = None
-    task.archived_at = None
-    task.updated_at = now
-    db.flush()
-    return task
+    return task_repository.restore_archived_task(db, task, now)
 
 
 @router.delete("/{task_id}", status_code=204, responses=_MUTATE_ITEM_RESPONSES)
@@ -133,6 +106,6 @@ def delete_archived_task(
 ) -> Response:
     task = task_repository.get_archived_task(db, task_id)
     if task is None:
-        raise _not_found()
+        raise not_found(_NOT_FOUND_MESSAGE)
     task_repository.delete_task(db, task)
     return Response(status_code=204)

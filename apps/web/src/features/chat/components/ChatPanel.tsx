@@ -16,20 +16,17 @@ import {
 import { useChatMutations, useConversation } from "@/features/chat/hooks";
 import { ApiError, type ChatAction } from "@/types";
 import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
-import { AI_TEXT_LIMIT, countTrimmedCodePoints, trimApiText } from "@/shared/api/textLimits";
+import {
+  AI_TEXT_LIMIT,
+  countTrimmedCodePoints,
+  isTextValidationError,
+  trimApiText,
+} from "@/shared/api/textLimits";
 import { cn } from "@/lib/utils";
 
 const LIMIT_MESSAGE =
   "Messages to the assistant take up to 4,000 characters. Shorten your message.";
 const LIMIT_MESSAGE_ID = "chat-limit-message";
-
-function isTextValidationError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.code === "VALIDATION_ERROR" &&
-    !!error.details?.some((detail) => detail.field === "text")
-  );
-}
 
 function ActionCard({
   action,

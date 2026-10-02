@@ -8,8 +8,10 @@ export const useConversation = () =>
 
 export function useChatMutations() {
   const qc = useQueryClient();
-  const sync = (conv: unknown) => {
-    qc.setQueryData(qk.conversation, conv);
+  const sync = (conv: unknown) => qc.setQueryData(qk.conversation, conv);
+  // Only a confirmed action can write tasks; send, reset and reject touch the conversation alone.
+  const syncAndRefreshTasks = (conv: unknown) => {
+    sync(conv);
     qc.invalidateQueries({ queryKey: qk.tasks });
   };
   // A 404 or 409 means the card is out of date (cancelled elsewhere, already applied, or
@@ -23,7 +25,7 @@ export function useChatMutations() {
     reset: useMutation({ mutationFn: () => api.startNewConversation(), onSuccess: sync }),
     confirm: useMutation({
       mutationFn: (actionId: string) => api.confirmChatAction(actionId),
-      onSuccess: sync,
+      onSuccess: syncAndRefreshTasks,
       onError: resyncIfStale,
     }),
     reject: useMutation({

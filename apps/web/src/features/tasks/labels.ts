@@ -12,3 +12,11 @@ export const priorityLabels: Record<TaskPriority, string> = {
   medium: "Medium",
   high: "High",
 };
+
+export const categoryOptions = (Object.entries(categoryLabels) as [TaskCategory, string][]).map(
+  ([value, label]) => ({ value, label }),
+);
+
+export const priorityOptions = (Object.entries(priorityLabels) as [TaskPriority, string][]).map(
+  ([value, label]) => ({ value, label }),
+);

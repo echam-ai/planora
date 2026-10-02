@@ -116,7 +116,7 @@ def login(
 
     user = auth_repository.get_app_user(db)
     is_known_user = user is not None and body.username == user.username
-    hash_to_check = user.password_hash if is_known_user else password_security.DUMMY_PASSWORD_HASH
+    hash_to_check = user.password_hash if is_known_user else password_security.dummy_password_hash()
 
     # Exactly one Argon2 verification either way, against a real user's
     # hash or the fixed dummy hash — so an unknown username and a wrong

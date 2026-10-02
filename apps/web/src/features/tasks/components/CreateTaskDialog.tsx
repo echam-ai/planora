@@ -15,7 +15,12 @@ import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { emptyDraft } from "@/features/tasks/formMapping";
 import { useTaskMutations } from "@/features/tasks/hooks";
 import { api } from "@/services/api";
-import { AI_TEXT_LIMIT, countTrimmedCodePoints, trimApiText } from "@/shared/api/textLimits";
+import {
+  AI_TEXT_LIMIT,
+  countTrimmedCodePoints,
+  isTextValidationError,
+  trimApiText,
+} from "@/shared/api/textLimits";
 import { ApiError, type TaskDraft } from "@/types";
 
 const EXAMPLE =
@@ -59,13 +64,7 @@ export function CreateTaskDialog({
       const draft = await api.parseTaskText(text);
       setReviewDraft(draft);
     } catch (e) {
-      setParseError(
-        e instanceof ApiError &&
-          e.code === "VALIDATION_ERROR" &&
-          e.details?.some((detail) => detail.field === "text")
-          ? LIMIT_MESSAGE
-          : (e as Error).message,
-      );
+      setParseError(isTextValidationError(e) ? LIMIT_MESSAGE : (e as Error).message);
     } finally {
       setParsing(false);
     }

@@ -66,17 +66,15 @@ function ArchivePage() {
   const selected = archivedTask.data ?? null;
   const timezone = settings?.timezone ?? "UTC";
 
+  const notFound =
+    archivedTask.error instanceof ApiError && archivedTask.error.code === "NOT_FOUND";
+
   useEffect(() => {
-    if (
-      selectedId &&
-      archivedTask.isError &&
-      archivedTask.error instanceof ApiError &&
-      archivedTask.error.code === "NOT_FOUND"
-    ) {
+    if (selectedId && archivedTask.isError && notFound) {
       setSelectedId(null);
       toast.info("This task is no longer available in the archive.");
     }
-  }, [archivedTask.error, archivedTask.isError, selectedId]);
+  }, [archivedTask.isError, notFound, selectedId]);
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
@@ -200,12 +198,7 @@ function ArchivePage() {
         onClose={() => setSelectedId(null)}
         open={selectedId !== null}
         loading={archivedTask.isLoading && selected === null}
-        error={
-          archivedTask.isError &&
-          !(archivedTask.error instanceof ApiError && archivedTask.error.code === "NOT_FOUND")
-            ? archivedTask.error.message
-            : null
-        }
+        error={archivedTask.isError && !notFound ? archivedTask.error.message : null}
         onRetry={() => archivedTask.refetch()}
       />
 

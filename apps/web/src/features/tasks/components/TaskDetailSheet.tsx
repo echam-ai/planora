@@ -31,6 +31,49 @@ import {
 import { useTaskMutations } from "@/features/tasks/hooks";
 import type { Task, TaskDraft, TaskStatus } from "@/types";
 
+function TaskLinks({ urls }: { urls: Task["urls"] }) {
+  if (urls.length === 0) return null;
+  return (
+    <ul className="space-y-1 text-sm">
+      {urls.map((u) => (
+        <li key={u.id}>
+          <a
+            className="inline-flex items-center gap-1 text-primary underline"
+            href={u.url}
+            target="_blank"
+            rel="noopener noreferrer nofollow"
+          >
+            {u.label || u.url} <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LoadError({
+  verb,
+  error,
+  onRetry,
+}: {
+  verb: "load" | "refresh";
+  error: string;
+  onRetry?: (() => void) | undefined;
+}) {
+  return (
+    <div className="space-y-3" role="alert">
+      <p className="text-sm text-destructive">
+        Couldn't {verb} this archived task: {error}
+      </p>
+      {onRetry && (
+        <Button type="button" variant="outline" className="min-h-11" onClick={onRetry}>
+          Retry
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function TaskDetailSheet({
   task,
   timezone,
@@ -71,18 +114,7 @@ export function TaskDetailSheet({
           </SheetHeader>
           <div className="space-y-4 px-4 pb-8">
             {loading && <p className="text-sm text-muted-foreground">Loading archived task…</p>}
-            {error && (
-              <div className="space-y-3" role="alert">
-                <p className="text-sm text-destructive">
-                  Couldn't load this archived task: {error}
-                </p>
-                {onRetry && (
-                  <Button type="button" variant="outline" className="min-h-11" onClick={onRetry}>
-                    Retry
-                  </Button>
-                )}
-              </div>
-            )}
+            {error && <LoadError verb="load" error={error} onRetry={onRetry} />}
           </div>
         </SheetContent>
       </Sheet>
@@ -122,18 +154,7 @@ export function TaskDetailSheet({
         </SheetHeader>
 
         <div className="space-y-6 px-4 pb-8">
-          {error && (
-            <div className="space-y-3" role="alert">
-              <p className="text-sm text-destructive">
-                Couldn't refresh this archived task: {error}
-              </p>
-              {onRetry && (
-                <Button type="button" variant="outline" className="min-h-11" onClick={onRetry}>
-                  Retry
-                </Button>
-              )}
-            </div>
-          )}
+          {error && <LoadError verb="refresh" error={error} onRetry={onRetry} />}
           {readOnly ? (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -164,22 +185,7 @@ export function TaskDetailSheet({
                   <dd>{formatInZone(task.archivedAt, timezone)}</dd>
                 </div>
               </dl>
-              {task.urls.length > 0 && (
-                <ul className="space-y-1 text-sm">
-                  {task.urls.map((u) => (
-                    <li key={u.id}>
-                      <a
-                        className="inline-flex items-center gap-1 text-primary underline"
-                        href={u.url}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                      >
-                        {u.label || u.url} <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <TaskLinks urls={task.urls} />
               <div className="rounded-lg border border-border bg-card p-4">
                 <MarkdownPreview source={task.markdownNote} />
               </div>
@@ -187,22 +193,7 @@ export function TaskDetailSheet({
           ) : (
             <>
               <DeadlineBadge state={getDeadlineState(task)} />
-              {task.urls.length > 0 && (
-                <ul className="space-y-1 text-sm">
-                  {task.urls.map((u) => (
-                    <li key={u.id}>
-                      <a
-                        className="inline-flex items-center gap-1 text-primary underline"
-                        href={u.url}
-                        target="_blank"
-                        rel="noopener noreferrer nofollow"
-                      >
-                        {u.label || u.url} <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <TaskLinks urls={task.urls} />
 
               <TaskForm
                 key={task.id}

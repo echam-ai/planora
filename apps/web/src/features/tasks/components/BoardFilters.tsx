@@ -8,9 +8,7 @@ import {
 } from "@/features/tasks/boardFilters";
 import { deadlineLabels } from "@/features/tasks/deadline";
 import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
-import type { TaskCategory, TaskPriority } from "@/types";
-
-export type { BoardDeadlineFilter, BoardFiltersState } from "@/features/tasks/boardFilters";
+import { categoryOptions, priorityOptions } from "@/features/tasks/labels";
 
 type Props = {
   search: string;
@@ -19,23 +17,9 @@ type Props = {
   onFiltersChange: (value: BoardFiltersState) => void;
 };
 
-const categoryOptions: { value: TaskCategory; label: string }[] = [
-  { value: "work", label: "Work" },
-  { value: "personal", label: "Personal" },
-  { value: "study", label: "Study" },
-  { value: "other", label: "Other" },
-];
-const priorityOptions: { value: TaskPriority; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
-const deadlineOptions: { value: BoardDeadlineFilter; label: string }[] = [
-  { value: "none", label: deadlineLabels.none },
-  { value: "scheduled", label: deadlineLabels.scheduled },
-  { value: "due_soon", label: deadlineLabels.due_soon },
-  { value: "overdue", label: deadlineLabels.overdue },
-];
+const deadlineOptions = (
+  ["none", "scheduled", "due_soon", "overdue"] satisfies BoardDeadlineFilter[]
+).map((value) => ({ value, label: deadlineLabels[value] }));
 
 function toggle<T>(values: T[], value: T): T[] {
   return values.includes(value) ? values.filter((item) => item !== value) : [...values, value];

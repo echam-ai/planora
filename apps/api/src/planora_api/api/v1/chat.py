@@ -41,7 +41,12 @@ from planora_api.db.models import (
     ChatRole,
     Conversation,
 )
-from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE
+from planora_api.errors import (
+    AUTH_RESPONSES,
+    ERROR_RESPONSE,
+    VALIDATION_RESPONSE,
+    WRITE_RESPONSES,
+)
 from planora_api.schemas.chat import (
     ChatActionFieldResponse,
     ChatActionResponse,
@@ -52,15 +57,13 @@ from planora_api.schemas.chat import (
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
-_AUTH_RESPONSES = {401: ERROR_RESPONSE}
-_WRITE_RESPONSES = {**_AUTH_RESPONSES, 403: ERROR_RESPONSE}
 _SEND_MESSAGE_RESPONSES = {
-    **_WRITE_RESPONSES,
+    **WRITE_RESPONSES,
     422: VALIDATION_RESPONSE,
     503: ERROR_RESPONSE,
 }
 _ACTION_RESPONSES = {
-    **_WRITE_RESPONSES,
+    **WRITE_RESPONSES,
     404: ERROR_RESPONSE,
     409: ERROR_RESPONSE,
     422: VALIDATION_RESPONSE,
@@ -112,7 +115,7 @@ def _current_conversation_response(db: Session, now: datetime) -> ConversationRe
 
 
 @router.get(
-    "/conversation", response_model=ConversationResponse, responses=_AUTH_RESPONSES
+    "/conversation", response_model=ConversationResponse, responses=AUTH_RESPONSES
 )
 def read_conversation(
     db: DbSession,
@@ -126,7 +129,7 @@ def read_conversation(
     "/conversation",
     response_model=ConversationResponse,
     status_code=201,
-    responses=_WRITE_RESPONSES,
+    responses=WRITE_RESPONSES,
 )
 def reset_conversation(
     db: DbSession,

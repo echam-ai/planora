@@ -48,8 +48,13 @@ export function Board() {
     () => filterTasks(tasks ?? [], search, filters),
     [tasks, search, filters],
   );
-  const byStatus = (status: TaskStatus) =>
-    filtered.filter((task) => task.status === status).sort((a, b) => a.position - b.position);
+  const grouped = useMemo(() => {
+    const groups: Record<TaskStatus, Task[]> = { todo: [], in_progress: [], done: [] };
+    for (const task of filtered) groups[task.status].push(task);
+    for (const group of Object.values(groups)) group.sort((a, b) => a.position - b.position);
+    return groups;
+  }, [filtered]);
+  const byStatus = (status: TaskStatus) => grouped[status];
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

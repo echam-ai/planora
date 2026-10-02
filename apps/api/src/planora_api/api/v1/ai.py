@@ -27,16 +27,18 @@ from planora_api.api.deps import (
 from planora_api.config import Settings
 from planora_api.db import settings_repository
 from planora_api.db.models import AuthSession
-from planora_api.errors import ERROR_RESPONSE, VALIDATION_RESPONSE
+from planora_api.errors import (
+    ERROR_RESPONSE,
+    VALIDATION_RESPONSE,
+    WRITE_RESPONSES,
+)
 from planora_api.schemas.ai import ParsedTaskResponse, ParseTaskRequest
 from planora_api.schemas.task import TaskUrl
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
-_AUTH_RESPONSES = {401: ERROR_RESPONSE}
 _PARSE_RESPONSES = {
-    **_AUTH_RESPONSES,
-    403: ERROR_RESPONSE,
+    **WRITE_RESPONSES,
     422: VALIDATION_RESPONSE,
     503: ERROR_RESPONSE,
 }

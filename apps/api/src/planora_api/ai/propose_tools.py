@@ -36,37 +36,9 @@ from planora_api.ai.chat_tools import (
 from planora_api.db import task_repository
 from planora_api.db.models import TaskCategory, TaskPriority, TaskStatus
 from planora_api.domain import chat_actions
-from planora_api.domain.local_time import (
-    local_wall_clock_to_utc,
-    parse_local_wall_clock,
-)
+from planora_api.domain.local_time import resolve_deadline, validate_deadline_string
+from planora_api.schemas.common import non_blank
 from planora_api.schemas.task import TaskUrl
-
-
-def _resolve_deadline(deadline: str | None, timezone_name: str) -> datetime | None:
-    if deadline is None:
-        return None
-    local_dt = parse_local_wall_clock(deadline)
-    return local_wall_clock_to_utc(local_dt, timezone_name)
-
-
-def _validate_deadline_string(value: str | None) -> str | None:
-    if value is None:
-        return None
-    try:
-        parse_local_wall_clock(value)
-    except ValueError as exc:
-        raise ValueError(
-            "deadline must be a real calendar YYYY-MM-DD or YYYY-MM-DDTHH:MM value"
-        ) from exc
-    return value
-
-
-def _non_blank(value: str) -> str:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError("must not be blank")
-    return stripped
 
 
 def _draft_payload(
@@ -106,12 +78,12 @@ class ProposeCreateTaskArgs(BaseModel):
     @field_validator("title", "content")
     @classmethod
     def _non_blank_field(cls, value: str) -> str:
-        return _non_blank(value)
+        return non_blank(value)
 
     @field_validator("deadline")
     @classmethod
     def _deadline_is_valid(cls, value: str | None) -> str | None:
-        return _validate_deadline_string(value)
+        return validate_deadline_string(value)
 
 
 PROPOSE_CREATE_TASK_TOOL: dict[str, Any] = {
@@ -161,7 +133,7 @@ def propose_create_task(
     db: Session, args: ProposeCreateTaskArgs, now: datetime, timezone_name: str
 ) -> ToolExecutionResult:
     del db, now
-    deadline_at = _resolve_deadline(args.deadline, timezone_name)
+    deadline_at = resolve_deadline(args.deadline, timezone_name)
     urls = [url.model_dump() for url in args.urls]
     fields = chat_actions.create_fields(
         title=args.title,
@@ -209,7 +181,7 @@ class ProposeUpdateTaskArgs(BaseModel):
     def _non_blank_if_present(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return _non_blank(value)
+        return non_blank(value)
 
 
 PROPOSE_UPDATE_TASK_TOOL: dict[str, Any] = {
@@ -266,9 +238,7 @@ def propose_update_task(
     if not changed_keys:
         return ToolExecutionResult(tool_result=TOOL_CALL_ERROR_RESULT)
 
-    fields = chat_actions.update_fields(
-        current=current, proposed=proposed, timezone_name=timezone_name
-    )
+    fields = chat_actions.update_fields(current=current, proposed=proposed)
     changed_fields = {key: proposed[key] for key in changed_keys}
     snapshot = {key: current[key] for key in changed_keys}
 
@@ -364,7 +334,7 @@ class ProposeSetDeadlineArgs(BaseModel):
     @field_validator("deadline")
     @classmethod
     def _deadline_is_valid(cls, value: str | None) -> str | None:
-        return _validate_deadline_string(value)
+        return validate_deadline_string(value)
 
 
 PROPOSE_SET_DEADLINE_TOOL: dict[str, Any] = {
@@ -403,7 +373,7 @@ def propose_set_deadline(
     if task is None:
         return ToolExecutionResult(tool_result=TOOL_CALL_ERROR_RESULT)
 
-    new_deadline_at = _resolve_deadline(args.deadline, timezone_name)
+    new_deadline_at = resolve_deadline(args.deadline, timezone_name)
     field = chat_actions.schedule_field(
         current_deadline_at=task.deadline_at,
         new_deadline_at=new_deadline_at,

@@ -8,13 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from planora_api.db.models import TaskCategory, TaskPriority
+from planora_api.schemas.common import TrimmedText
 from planora_api.schemas.task import TaskUrl
-
-_TEXT_MIN_LENGTH = 1
-_TEXT_MAX_LENGTH = 4000
 
 
 class ParseTaskRequest(BaseModel):
@@ -26,18 +24,7 @@ class ParseTaskRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    text: str
-
-    @field_validator("text")
-    @classmethod
-    def _text_is_1_to_4000_chars_after_trimming(cls, value: str) -> str:
-        stripped = value.strip()
-        if not (_TEXT_MIN_LENGTH <= len(stripped) <= _TEXT_MAX_LENGTH):
-            raise ValueError(
-                f"text must be {_TEXT_MIN_LENGTH} to {_TEXT_MAX_LENGTH} "
-                "characters after trimming"
-            )
-        return stripped
+    text: TrimmedText
 
 
 class ParsedTaskResponse(BaseModel):

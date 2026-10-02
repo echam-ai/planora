@@ -17,12 +17,10 @@ request") — never `content`, `markdown_note`, or `urls`.
 
 from __future__ import annotations
 
-import logging
-import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -33,8 +31,6 @@ from planora_api.db.models import Task, TaskCategory, TaskPriority, TaskStatus
 from planora_api.domain.chat_actions import ActionField
 from planora_api.domain.chat_filters import ActiveTaskFilters, active_task_matches
 from planora_api.domain.deadline import deadline_state
-
-logger = logging.getLogger("planora_api.ai.chat_tools")
 
 # spec §10.4: "the minimum task data required to answer the request" — a
 # single hard cap on every tool result, active or archive.
@@ -47,6 +43,7 @@ _TITLE_CONTAINS_MAX_LENGTH = 200
 # Done task (whose derived state is always `"completed"`) can never be
 # requested and therefore matches no `deadline_states` filter.
 _FilterableDeadlineState = Literal["none", "scheduled", "due_soon", "overdue"]
+DEADLINE_STATE_VALUES: tuple[str, ...] = get_args(_FilterableDeadlineState)
 
 # The one fixed, safe body sent back to the model for a tool call that is
 # never executed — unknown name, invalid JSON, or a schema-failing
@@ -83,22 +80,6 @@ class ToolExecutionResult:
 
     tool_result: dict[str, Any]
     proposal: PendingProposal | None = None
-
-
-def _log_tool_call(
-    name: str, *, outcome: str, count: int | None, started: float
-) -> None:
-    """spec §15.5: only the tool name, result count, duration and outcome
-    — never arguments, never a task title or other task content."""
-    logger.info(
-        "chat_tool_call",
-        extra={
-            "tool": name,
-            "outcome": outcome,
-            "count": count,
-            "duration_ms": round((time.perf_counter() - started) * 1000, 3),
-        },
-    )
 
 
 # --- find_active_tasks -------------------------------------------------------
@@ -161,7 +142,7 @@ FIND_ACTIVE_TASKS_TOOL: dict[str, Any] = {
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": ["none", "scheduled", "due_soon", "overdue"],
+                        "enum": list(DEADLINE_STATE_VALUES),
                     },
                     "description": (
                         "A Done task matches no deadline_states value, even "
@@ -320,9 +301,9 @@ def _search_archive_executor(
     )
 
 
-# Exactly the two read tools spec §10.1 allows in v1. `ai.chat` sends
-# `TOOL_DEFINITIONS` as the `tools=` argument on every `complete()` call and
-# dispatches an incoming tool call through `TOOL_REGISTRY` by name — an
+# Exactly the two read tools spec §10.1 allows in v1. `ai.chat` merges this
+# with `propose_tools.TOOL_REGISTRY` to build the `tools=` argument for every
+# `complete()` call and dispatches an incoming tool call through `TOOL_REGISTRY` by name — an
 # unknown name (including a write-like one such as `create_task`) simply
 # isn't a key here, so it is never executed.
 TOOL_REGISTRY: dict[str, ToolSpec] = {
@@ -337,7 +318,3 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         executor=_search_archive_executor,
     ),
 }
-
-TOOL_DEFINITIONS: tuple[Mapping[str, Any], ...] = tuple(
-    spec.definition for spec in TOOL_REGISTRY.values()
-)

@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from planora_api.ai import chat_tools, propose_tools
 from planora_api.ai.chat_tools import (
+    DEADLINE_STATE_VALUES,
     TOOL_CALL_ERROR_RESULT,
     PendingProposal,
     ToolSpec,
@@ -87,8 +88,6 @@ TOOL_DEFINITIONS: tuple[Mapping[str, Any], ...] = tuple(
 # text), so there is nothing of that kind to resend here either.
 _MAX_HISTORY_MESSAGES = 20
 
-_DEADLINE_STATE_VALUES = ("none", "scheduled", "due_soon", "overdue")
-
 
 def _build_system_prompt(*, now: datetime, timezone_name: str) -> str:
     local_now = now.astimezone(ZoneInfo(timezone_name))
@@ -100,7 +99,7 @@ def _build_system_prompt(*, now: datetime, timezone_name: str) -> str:
         statuses=[member.value for member in TaskStatus],
         categories=[member.value for member in TaskCategory],
         priorities=[member.value for member in TaskPriority],
-        deadline_states=list(_DEADLINE_STATE_VALUES),
+        deadline_states=list(DEADLINE_STATE_VALUES),
     )
 
 

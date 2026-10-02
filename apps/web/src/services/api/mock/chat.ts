@@ -19,6 +19,16 @@ import type { ApiClient } from "../ApiClient";
 import { currentTimezone } from "./auth";
 import { KEYS, delay, ensureTasks, nowIso, read, write } from "./store";
 
+const textTooLongError = () =>
+  new ApiError("VALIDATION_ERROR", "Request validation failed.", {
+    status: 422,
+    details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
+  });
+const assistantUnavailableError = () =>
+  new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {
+    status: 503,
+  });
+
 const CATEGORY_WORDS: Record<TaskCategory, string[]> = {
   work: ["work", "meeting", "review", "deck", "client", "sprint", "deploy", "report"],
   personal: ["personal", "home", "family", "errand", "grocery", "doctor", "dentist", "trip"],
@@ -291,15 +301,9 @@ export function createChatClient(
   return {
     async parseTaskText(text) {
       await delay(700, 1400);
-      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT)
-        throw new ApiError("VALIDATION_ERROR", "Request validation failed.", {
-          status: 422,
-          details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
-        });
+      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT) throw textTooLongError();
       if (read<boolean>(KEYS.forceError, false) || /\bfail\b/i.test(text))
-        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {
-          status: 503,
-        });
+        throw assistantUnavailableError();
       return parseText(text, currentTimezone());
     },
     async getCurrentConversation() {
@@ -313,16 +317,9 @@ export function createChatClient(
     async sendChatMessage(text) {
       await delay(600, 1200);
       text = trimApiText(text);
-      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT)
-        throw new ApiError("VALIDATION_ERROR", "Request validation failed.", {
-          status: 422,
-          details: [{ field: "text", code: "VALUE_ERROR", message: "Text is too long." }],
-        });
+      if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT) throw textTooLongError();
       // Like the API, a failed send persists nothing — not even the user's message.
-      if (read<boolean>(KEYS.forceError, false))
-        throw new ApiError("AI_UNAVAILABLE", "The assistant is unavailable right now. Try again.", {
-          status: 503,
-        });
+      if (read<boolean>(KEYS.forceError, false)) throw assistantUnavailableError();
       const conversation =
         read<Conversation | null>(KEYS.conversation, null) ?? emptyConversation();
       conversation.messages.push({ id: uid("msg"), role: "user", text, createdAt: nowIso() });

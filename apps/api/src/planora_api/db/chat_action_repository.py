@@ -24,6 +24,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from sqlalchemy import select, update
@@ -113,37 +114,37 @@ def list_actions_by_message_id(db: Session) -> dict[uuid.UUID, ChatAction]:
     return {action.message_id: action for action in actions}
 
 
+def _try_transition(
+    db: Session, action_id: uuid.UUID, new_status: ChatActionStatus, now: datetime
+) -> bool:
+    """Compare-and-set: `pending` -> `new_status`. Returns whether *this*
+    call performed the transition, so a loser of a race can never overwrite
+    the winner's committed status."""
+    result = db.execute(
+        update(ChatAction)
+        .where(ChatAction.id == action_id, ChatAction.status == ChatActionStatus.PENDING)
+        .values(status=new_status, updated_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    db.flush()
+    return result.rowcount == 1
+
+
 def try_mark_applied(db: Session, action_id: uuid.UUID, *, now: datetime) -> bool:
-    """Compare-and-set: `pending` -> `applied`. Returns whether *this* call
-    performed the transition. A module-level function (not a closure), the
-    same pattern `jobs.archive_done_tasks._archive_one` and
+    """Compare-and-set `pending` -> `applied`. A module-level function (not
+    a closure), the same pattern `jobs.archive_done_tasks._archive_one` and
     `db.chat_repository._insert_message` use, so a test can monkeypatch it
     directly to inject a competing confirm deterministically, immediately
     before the real compare-and-set runs (see
     `tests/integration/test_chat_action_confirm_concurrency.py`)."""
-    result = db.execute(
-        update(ChatAction)
-        .where(ChatAction.id == action_id, ChatAction.status == ChatActionStatus.PENDING)
-        .values(status=ChatActionStatus.APPLIED, updated_at=now)
-        .execution_options(synchronize_session=False)
-    )
-    db.flush()
-    return result.rowcount == 1
+    return _try_transition(db, action_id, ChatActionStatus.APPLIED, now)
 
 
 def try_mark_rejected(db: Session, action_id: uuid.UUID, *, now: datetime) -> bool:
-    """Compare-and-set: `pending` -> `rejected`, mirroring `try_mark_applied`
-    (and monkeypatchable the same way). Returns whether *this* call
-    performed the transition, so a reject that read `pending` can never
-    overwrite a confirm that committed `applied` first."""
-    result = db.execute(
-        update(ChatAction)
-        .where(ChatAction.id == action_id, ChatAction.status == ChatActionStatus.PENDING)
-        .values(status=ChatActionStatus.REJECTED, updated_at=now)
-        .execution_options(synchronize_session=False)
-    )
-    db.flush()
-    return result.rowcount == 1
+    """Compare-and-set `pending` -> `rejected`, monkeypatchable like
+    `try_mark_applied`: a reject that read `pending` can never overwrite a
+    confirm that committed `applied` first."""
+    return _try_transition(db, action_id, ChatActionStatus.REJECTED, now)
 
 
 def _reread_committed(db: Session, action_id: uuid.UUID) -> ChatAction | None:
@@ -223,21 +224,21 @@ def confirm(db: Session, action_id: uuid.UUID, *, now: datetime) -> None:
     else written (the request-scoped `get_db` dependency rolls the whole
     transaction back).
     """
-    started = time.perf_counter()
+    log = partial(
+        _log_action, "confirm", action_id=action_id, started=time.perf_counter()
+    )
     action = get_action(db, action_id)
     if action is None:
-        _log_action("confirm", kind=None, action_id=action_id, outcome="not_found", started=started)
+        log(kind=None, outcome="not_found")
         raise ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
 
-    kind = action.kind.value
+    log = partial(log, kind=action.kind.value)
     outcome = chat_actions.confirm_outcome(action.status.value)
     if outcome == "already_rejected":
-        _log_action(
-            "confirm", kind=kind, action_id=action_id, outcome="already_rejected", started=started
-        )
+        log(outcome="already_rejected")
         raise ApiError(409, "ACTION_ALREADY_REJECTED", _ALREADY_REJECTED_MESSAGE)
     if outcome == "noop":
-        _log_action("confirm", kind=kind, action_id=action_id, outcome="noop", started=started)
+        log(outcome="noop")
         return
 
     task: Task | None = None
@@ -247,7 +248,7 @@ def confirm(db: Session, action_id: uuid.UUID, *, now: datetime) -> None:
         if task is None or chat_actions.is_stale(
             current=_task_field_snapshot(task), snapshot=action.stale_snapshot
         ):
-            _log_action("confirm", kind=kind, action_id=action_id, outcome="stale", started=started)
+            log(outcome="stale")
             raise ApiError(409, "ACTION_STALE", _STALE_MESSAGE)
 
     if not try_mark_applied(db, action_id, now=now):
@@ -255,23 +256,19 @@ def confirm(db: Session, action_id: uuid.UUID, *, now: datetime) -> None:
         # happened, chosen by the same domain rule as the pre-check.
         refreshed = _reread_committed(db, action_id)
         if refreshed is None:
-            _log_action("confirm", kind=kind, action_id=action_id, outcome="not_found", started=started)
+            log(outcome="not_found")
             raise ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
         if chat_actions.confirm_outcome(refreshed.status.value) == "already_rejected":
-            _log_action(
-                "confirm", kind=kind, action_id=action_id, outcome="already_rejected", started=started
-            )
+            log(outcome="already_rejected")
             raise ApiError(409, "ACTION_ALREADY_REJECTED", _ALREADY_REJECTED_MESSAGE)
         # A competing confirm won: this call's own idempotent success,
         # never a second write.
-        _log_action(
-            "confirm", kind=kind, action_id=action_id, outcome="applied_by_race", started=started
-        )
+        log(outcome="applied_by_race")
         return
 
     _apply_action_write(db, action, task=task, now=now)
     chat_repository.append_message(db, role=ChatRole.ASSISTANT, text=_CONFIRMATION_TEXT, now=now)
-    _log_action("confirm", kind=kind, action_id=action_id, outcome="applied", started=started)
+    log(outcome="applied")
 
 
 def reject(db: Session, action_id: uuid.UUID, *, now: datetime) -> None:
@@ -281,35 +278,33 @@ def reject(db: Session, action_id: uuid.UUID, *, now: datetime) -> None:
     (or reset-removed) id and
     `ApiError(409, "ACTION_ALREADY_APPLIED", ...)` for an already-applied
     one. Writes nothing else — no task row, no message."""
-    started = time.perf_counter()
+    log = partial(
+        _log_action, "reject", action_id=action_id, started=time.perf_counter()
+    )
     action = get_action(db, action_id)
     if action is None:
-        _log_action("reject", kind=None, action_id=action_id, outcome="not_found", started=started)
+        log(kind=None, outcome="not_found")
         raise ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
 
-    kind = action.kind.value
+    log = partial(log, kind=action.kind.value)
     outcome = chat_actions.reject_outcome(action.status.value)
     if outcome == "already_applied":
-        _log_action(
-            "reject", kind=kind, action_id=action_id, outcome="already_applied", started=started
-        )
+        log(outcome="already_applied")
         raise ApiError(409, "ACTION_ALREADY_APPLIED", _ALREADY_APPLIED_MESSAGE)
     if outcome == "noop":
-        _log_action("reject", kind=kind, action_id=action_id, outcome="noop", started=started)
+        log(outcome="noop")
         return
 
     if try_mark_rejected(db, action_id, now=now):
-        _log_action("reject", kind=kind, action_id=action_id, outcome="rejected", started=started)
+        log(outcome="rejected")
         return
 
     # Lost a race: re-read the committed row and report the true outcome.
     refreshed = _reread_committed(db, action_id)
     if refreshed is None:
-        _log_action("reject", kind=kind, action_id=action_id, outcome="not_found", started=started)
+        log(outcome="not_found")
         raise ApiError(404, "NOT_FOUND", _NOT_FOUND_MESSAGE)
     if chat_actions.reject_outcome(refreshed.status.value) == "already_applied":
-        _log_action(
-            "reject", kind=kind, action_id=action_id, outcome="already_applied", started=started
-        )
+        log(outcome="already_applied")
         raise ApiError(409, "ACTION_ALREADY_APPLIED", _ALREADY_APPLIED_MESSAGE)
-    _log_action("reject", kind=kind, action_id=action_id, outcome="noop", started=started)
+    log(outcome="noop")

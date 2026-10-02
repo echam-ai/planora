@@ -6,7 +6,7 @@ RFC 9106 low-memory profile pinned at grooming: `time_cost=3`,
 self-describing `$argon2id$...` PHC string, so no separate salt or
 parameter columns are needed.
 
-`DUMMY_PASSWORD_HASH` lets a caller verify against a fixed hash when the
+`dummy_password_hash()` lets a caller verify against a fixed hash when the
 submitted username does not match any account, so an unknown-user login and
 a wrong-password login perform the same one Argon2 verification and cost
 the same time — the response never reveals whether the username exists.
@@ -20,6 +20,8 @@ the other. Passwords are never trimmed before this check.
 
 from __future__ import annotations
 
+from functools import cache
+
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 
@@ -32,10 +34,15 @@ PASSWORD_LENGTH_RULE_MESSAGE = (
     f"Password must be {MIN_PASSWORD_LENGTH} to {MAX_PASSWORD_LENGTH} characters."
 )
 
-# A hash of a value nobody can ever submit as a real password, computed once
-# at import time. Verifying against it always fails, but costs one real
-# Argon2 verification — never returns and never logs the value hashed here.
-DUMMY_PASSWORD_HASH = _hasher.hash("planora-unknown-user-dummy-hash-25")
+
+
+@cache
+def dummy_password_hash() -> str:
+    """A hash of a value nobody can ever submit as a real password,
+    computed once on first use (not at import). Verifying against it always
+    fails, but costs one real Argon2 verification — never returns and never
+    logs the value hashed here."""
+    return _hasher.hash("planora-unknown-user-dummy-hash-25")
 
 
 def hash_password(password: str) -> str:
