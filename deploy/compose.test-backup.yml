@@ -1,0 +1,35 @@
+# Disposable #45 restore smoke, separate from production and #44 parity runs.
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: planora_test45
+      POSTGRES_USER: planora_test45
+      POSTGRES_PASSWORD: issue45-database-marker
+    ports:
+      - "127.0.0.1:${PLANORA_TEST_BACKUP_PORT:-15445}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, planora_test45, -d, planora_test45]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+  backup:
+    build:
+      context: .
+      dockerfile: backup.Dockerfile
+    environment:
+      PGHOST: db
+      PGDATABASE: planora_test45
+      PGUSER: planora_test45
+      PGPASSWORD: issue45-database-marker
+      DEFAULT_TIMEZONE: Asia/Singapore
+    volumes:
+      - backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres-data:
+  backups:

@@ -154,9 +154,10 @@ rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/co
 `pg_restore --list` must show the application tables, and both workers must
 stop cleanly. Unit checks in `tests/unit/test_deployment_backup.py` cover 03:00,
 DST, successful publication, and partial/empty failures without waiting overnight.
-#45 owns seven-success retention, full credential-content verification, and an
-executed restore. Dumps currently accumulate; preserve and monitor backup storage
-until that issue adds retention.
+The worker retains the latest seven successful dumps, ordered by UTC completion
+identity after durable publication. See [backup and restore](backup-restore.md)
+for exact explicit-target restore commands, decoded credential-content audit,
+and the executed disposable PostgreSQL recovery smoke.
 
 ## Cleanup disposable verification only
 
