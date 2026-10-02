@@ -58,7 +58,7 @@ function FilterGroup<T extends string>({
           ref={triggerRef}
           type="button"
           variant={selected.length ? "secondary" : "outline"}
-          className="gap-1 px-2"
+          className="gap-0.5 px-1.5 sm:gap-1 sm:px-2"
           aria-label={selected.length ? `${label} ${selected.length}` : label}
           aria-describedby={descriptionId}
         >
@@ -184,7 +184,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
           className="bg-background pl-9"
         />
       </div>
-      <div className="col-span-2 row-start-2 flex min-w-0 flex-wrap gap-2 sm:contents">
+      <div className="col-span-2 row-start-2 flex min-w-0 flex-wrap gap-1 sm:contents">
         <FilterGroup
           label="Category"
           options={categoryOptions}
