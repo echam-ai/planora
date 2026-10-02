@@ -68,8 +68,16 @@ describe("AppShell", () => {
     expect(screen.queryByText(/You're offline/)).not.toBeInTheDocument();
   });
 
-  it("opens the create task dialog from the header button", async () => {
+  it("keeps the named header actions available and opens task capture at 320px", async () => {
+    setViewportWidth(320);
     renderShell();
+
+    const header = within(screen.getByRole("banner"));
+    for (const name of ["Add task", "AI Assistant", "Account menu"]) {
+      expect(header.getByRole("button", { name })).toBeVisible();
+    }
+    expect(header.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("navigation", { name: "Main mobile" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add task" }));
 
@@ -110,6 +118,7 @@ describe("AppShell", () => {
   });
 
   it("logs out through the account menu: clears cached queries and navigates to login", async () => {
+    setViewportWidth(320);
     const logout = vi.spyOn(api, "logout").mockResolvedValue(undefined);
     renderShell();
     const clearSpy = vi.spyOn(qc, "clear");

@@ -15,51 +15,129 @@ test("signs in and shows the three board columns", async ({ page }) => {
 });
 
 test("combines multi-select board filters and clears them by keyboard", async ({ page }) => {
-  await page.goto("/");
-  await page.getByLabel("Username").fill("demo");
-  await page.getByLabel("Password").fill("focusboard");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
+  const search = page.getByLabel("Search tasks");
+  await search.fill("RaFt");
+  await expect(card(page, "Read chapter 4 of the distributed systems book")).toBeVisible();
+  await expect(card(page, "Renew passport")).toBeHidden();
+  await search.fill("");
 
-  await page.getByLabel("Search tasks").fill("RaFt");
-  await expect(
-    page.getByRole("button", { name: "Open task Read chapter 4 of the distributed systems book" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeHidden();
-  await page.getByLabel("Search tasks").fill("");
-
-  const work = page.getByRole("button", { name: "Work" });
-  const personal = page.getByRole("button", { name: "Personal" });
-  await expect(page.getByRole("group", { name: "Category" })).toBeVisible();
-  await work.focus();
-  await page.keyboard.press("Space");
+  await page.getByRole("button", { name: "Category", exact: true }).press("Enter");
+  const work = page.getByRole("button", { name: "Work", exact: true });
+  const personal = page.getByRole("button", { name: "Personal", exact: true });
+  await expect(work).toBeFocused();
+  await work.press("Space");
   await personal.press("Enter");
-  await page.getByRole("button", { name: "High" }).click();
-  await page.getByRole("button", { name: "Low" }).click();
-  await page.getByRole("button", { name: "Scheduled" }).click();
-  await page.getByRole("button", { name: "Overdue" }).click();
-
-  await expect(work).toHaveAttribute("aria-pressed", "true");
-  await expect(personal).toHaveAttribute("aria-pressed", "true");
-  await expect(work.locator("svg")).toBeVisible();
-  await expect(personal.locator("svg")).toBeVisible();
+  for (const option of [work, personal]) {
+    await expect(option).toHaveAttribute("aria-pressed", "true");
+    await expect(option.locator("svg")).toBeVisible();
+  }
+  await expect(page.getByRole("dialog", { name: "Category filters" })).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Open task Ship the search-quality review deck" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeHidden();
+    page.getByRole("button", { name: "Category 2", exact: true }),
+  ).toHaveAccessibleDescription("Selected: Work, Personal");
+  await page.getByRole("button", { name: "Priority", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Category filters" })).toHaveCount(0);
+  await page.getByRole("button", { name: "High", exact: true }).click();
+  await page.getByRole("button", { name: "Low", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Open task Write the weekly status update" }),
-  ).toBeHidden();
-
-  await page.getByRole("button", { name: "Overdue" }).press("Enter");
+    page.getByRole("button", { name: "Priority 2", exact: true }),
+  ).toHaveAccessibleDescription("Selected: Low, High");
+  await page.getByRole("button", { name: "Deadline", exact: true }).click();
+  await page.getByRole("button", { name: "Scheduled", exact: true }).click();
+  await page.getByRole("button", { name: "Overdue", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Open task Ship the search-quality review deck" }),
-  ).toBeHidden();
+    page.getByRole("button", { name: "Deadline 2", exact: true }),
+  ).toHaveAccessibleDescription("Selected: Scheduled, Overdue");
+  await expect(card(page, "Ship the search-quality review deck")).toBeVisible();
+  await expect(card(page, "Renew passport")).toBeHidden();
+  await expect(card(page, "Write the weekly status update")).toBeHidden();
+  await page.getByRole("button", { name: "Overdue", exact: true }).press("Enter");
+  await expect(
+    page.getByRole("button", { name: "Deadline 1", exact: true }),
+  ).toHaveAccessibleDescription("Selected: Scheduled");
+  await expect(card(page, "Ship the search-quality review deck")).toBeHidden();
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Clear all filters" }).press("Enter");
-  await expect(page.getByLabel("Search tasks")).toHaveValue("");
-  await expect(page.getByRole("button", { name: "Open task Renew passport" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Open task Write the weekly status update" }),
-  ).toBeVisible();
+  await expect(search).toHaveValue("");
+  await expect(card(page, "Renew passport")).toBeVisible();
+  await expect(card(page, "Write the weekly status update")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clear all filters" })).toHaveCount(0);
+
+  await search.fill("No matching task for reset");
+  for (const [dimension, option] of [
+    ["Category", "Work"],
+    ["Priority", "High"],
+    ["Deadline", "No deadline"],
+  ] as const) {
+    await page.getByRole("button", { name: dimension, exact: true }).click();
+    await page.getByRole("button", { name: option, exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: /^Open task / })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Clear all filters" }).click();
+  await expect(search).toHaveValue("");
+  for (const dimension of ["Category", "Priority", "Deadline"]) {
+    await expect(
+      page.getByRole("button", { name: dimension, exact: true }),
+    ).toHaveAccessibleDescription("No selections");
+  }
+  await expect(page.getByRole("button", { name: "Clear all filters" })).toHaveCount(0);
+  await expect(card(page, "Renew passport")).toBeVisible();
+});
+
+test("keyboard opens filters, toggles without dismissal, returns focus and tabs out", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole("textbox", { name: "Search tasks" }).focus();
+  await page.keyboard.press("Tab");
+  for (const [dimension, options] of [
+    ["Category", ["Work", "Personal", "Study", "Other"]],
+    ["Priority", ["Low", "Medium", "High"]],
+    ["Deadline", ["No deadline", "Scheduled", "Near deadline", "Overdue"]],
+  ] as const) {
+    const trigger = page.getByRole("button", { name: new RegExp(`^${dimension}( [0-9]+)?$`) });
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: `${dimension} filters` });
+    for (const [index, name] of options.entries()) {
+      const option = dialog.getByRole("button", { name, exact: true });
+      await expect(option).toBeFocused();
+      expect(
+        await option.evaluate(
+          (element) =>
+            element.matches(":focus-visible") && getComputedStyle(element).boxShadow !== "none",
+        ),
+      ).toBe(true);
+      if (index === 0) {
+        await page.keyboard.press("Space");
+        await expect(option).toHaveAttribute("aria-pressed", "true");
+        await expect(option.locator("svg")).toBeVisible();
+        await page.keyboard.press("Enter");
+        await expect(option).toHaveAttribute("aria-pressed", "false");
+        await expect(option.locator("svg")).toHaveCount(0);
+        await page.keyboard.press("Space");
+      }
+      await page.keyboard.press("Tab");
+    }
+    const close = dialog.getByRole("button", { name: `Close ${dimension} filters` });
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(dialog.getByRole("button", { name: options[0], exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Enter");
+    for (let step = 0; step < options.length; step++) await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog).toHaveCount(0);
+  }
+  await expect(page.getByRole("button", { name: "Clear all filters" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Clear all filters" })).toHaveCount(0);
 });
 
 test("labels the near-deadline state 'Near deadline' on the card, in the sheet, and in the filter (#73)", async ({
@@ -75,6 +153,7 @@ test("labels the near-deadline state 'Near deadline' on the card, in the sheet, 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
+  await page.getByRole("button", { name: "Deadline", exact: true }).click();
   const nearDeadline = page.getByRole("button", { name: "Near deadline" });
   await nearDeadline.click();
   await expect(nearDeadline).toHaveAttribute("aria-pressed", "true");
