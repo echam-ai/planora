@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -310,21 +308,14 @@ def test_with_an_account_present_the_command_never_prompts_for_a_username(
 
 
 def test_unmigrated_database_exits_1_before_any_prompt(
-    valid_env: pytest.MonkeyPatch,
+    database_url: str,
 ) -> None:
-    scratch_dir = Path(__file__).resolve().parents[2] / ".tmp" / "issue-33-unmigrated"
-    scratch_dir.mkdir(parents=True, exist_ok=True)
-    db_path = scratch_dir / f"{uuid.uuid4().hex}.db"
-    valid_env.setenv("DATABASE_URL", f"sqlite:///{db_path}")
 
     def _never_called(_prompt_text: str) -> str:
         raise AssertionError("must not prompt against an unmigrated database")
 
-    try:
-        code = main([], prompt=_never_called, read_line=_never_called, stdin_is_tty=lambda: True)
-        assert code == 1
-    finally:
-        db_path.unlink(missing_ok=True)
+    code = main([], prompt=_never_called, read_line=_never_called, stdin_is_tty=lambda: True)
+    assert code == 1
 
 
 # --- Failure modes: configuration, unrecognized argument, database error ----

@@ -1,0 +1,17 @@
+# Isolated test-only PostgreSQL, never an override for the production stack.
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: planora_test44
+      POSTGRES_USER: planora_test
+      POSTGRES_PASSWORD: disposable-test-only
+    ports:
+      - "127.0.0.1:${PLANORA_TEST_POSTGRES_PORT:-15444}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, planora_test, -d, planora_test44]
+      interval: 2s
+      timeout: 5s
+      retries: 20

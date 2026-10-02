@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -76,31 +75,22 @@ def test_exit_0_when_zero_tasks_are_eligible(
 
 
 def test_exit_1_when_the_task_table_is_missing(
-    valid_env: pytest.MonkeyPatch,
-    tmp_path_factory: pytest.TempPathFactory,
+    database_url: str,
     caplog: pytest.LogCaptureFixture,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    # An empty SQLite database with no migrations applied — the `task`
+    # An empty selected-backend database with no migrations applied — the `task`
     # table simply doesn't exist, so the run itself fails.
-    scratch_dir = Path(__file__).resolve().parents[2] / ".tmp" / "issue-32-unmigrated"
-    scratch_dir.mkdir(parents=True, exist_ok=True)
-    db_path = scratch_dir / f"{uuid.uuid4().hex}.db"
-    valid_env.setenv("DATABASE_URL", f"sqlite:///{db_path}")
     caplog.set_level(logging.ERROR, logger="planora_api.jobs.archive_done_tasks")
 
-    try:
-        code = main([])
-
-        assert code == 1
-        failed = [r for r in caplog.records if r.message == "archive_job_failed"]
-        assert len(failed) == 1
-        assert failed[0].error_type  # names the exception type
-        captured = capsys.readouterr()
-        assert "Traceback" not in captured.out
-        assert "Traceback" not in captured.err
-    finally:
-        db_path.unlink(missing_ok=True)
+    code = main([])
+    assert code == 1
+    failed = [r for r in caplog.records if r.message == "archive_job_failed"]
+    assert len(failed) == 1
+    assert failed[0].error_type
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.out
+    assert "Traceback" not in captured.err
 
 
 def test_exit_2_with_message_naming_the_variable_on_invalid_configuration(

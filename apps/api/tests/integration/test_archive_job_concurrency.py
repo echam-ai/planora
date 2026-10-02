@@ -28,7 +28,6 @@ from __future__ import annotations
 import threading
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -74,11 +73,11 @@ def _get_task(session_factory: sessionmaker[Session], task_id: uuid.UUID) -> Tas
 
 
 def test_two_concurrent_runs_never_double_archive_and_counts_sum_to_the_total(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> None:
     task_count = 50
-    engine_a = create_engine(f"sqlite:///{migrated_db_path}")
-    engine_b = create_engine(f"sqlite:///{migrated_db_path}")
+    engine_a = create_engine(migrated_database_url)
+    engine_b = create_engine(migrated_database_url)
     factory_a = sessionmaker(bind=engine_a, autoflush=False, expire_on_commit=True)
     factory_b = sessionmaker(bind=engine_b, autoflush=False, expire_on_commit=True)
 

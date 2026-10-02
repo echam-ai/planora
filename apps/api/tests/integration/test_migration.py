@@ -5,8 +5,6 @@ reversible").
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
@@ -31,9 +29,9 @@ _EXPECTED_COLUMNS = {
 
 
 def test_upgrade_head_creates_the_task_table_with_all_columns(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
 
     assert "task" in inspector.get_table_names()
@@ -43,16 +41,16 @@ def test_upgrade_head_creates_the_task_table_with_all_columns(
 
 
 def test_downgrade_then_upgrade_recreates_the_task_table(
-    migrated_db_path: Path,
+    migrated_database_url: str,
     alembic_config: Config,
 ) -> None:
     command.downgrade(alembic_config, "base")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     assert "task" not in inspect(engine).get_table_names()
     engine.dispose()
 
     command.upgrade(alembic_config, "head")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
     assert "task" in inspector.get_table_names()
     column_names = {column["name"] for column in inspector.get_columns("task")}
@@ -66,9 +64,9 @@ _EXPECTED_APP_SETTINGS_COLUMNS = {"id", "timezone", "model_name", "updated_at"}
 
 
 def test_upgrade_head_creates_the_app_settings_table_with_all_columns(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
 
     assert "app_settings" in inspector.get_table_names()
@@ -78,7 +76,7 @@ def test_upgrade_head_creates_the_app_settings_table_with_all_columns(
 
 
 def test_downgrade_one_step_drops_the_app_settings_table_and_upgrade_recreates_it(
-    migrated_db_path: Path,
+    migrated_database_url: str,
     alembic_config: Config,
 ) -> None:
     # Targets the app_settings revision's own `down_revision` explicitly,
@@ -86,7 +84,7 @@ def test_downgrade_one_step_drops_the_app_settings_table_and_upgrade_recreates_i
     # revision on top of it — "-1" from head now lands one step short of
     # removing app_settings at all.
     command.downgrade(alembic_config, "cbbec2744527")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     assert "app_settings" not in inspect(engine).get_table_names()
     # The task table (created by an earlier revision) is unaffected by
     # this downgrade.
@@ -94,7 +92,7 @@ def test_downgrade_one_step_drops_the_app_settings_table_and_upgrade_recreates_i
     engine.dispose()
 
     command.upgrade(alembic_config, "head")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
     assert "app_settings" in inspector.get_table_names()
     column_names = {column["name"] for column in inspector.get_columns("app_settings")}
@@ -110,9 +108,9 @@ _PRE_CHAT_TABLES = {"task", "app_user", "auth_session", "login_failure", "app_se
 
 
 def test_upgrade_head_creates_the_chat_tables_with_all_columns(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
 
     assert "conversation" in inspector.get_table_names()
@@ -125,14 +123,14 @@ def test_upgrade_head_creates_the_chat_tables_with_all_columns(
 
 
 def test_downgrade_one_step_drops_the_chat_tables_and_upgrade_recreates_them(
-    migrated_db_path: Path,
+    migrated_database_url: str,
     alembic_config: Config,
 ) -> None:
     # Targets the chat-action revision's own `down_revision` explicitly —
     # "-1" from head now lands one step short of removing these tables,
     # the same reason the `app_settings` test above stopped using it.
     command.downgrade(alembic_config, "0cf85705ba3d")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     table_names = set(inspect(engine).get_table_names())
     assert "conversation" not in table_names
     assert "chat_message" not in table_names
@@ -141,7 +139,7 @@ def test_downgrade_one_step_drops_the_chat_tables_and_upgrade_recreates_them(
     engine.dispose()
 
     command.upgrade(alembic_config, "head")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
     assert "conversation" in inspector.get_table_names()
     assert "chat_message" in inspector.get_table_names()
@@ -173,9 +171,9 @@ _PRE_CHAT_ACTION_TABLES = _PRE_CHAT_TABLES | {"conversation", "chat_message"}
 
 
 def test_upgrade_head_creates_the_chat_action_table_with_all_columns(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> None:
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
 
     assert "chat_action" in inspector.get_table_names()
@@ -185,11 +183,11 @@ def test_upgrade_head_creates_the_chat_action_table_with_all_columns(
 
 
 def test_downgrade_one_step_drops_the_chat_action_table_and_upgrade_recreates_it(
-    migrated_db_path: Path,
+    migrated_database_url: str,
     alembic_config: Config,
 ) -> None:
     command.downgrade(alembic_config, "-1")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     table_names = set(inspect(engine).get_table_names())
     assert "chat_action" not in table_names
     # Every earlier table, including the other chat tables, is unaffected
@@ -198,7 +196,7 @@ def test_downgrade_one_step_drops_the_chat_action_table_and_upgrade_recreates_it
     engine.dispose()
 
     command.upgrade(alembic_config, "head")
-    engine = create_engine(f"sqlite:///{migrated_db_path}")
+    engine = create_engine(migrated_database_url)
     inspector = inspect(engine)
     assert "chat_action" in inspector.get_table_names()
     column_names = {column["name"] for column in inspector.get_columns("chat_action")}

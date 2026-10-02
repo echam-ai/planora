@@ -9,12 +9,12 @@ it and break those imports. One conftest, at `tests/`.
 from __future__ import annotations
 
 import os
-import uuid
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 from alembic.config import Config
+from database_backend import isolated_database, validate_postgres_url
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.orm import Session, sessionmaker
@@ -69,6 +69,23 @@ VALID_ENV: dict[str, str] = {
 # green.
 
 DEFAULT_ORIGIN = VALID_ENV["APP_ORIGIN"]
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption("--db-backend", choices=("sqlite", "postgresql"), default="sqlite",
+                     help="Engine for the same shared migration/integration corpus")
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    if config.getoption("db_backend") == "postgresql":
+        try:
+            validate_postgres_url(os.environ.get("PLANORA_TEST_POSTGRES_URL", ""))
+        except ValueError as exc:
+            raise pytest.UsageError(str(exc)) from None
+
+
+def pytest_report_header(config: pytest.Config) -> str:
+    return f"shared integration database backend: {config.getoption('db_backend')}"
 
 
 def make_client(
@@ -149,26 +166,25 @@ def alembic_config() -> Config:
 
 
 @pytest.fixture
-def migrated_db_path(
-    valid_env: pytest.MonkeyPatch, alembic_config: Config
-) -> Iterator[Path]:
-    """A fresh SQLite file under the repo's `.tmp/`, migrated to `head`
-    through Alembic (not `metadata.create_all`)."""
-    _DB_SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
-    db_path = _DB_SCRATCH_DIR / f"{uuid.uuid4().hex}.db"
-    valid_env.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+def database_url(valid_env: pytest.MonkeyPatch, pytestconfig: pytest.Config) -> Iterator[str]:
+    """Unmigrated disposable selected-engine target, isolated for this test."""
+    with isolated_database(pytestconfig.getoption("db_backend"),
+                           os.environ.get("PLANORA_TEST_POSTGRES_URL", ""),
+                           _DB_SCRATCH_DIR) as url:
+        valid_env.setenv("DATABASE_URL", url)
+        yield url
 
+
+@pytest.fixture
+def migrated_database_url(database_url: str, alembic_config: Config) -> str:
+    """Migrate the selected disposable target using the shared history."""
     command.upgrade(alembic_config, "head")
-
-    try:
-        yield db_path
-    finally:
-        db_path.unlink(missing_ok=True)
+    return database_url
 
 
 @pytest.fixture
 def migrated_session_factory(
-    migrated_db_path: Path,
+    migrated_database_url: str,
 ) -> Iterator[sessionmaker[Session]]:
     """A session factory bound to the freshly migrated database above."""
     settings = load_settings()

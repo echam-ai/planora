@@ -1,7 +1,7 @@
 """Integration tests for `POST /api/v1/auth/login` (issue #25).
 
 Uses the HTTPX `AsyncClient` against the real ASGI app, exactly like
-`tests/integration/test_health.py` — no browser needed. `migrated_db_path`
+`tests/integration/test_health.py` — no browser needed. `migrated_database_url`
 (via `seeded_user`) applies the Alembic migration to a disposable SQLite
 file under the repo's `.tmp/`, and `app_factory()` (see `conftest.py`)
 builds a fresh app per test against that same database through
@@ -130,10 +130,10 @@ def test_unknown_username_returns_a_byte_identical_401_response(
 
 
 def test_login_with_no_app_user_returns_invalid_credentials(
-    migrated_db_path: object,
+    migrated_database_url: object,
     app_factory: Callable[[], FastAPI],
 ) -> None:
-    # `migrated_db_path` applies the migration but seeds no user — until
+    # `migrated_database_url` applies the migration but seeds no user — until
     # #33 lands, this is the real behavior of a fresh install: every login
     # returns INVALID_CREDENTIALS.
     app = app_factory()
