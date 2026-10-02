@@ -161,6 +161,52 @@ test("touch targets: archive and settings", async ({ page }) => {
   await expectTouchTargets(page, "16: settings");
 });
 
+test("390px active filters keep two rows with wider fallback font metrics", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signIn(page);
+  const toolbar = page.getByRole("region", { name: "Board filters" });
+  // Outfit is named but not bundled. Exercise wider glyphs deterministically,
+  // rather than letting the host's system font decide whether this test wraps.
+  await toolbar.evaluate((element) => {
+    element.style.fontFamily = "monospace";
+  });
+  await toolbar.getByRole("textbox").fill("No matching task");
+  for (const [dimension, option] of [
+    ["Category", "Work"],
+    ["Priority", "High"],
+    ["Deadline", "No deadline"],
+  ] as const) {
+    await toolbar.getByRole("button", { name: dimension, exact: true }).click();
+    await page.getByRole("button", { name: option, exact: true }).click();
+    await page.keyboard.press("Escape");
+  }
+  const box = await toolbar.boundingBox();
+  expect(box!.height).toBeLessThanOrEqual(112);
+  const triggers = await toolbar
+    .getByRole("button", { name: /^(Category|Priority|Deadline) 1$/ })
+    .all();
+  const boxes = await Promise.all(triggers.map((trigger) => trigger.boundingBox()));
+  expect(boxes).toHaveLength(3);
+  expect(boxes[0]!.y).toEqual(boxes[2]!.y);
+  for (const trigger of triggers) {
+    await expect(trigger).toHaveAccessibleDescription(/^Selected: /);
+    expect(await trigger.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+  }
+  for (let first = 0; first < triggers.length; first++) {
+    for (let second = first + 1; second < triggers.length; second++) {
+      await expectSeparateBoxes(
+        triggers[first]!,
+        triggers[second]!,
+        "fallback-font triggers stay separate",
+      );
+    }
+  }
+  await expectTouchTargets(page, "390px fallback-font active toolbar", toolbar);
+  await expectNoHorizontalScroll(page, "390px fallback-font active toolbar");
+});
+
 for (const width of [390, 320]) {
   test(`filter popovers fit ${width}px and scroll within a short viewport`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
