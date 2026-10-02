@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 max-[360px]:gap-1">
           <Link to="/tasks" className="flex min-h-11 shrink-0 items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-primary-foreground">
               <Sparkles className="h-4 w-4" aria-hidden />
@@ -103,14 +103,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
-            <Button onClick={() => setCreateOpen(true)} className="min-h-11" aria-label="Add task">
+          <div className="ml-auto flex items-center gap-2 max-[360px]:gap-0">
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className="min-h-11 max-[360px]:w-11 max-[360px]:px-0"
+              aria-label="Add task"
+            >
               <Plus className="h-4 w-4" aria-hidden />
               <span className="hidden sm:inline">Add task</span>
             </Button>
             <Button
               variant="outline"
-              className="min-h-11"
+              className="min-h-11 max-[360px]:w-11 max-[360px]:px-0"
               onClick={() => setChatOpen((v) => !v)}
               aria-pressed={chatOpen}
               aria-label="AI Assistant"

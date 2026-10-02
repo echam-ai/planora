@@ -101,6 +101,54 @@ afterEach(() => {
 });
 
 describe("Board", () => {
+  it("combines search and filters, resets empty results, and preserves manual order without writes", async () => {
+    const tasks = [
+      makeTask({
+        id: "second",
+        title: "Second notes",
+        position: 1,
+        category: "personal",
+        priority: "low",
+      }),
+      makeTask({ id: "first", title: "First notes", position: 0, priority: "high" }),
+      makeTask({ id: "third", title: "Third notes", position: 2, category: "study" }),
+    ];
+    const reorderTasks = vi.spyOn(api, "reorderTasks");
+    const moveTask = vi.spyOn(api, "moveTask");
+    renderBoard(tasks);
+    await screen.findByRole("button", { name: "Open task Third notes" });
+    const titles = () =>
+      screen
+        .getAllByRole("button", { name: /^Open task / })
+        .map((button) => button.getAttribute("aria-label"));
+    const original = titles();
+    expect(original).toEqual([
+      "Open task First notes",
+      "Open task Second notes",
+      "Open task Third notes",
+    ]);
+    for (const [dimension, choices] of [
+      ["Category", ["Work", "Personal"]],
+      ["Priority", ["High", "Low"]],
+      ["Deadline", ["No deadline"]],
+    ] as const) {
+      fireEvent.click(screen.getByRole("button", { name: dimension }));
+      for (const name of choices) fireEvent.click(screen.getByRole("button", { name }));
+    }
+    expect(titles()).toEqual(original.slice(0, 2));
+    fireEvent.change(screen.getByLabelText("Search tasks"), { target: { value: "SECOND" } });
+    expect(titles()).toEqual(["Open task Second notes"]);
+    fireEvent.click(screen.getByRole("button", { name: "Category 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Personal" }));
+    expect(screen.queryByRole("button", { name: /^Open task / })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+    expect(titles()).toEqual(original);
+    expect(screen.getByLabelText("Search tasks")).toHaveValue("");
+    expect(reorderTasks).not.toHaveBeenCalled();
+    expect(moveTask).not.toHaveBeenCalled();
+    expect(qc.getQueryData(["tasks"])).toEqual(tasks);
+  });
+
   it("shows an error state and reloads the board through Try again", async () => {
     const listTasks = vi
       .spyOn(api, "listTasks")
