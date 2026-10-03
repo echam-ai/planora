@@ -23,8 +23,8 @@ export function DemoDataSection() {
 
   return (
     <>
-      <section className="space-y-3 rounded-2xl border border-dashed border-border p-6">
-        <h2 className="text-sm font-semibold">Demo data</h2>
+      <section className="space-y-3 rounded-3xl border border-dashed border-border bg-card/60 p-6">
+        <h2 className="text-base font-semibold tracking-tight">Demo data</h2>
         <p className="text-sm text-muted-foreground">
           Reset this account’s tasks, conversation and settings to their demo defaults.
         </p>

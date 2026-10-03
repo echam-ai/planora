@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { CloudOff, SlidersHorizontal } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
+import { StatePanel } from "@/components/layout/StatePanel";
+import { AppearanceSection } from "@/features/settings/components/AppearanceSection";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -106,25 +109,33 @@ function SettingsPage() {
   const { data: settings, isError, refetch } = useSettings();
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
+      <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-8">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">Preferences for this workspace.</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Settings</h1>
+          <p className="mt-1 text-muted-foreground">Preferences for this workspace.</p>
         </div>
 
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-card">
-          <h2 className="text-sm font-semibold">Preferences</h2>
+        <AppearanceSection />
+
+        <section className="space-y-5 rounded-3xl border border-border bg-card p-6 shadow-card">
+          <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+            <SlidersHorizontal className="size-4 text-muted-foreground" aria-hidden />
+            Preferences
+          </h2>
           {settings ? (
             <PreferencesForm settings={settings} />
           ) : isError ? (
-            <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-              <p role="alert" className="text-sm text-destructive">
-                We couldn't load your settings.
-              </p>
-              <Button className="mt-3 min-h-11" variant="outline" onClick={() => refetch()}>
-                Try again
-              </Button>
-            </div>
+            <StatePanel
+              icon={CloudOff}
+              tone="error"
+              action={
+                <Button className="min-h-11" variant="outline" onClick={() => refetch()}>
+                  Try again
+                </Button>
+              }
+            >
+              We couldn't load your settings.
+            </StatePanel>
           ) : (
             <Skeleton className="h-24 w-full" />
           )}

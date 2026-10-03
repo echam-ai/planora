@@ -26,6 +26,19 @@ describe("BoardColumn", () => {
     expect(screen.getByRole("heading", { name: "To do" })).toBeInTheDocument();
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getByText("Nothing here yet.")).toBeInTheDocument();
+    // The empty message has a decorative icon beside it.
+    expect(
+      screen
+        .getByText("Nothing here yet.")
+        .parentElement?.querySelector('[aria-hidden="true"] svg'),
+    ).not.toBeNull();
+  });
+
+  it("names each column's status next to its count, not by color alone", () => {
+    render(<BoardColumn status="done" label="Done" tasks={[]} timezone="UTC" onOpen={vi.fn()} />);
+
+    expect(screen.getByRole("heading", { name: "Done" })).toBeInTheDocument();
+    expect(screen.getByText("0")).toHaveTextContent("0 tasks");
   });
 
   it("shows the drop-target highlight only while dnd-kit reports a hover over the column", () => {
@@ -35,7 +48,7 @@ describe("BoardColumn", () => {
     const { rerender } = render(
       <BoardColumn status="todo" label="To do" tasks={[]} timezone="UTC" onOpen={vi.fn()} />,
     );
-    const dropZone = screen.getByText("Nothing here yet.").parentElement!;
+    const dropZone = screen.getByTestId("column-dropzone-todo");
     expect(dropZone).not.toHaveClass("ring-2");
 
     isOver = true;

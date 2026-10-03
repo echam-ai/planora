@@ -29,7 +29,7 @@ function TaskLinks({ urls }: { urls: Task["urls"] }) {
       {urls.map((u) => (
         <li key={u.id}>
           <a
-            className="inline-flex items-center gap-1 text-primary underline"
+            className="inline-flex items-center gap-1 rounded-sm text-primary underline underline-offset-4"
             href={u.url}
             target="_blank"
             rel="noopener noreferrer nofollow"
@@ -53,7 +53,7 @@ function LoadError({
 }) {
   return (
     <div className="space-y-3" role="alert">
-      <p className="text-sm text-destructive">
+      <p className="text-sm font-medium text-destructive">
         Couldn't {verb} this archived task: {error}
       </p>
       {onRetry && (
@@ -154,7 +154,7 @@ export function TaskDetailSheet({
                 <DeadlineBadge state={getDeadlineState(task)} />
               </div>
               <p className="whitespace-pre-wrap text-sm">{task.content}</p>
-              <dl className="grid gap-2 text-sm">
+              <dl className="grid gap-2 rounded-2xl border border-border bg-muted/50 p-4 text-sm">
                 <div className="flex gap-2">
                   <dt className="w-28 text-muted-foreground">Category</dt>
                   <dd>{categoryLabels[task.category]}</dd>
@@ -177,7 +177,7 @@ export function TaskDetailSheet({
                 </div>
               </dl>
               <TaskLinks urls={task.urls} />
-              <div className="rounded-lg border border-border bg-card p-4">
+              <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
                 <MarkdownPreview source={task.markdownNote} />
               </div>
               <Button

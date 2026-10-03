@@ -5,6 +5,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { createElement, StrictMode, type ComponentType, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
+import { THEME_KEY } from "@/lib/theme";
 
 const profileContext = vi.hoisted(() => ({
   pathname: "/",
@@ -63,7 +65,11 @@ type RootRouteOptions = {
   errorComponent: ComponentType<{ error: unknown; reset: () => void }>;
   shellComponent: ComponentType<{ children: ReactNode }>;
   component: ComponentType<Record<string, never>>;
-  head: () => { meta: Array<Record<string, string>> };
+  head: () => {
+    meta: Array<Record<string, string>>;
+    scripts?: Array<{ children?: string }>;
+    links?: Array<{ rel: string; href: string }>;
+  };
 };
 
 async function importRootRoute() {
@@ -153,6 +159,27 @@ describe("root route", () => {
     expect(Route.options.head()).toMatchObject({
       meta: expect.arrayContaining([{ title: "Planora" }]),
     });
+  });
+});
+
+describe("theme bootstrap", () => {
+  afterEach(() => {
+    document.documentElement.removeAttribute("data-theme");
+    localStorage.removeItem(THEME_KEY);
+  });
+
+  it("puts the inline theme script in the head, ahead of the stylesheet", async () => {
+    const Route = await importRootRoute();
+    const head = Route.options.head();
+    expect(head.scripts).toEqual([{ children: THEME_BOOT_SCRIPT }]);
+  });
+
+  it("applies the stored theme itself if the inline script never ran", async () => {
+    localStorage.setItem(THEME_KEY, "colorful");
+    const Route = await importRootRoute();
+    const Root = Route.options.component;
+    render(createElement(Root, {}));
+    expect(document.documentElement.dataset["theme"]).toBe("colorful");
   });
 });
 

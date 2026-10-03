@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/AppShell";
 import { api } from "@/services/api";
+import { THEME_KEY } from "@/lib/theme";
 
 const navigate = vi.fn();
 
@@ -46,6 +47,8 @@ function renderShell() {
 }
 
 afterEach(() => {
+  window.localStorage.removeItem(THEME_KEY);
+  document.documentElement.removeAttribute("data-theme");
   vi.restoreAllMocks();
   navigate.mockClear();
   setOnline(true);
@@ -129,5 +132,96 @@ describe("AppShell", () => {
     expect(window.localStorage.getItem("planora.profile")).toBeNull();
     expect(clearSpy).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith({ to: "/" });
+  });
+  it("shows the selected account's name and illustration in the header, not initials", () => {
+    window.localStorage.setItem("planora.profile", "ech_princess");
+    renderShell();
+
+    const header = within(screen.getByRole("banner"));
+    expect(header.getByLabelText("Selected account")).toHaveTextContent(/^Ech Princess$/);
+    const trigger = header.getByRole("button", { name: "Account menu" });
+    expect(trigger.querySelector('svg[aria-hidden="true"][data-mascot="frog"]')).not.toBeNull();
+    expect(trigger).not.toHaveTextContent("EP");
+    // The button's aria-label replaces its content, so the name is announced as its description.
+    expect(trigger).toHaveAccessibleDescription("Ech Princess");
+    // The old standalone line under the header is gone: the name exists exactly once.
+    expect(screen.getAllByLabelText("Selected account")).toHaveLength(1);
+  });
+
+  it("shows the knight for Hamster Knight", () => {
+    window.localStorage.setItem("planora.profile", "hamster_knight");
+    renderShell();
+
+    const trigger = screen.getByRole("button", { name: "Account menu" });
+    expect(trigger.querySelector('svg[data-mascot="hamster"]')).not.toBeNull();
+    expect(screen.getByLabelText("Selected account")).toHaveTextContent(/^Hamster Knight$/);
+    expect(trigger).toHaveAccessibleDescription("Hamster Knight");
+  });
+
+  it("gives the AI Assistant button its own icon, distinct from the brand mark", () => {
+    renderShell();
+    const assistant = screen.getByRole("button", { name: "AI Assistant" });
+    expect(assistant.querySelector("svg.lucide-bot")).not.toBeNull();
+    expect(assistant.querySelector("svg.lucide-sparkles")).toBeNull();
+  });
+
+  describe("theme in the account menu", () => {
+    async function openMenu() {
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Account menu" }), { button: 0 });
+      return screen.findByRole("menu");
+    }
+
+    it("lists System, Light, Dark and Colorful as radios under a Theme label, System checked by default", async () => {
+      window.localStorage.removeItem(THEME_KEY);
+      renderShell();
+      const menu = within(await openMenu());
+
+      expect(menu.getByText("Theme")).toBeVisible();
+      const group = menu.getByRole("group", { name: "Theme" });
+      const items = within(group).getAllByRole("menuitemradio");
+      expect(items.map((item) => item.textContent)).toEqual([
+        "System",
+        "Light",
+        "Dark",
+        "Colorful",
+      ]);
+      expect(items.map((item) => item.getAttribute("aria-checked"))).toEqual([
+        "true",
+        "false",
+        "false",
+        "false",
+      ]);
+      expect(menu.getByRole("menuitem", { name: "Switch account" })).toBeVisible();
+    });
+
+    it("applies a chosen theme at once, stores it, and shows it checked when reopened", async () => {
+      window.localStorage.removeItem(THEME_KEY);
+      const getProfiles = vi.spyOn(api, "getProfiles");
+      renderShell();
+      fireEvent.click(within(await openMenu()).getByRole("menuitemradio", { name: "Colorful" }));
+
+      expect(document.documentElement.dataset["theme"]).toBe("colorful");
+      expect(window.localStorage.getItem(THEME_KEY)).toBe("colorful");
+      expect(getProfiles).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+
+      const reopened = within(await openMenu());
+      expect(reopened.getByRole("menuitemradio", { name: "Colorful" })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      expect(reopened.getByRole("menuitemradio", { name: "System" })).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+    });
+
+    it("treats an invalid stored value as System", async () => {
+      window.localStorage.setItem(THEME_KEY, "neon");
+      renderShell();
+      expect(
+        within(await openMenu()).getByRole("menuitemradio", { name: "System" }),
+      ).toHaveAttribute("aria-checked", "true");
+    });
   });
 });

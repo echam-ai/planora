@@ -12,12 +12,20 @@ import {
 } from "@/features/tasks/components/TaskBadges";
 import type { Task } from "@/types";
 
+const categoryStripe: Record<Task["category"], string> = {
+  work: "bg-cat-work-foreground/50",
+  personal: "bg-cat-personal-foreground/50",
+  study: "bg-cat-study-foreground/50",
+  other: "bg-cat-other-foreground/40",
+};
+
 export const TaskCardContent = memo(function TaskCardContent({
   task,
   timezone,
   dragging,
   detailsId,
   reserveDragHandle,
+  className,
 }: {
   task: Task;
   timezone: string;
@@ -26,24 +34,36 @@ export const TaskCardContent = memo(function TaskCardContent({
    * accessible description. Omit for copies that must not add a duplicate id (drag overlay). */
   detailsId?: string;
   reserveDragHandle?: boolean;
+  className?: string;
 }) {
   const state = getDeadlineState(task);
   return (
     <div
       className={cn(
-        "rounded-xl border border-border bg-card p-4 shadow-card transition-shadow",
-        dragging && "rotate-1 shadow-lg",
+        "relative overflow-hidden rounded-2xl border border-border bg-card py-4 pl-5 pr-4 shadow-card transition-[box-shadow,border-color] duration-200 hover:border-primary/30 hover:shadow-pop motion-reduce:transition-none",
+        dragging && "rotate-1 border-primary/40 shadow-pop ring-2 ring-primary/30",
+        className,
       )}
     >
+      {/* A quiet category stripe. The category is also named by its badge below. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-y-3 left-0 w-1 rounded-r-full",
+          categoryStripe[task.category],
+        )}
+      />
       <h3
         className={cn(
-          "text-sm font-semibold leading-snug text-card-foreground",
+          "text-sm font-semibold leading-snug tracking-tight text-card-foreground",
           reserveDragHandle && "mr-12",
         )}
       >
         {task.title}
       </h3>
-      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{task.content}</p>
+      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+        {task.content}
+      </p>
       <div id={detailsId}>
         <div className="mt-3 flex flex-wrap gap-1.5">
           <CategoryBadge category={task.category} />
@@ -97,7 +117,7 @@ export function SortableTaskCard({
       <button
         type="button"
         onClick={() => onOpen(task)}
-        className="w-full rounded-xl text-left focus-visible:outline-none"
+        className="w-full rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         aria-label={`Open task ${task.title}`}
         aria-describedby={taskCardDetailsId(task.id)}
       >
@@ -110,7 +130,7 @@ export function SortableTaskCard({
       </button>
       <button
         type="button"
-        className="absolute right-2 top-2 flex h-11 w-11 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+        className="absolute right-2 top-2 flex h-11 w-11 cursor-grab touch-none items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         aria-label={`Drag ${task.title}`}
         {...attributes}
         {...listeners}

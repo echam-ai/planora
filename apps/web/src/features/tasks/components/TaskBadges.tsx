@@ -1,4 +1,13 @@
-import { AlertTriangle, CalendarClock, CalendarOff, CheckCircle2, Clock } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CalendarClock,
+  CalendarOff,
+  CheckCircle2,
+  Clock,
+  Minus,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deadlineLabels } from "@/features/tasks/deadline";
 import { categoryLabels, priorityLabels } from "@/features/tasks/labels";
@@ -14,8 +23,10 @@ const categoryClass: Record<TaskCategory, string> = {
 const priorityClass: Record<TaskPriority, string> = {
   low: "border border-border bg-muted text-muted-foreground",
   medium: "border border-primary/30 bg-secondary text-secondary-foreground",
-  high: "bg-primary text-primary-foreground",
+  high: "border border-transparent bg-primary text-primary-foreground",
 };
+
+const priorityIcon = { low: ArrowDown, medium: Minus, high: ArrowUp };
 
 const chip = "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium";
 
@@ -24,8 +35,12 @@ export function CategoryBadge({ category }: { category: TaskCategory }) {
 }
 
 export function PriorityBadge({ priority }: { priority: TaskPriority }) {
+  const Icon = priorityIcon[priority];
   return (
-    <span className={cn(chip, priorityClass[priority])}>{priorityLabels[priority]} priority</span>
+    <span className={cn(chip, priorityClass[priority])}>
+      <Icon className="h-3.5 w-3.5" aria-hidden />
+      {priorityLabels[priority]} priority
+    </span>
   );
 }
 
