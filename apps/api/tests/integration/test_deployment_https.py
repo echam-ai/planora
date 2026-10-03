@@ -114,13 +114,13 @@ def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_pat
         root_before = ca.read_bytes()
         cert_path = f"/data/caddy/certificates/local/{DOMAIN}/{DOMAIN}.crt"
         cert_before = run("exec", "-T", "caddy", "cat", cert_path).stdout
-        status, headers, _ = request("/login?check=redirect", secure=False)
+        status, headers, _ = request("/?check=redirect", secure=False)
         assert status == 308
-        assert f"Location: {ORIGIN}/login?check=redirect".lower() in headers.lower()
+        assert f"Location: {ORIGIN}/?check=redirect".lower() in headers.lower()
         for path in ("/health", "/api/v1/health"):
             status, _, body = request(path)
             assert status == 200 and json.loads(body) == {"status": "ok"}
-        assert request("/login")[0] == 200
+        assert request("/")[0] == 200
         status, _, body = request("/api/v1/does-not-exist")
         assert status == 404 and json.loads(body)["code"] == "NOT_FOUND"
         status, headers, body = request("/api/v1/profiles")
