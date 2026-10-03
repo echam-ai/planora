@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChatPanel } from "@/features/chat/components/ChatPanel";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
-import { api } from "@/services/api";
+import { selectProfile, useSelectedProfile, PROFILES } from "@/services/api/profiles";
 import { APP_NAME } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -67,10 +67,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const logout = async () => {
-    await api.logout();
+  const profile = useSelectedProfile();
+  const profileName = PROFILES.find((p) => p.id === profile)?.name;
+  const logout = () => {
+    selectProfile(null);
     qc.clear();
-    navigate({ to: "/login" });
+    navigate({ to: "/" });
   };
 
   return (
@@ -135,12 +137,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground"
                   aria-label="Account menu"
                 >
-                  D
+                  {profile === "ech_princess" ? "EP" : "HK"}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={logout}>
-                  <LogOut className="h-4 w-4" /> Log out
+                  <LogOut className="h-4 w-4" /> Switch account
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -148,6 +150,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
+      <p className="px-4 py-2 text-sm font-medium" aria-label="Selected account">
+        {profileName}
+      </p>
       <div className="flex flex-1">
         <main className="min-w-0 flex-1 pb-20 md:pb-0">{children}</main>
         <aside

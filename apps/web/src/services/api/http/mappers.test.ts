@@ -8,8 +8,6 @@ import {
   chatMessageToDomain,
   conversationToDomain,
   taskDraftToDomain,
-  passwordChangeToWire,
-  sessionToDomain,
   settingsPatchToWire,
   settingsToDomain,
   taskDraftToWire,
@@ -21,8 +19,7 @@ import {
 
 type WireTask =
   paths["/api/v1/tasks/{task_id}"]["get"]["responses"][200]["content"]["application/json"];
-type WireSession =
-  paths["/api/v1/auth/login"]["post"]["responses"][200]["content"]["application/json"];
+
 type WireSettings =
   paths["/api/v1/settings"]["get"]["responses"][200]["content"]["application/json"];
 type WireArchiveList =
@@ -355,33 +352,6 @@ describe("http/mappers moves and reorders", () => {
 });
 
 describe("http/mappers session and settings", () => {
-  it("maps SessionResponse to exactly {username, signedInAt}", () => {
-    const session = sessionToDomain({
-      username: "demo",
-      signed_in_at: "2026-09-28T10:00:00+00:00",
-    });
-
-    expect(session).toStrictEqual({
-      username: "demo",
-      signedInAt: "2026-09-28T10:00:00+00:00",
-    });
-    expect(sortedKeys(session)).toStrictEqual(["signedInAt", "username"].sort());
-  });
-
-  it("drops an unrecognized field on SessionResponse", () => {
-    const wire = {
-      username: "demo",
-      signed_in_at: "2026-09-28T10:00:00+00:00",
-      future_field: "surprise",
-    } as WireSession;
-
-    const session = sessionToDomain(wire);
-
-    expect(session).not.toHaveProperty("future_field");
-    expect(session).not.toHaveProperty("futureField");
-    expect(sortedKeys(session)).toStrictEqual(["signedInAt", "username"].sort());
-  });
-
   it("maps SettingsResponse to exactly timezone, modelName and availableModels", () => {
     const wire: WireSettings = {
       timezone: "Asia/Singapore",
@@ -440,16 +410,6 @@ describe("http/mappers session and settings", () => {
     expect(wire).not.toHaveProperty("futureField");
     expect(wire).not.toHaveProperty("future_field");
     expect(sortedKeys(wire)).toStrictEqual(SETTINGS_UPDATE_KEYS);
-  });
-
-  it("maps a password change to exactly {current_password, new_password}", () => {
-    const wire = passwordChangeToWire("old", "new");
-
-    expect(wire).toStrictEqual({
-      current_password: "old",
-      new_password: "new",
-    });
-    expect(sortedKeys(wire)).toStrictEqual(["current_password", "new_password"].sort());
   });
 });
 

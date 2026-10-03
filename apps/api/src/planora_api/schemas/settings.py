@@ -12,12 +12,6 @@ from zoneinfo import available_timezones
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from planora_api.security.password import (
-    MAX_PASSWORD_LENGTH,
-    MIN_PASSWORD_LENGTH,
-    password_length_is_valid,
-)
-
 # Computed once at import time — `zoneinfo.available_timezones()` scans the
 # installed tzdata, which does not change while the process is running.
 # Membership is checked exactly (case-sensitive) against this set, per the
@@ -91,31 +85,3 @@ class SettingsUpdate(BaseModel):
         if _has_control_character(stripped):
             raise ValueError("model_name must not contain a control character")
         return stripped
-
-
-class PasswordChangeRequest(BaseModel):
-    """`POST /api/v1/settings/password` request body (spec §3.2).
-
-    Passwords are compared and hashed verbatim — never trimmed. Only
-    `new_password`'s length is checked here (before any database or Argon2
-    work); `current_password` is validated by the router, against the
-    stored hash, so an invalid `new_password` never costs an Argon2
-    verification. The length rule itself is `security.password`'s shared
-    definition (issue #33 moved it there so #33's administrative reset
-    command can reuse it without a second copy of the rule).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    current_password: str
-    new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def _new_password_length(cls, value: str) -> str:
-        if not password_length_is_valid(value):
-            raise ValueError(
-                f"new_password must be between {MIN_PASSWORD_LENGTH} and "
-                f"{MAX_PASSWORD_LENGTH} characters"
-            )
-        return value

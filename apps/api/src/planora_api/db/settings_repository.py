@@ -17,10 +17,7 @@ from sqlalchemy.orm import Session
 
 from planora_api.config import Settings
 from planora_api.db.models import AppSettings
-
-# `app_settings.id` is always 1 — the table's `CHECK (id = 1)` constraint
-# allows no other value (mirrors `auth_repository._SINGLE_USER_ID`).
-_SINGLE_SETTINGS_ID = 1
+from planora_api.db.profile import profile_id
 
 # Sentinel distinguishing "field left out of this update" from "field
 # explicitly set to some value" — `None` itself is not usable as that
@@ -41,9 +38,9 @@ class EffectiveSettings:
 
 
 def get_app_settings(db: Session) -> AppSettings | None:
-    """Return the single overrides row, or `None` if it does not exist yet
+    """Return the profile overrides row, or `None` if it does not exist yet
     (no `PATCH` has ever succeeded)."""
-    return db.get(AppSettings, _SINGLE_SETTINGS_ID)
+    return db.get(AppSettings, profile_id(db))
 
 
 def get_effective_settings(db: Session, settings: Settings) -> EffectiveSettings:
@@ -72,7 +69,7 @@ def update_app_settings(
     timezone: str | None = UNSET,
     model_name: str | None = UNSET,
 ) -> AppSettings | None:
-    """Apply a partial update to the single overrides row, creating it on
+    """Apply a partial update to the profile overrides row, creating it on
     first use.
 
     A field left at `UNSET` (not passed) is untouched — a `PATCH` that
@@ -93,7 +90,7 @@ def update_app_settings(
 
     row = get_app_settings(db)
     if row is None:
-        row = AppSettings(id=_SINGLE_SETTINGS_ID, timezone=None, model_name=None, updated_at=now)
+        row = AppSettings(id=profile_id(db), timezone=None, model_name=None, updated_at=now)
         db.add(row)
     if timezone is not UNSET:
         row.timezone = timezone

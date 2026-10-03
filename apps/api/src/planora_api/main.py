@@ -12,8 +12,8 @@ from fastapi import FastAPI, Request, Response
 from planora_api.ai.client import HttpLLMClient, register_llm_error_handler
 from planora_api.api.v1.ai import router as ai_router
 from planora_api.api.v1.archive import router as archive_router
-from planora_api.api.v1.auth import router as auth_router
 from planora_api.api.v1.chat import router as chat_router
+from planora_api.api.v1.profiles import router as profiles_router
 from planora_api.api.v1.settings import router as settings_router
 from planora_api.api.v1.tasks import router as tasks_router
 from planora_api.config import Settings, load_settings
@@ -69,7 +69,7 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     # No blanket `responses=` here (unlike #34's earlier draft): login,
     # logout and session read can each return a different status set —
     # `auth_router`'s own route decorators document each one precisely.
-    app.include_router(auth_router)
+    app.include_router(profiles_router)
     app.include_router(tasks_router)
     app.include_router(archive_router)
     app.include_router(settings_router)

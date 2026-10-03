@@ -98,7 +98,7 @@ def test_exit_2_with_message_naming_the_variable_on_invalid_configuration(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     for name, value in VALID_ENV.items():
-        if name != "SESSION_SECRET":
+        if name != "LLM_API_KEY":
             clean_env.setenv(name, value)
     # SESSION_SECRET deliberately left unset.
 
@@ -106,7 +106,7 @@ def test_exit_2_with_message_naming_the_variable_on_invalid_configuration(
 
     assert code == 2
     captured = capsys.readouterr()
-    assert "SESSION_SECRET" in captured.err
+    assert "LLM_API_KEY" in captured.err
 
 
 def test_exit_2_for_an_unrecognized_argument(

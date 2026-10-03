@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from alembic.script import ScriptDirectory
-from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy import MetaData, create_engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -35,7 +35,7 @@ def test_empty_history_is_idempotent_and_has_expected_schema(database_url, alemb
         assert {"task", "app_user", "auth_session", "login_failure", "app_settings", "conversation", "chat_message", "chat_action"} <= set(inspector.get_table_names())
         checks = {c["name"] for c in inspector.get_check_constraints("chat_action")}
         assert {"ck_chat_action_kind", "ck_chat_action_status"} <= checks
-        assert "uq_chat_message_sequence" in {c["name"] for c in inspector.get_unique_constraints("chat_message")}
+        assert "uq_chat_message_profile_sequence" in {c["name"] for c in inspector.get_unique_constraints("chat_message")}
         with engine.connect() as connection:
             assert connection.execute(text("select version_num from alembic_version")).scalar_one() == ScriptDirectory.from_config(alembic_config).get_current_head()
     finally:
@@ -52,14 +52,22 @@ def test_seeded_settings_revision_upgrade_preserves_account_settings_task(databa
         with Session(engine) as session:
             session.add(AppUser(id=1, username="migration-owner", password_hash="hash-preserved", created_at=instant, updated_at=instant))
             session.add(AppSettings(id=1, timezone="Asia/Singapore", model_name="kimi-k3", updated_at=instant))
-            session.add(Task(id=task_id, title="Preserve 100%_case", content="seeded content", status="todo", category="work", priority="high", position=2.5, deadline_at=instant, created_at=instant, updated_at=instant, urls=[{"url":"https://example.com", "label":"link"}], markdown_note="**note**"))
+            metadata = MetaData()
+            metadata.reflect(engine)
+            session.execute(metadata.tables["task"].insert().values(
+                id=task_id.hex if engine.dialect.name == "sqlite" else task_id,
+                title="Preserve 100%_case", content="seeded content", status="todo", category="work", priority="high",
+                position=2.5, deadline_at=instant.astimezone(UTC), created_at=instant.astimezone(UTC), updated_at=instant.astimezone(UTC),
+                urls=[{"url":"https://example.com", "label":"link"}], markdown_note="**note**",
+            ))
             session.commit()
         command.upgrade(alembic_config, "head")
         with Session(engine) as session:
             user = session.get(AppUser, 1)
             settings = session.get(AppSettings, 1)
             task = session.get(Task, task_id)
-            assert (user.username, user.password_hash, user.created_at) == ("migration-owner", "hash-preserved", instant.astimezone(UTC))
+            assert user is None  # credentials are retired by the additive profile migration
+            assert task.profile_id == 1
             assert (settings.timezone, settings.model_name, settings.updated_at) == ("Asia/Singapore", "kimi-k3", instant.astimezone(UTC))
             assert (task.id, task.title, task.content, task.position) == (task_id, "Preserve 100%_case", "seeded content", 2.5)
             assert (task.deadline_at, task.created_at, task.updated_at) == (instant.astimezone(UTC),) * 3

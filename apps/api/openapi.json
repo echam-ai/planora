@@ -238,24 +238,6 @@
         "title": "ErrorResponse",
         "type": "object"
       },
-      "LoginRequest": {
-        "properties": {
-          "password": {
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "LoginRequest",
-        "type": "object"
-      },
       "ParseTaskRequest": {
         "additionalProperties": false,
         "description": "`POST /api/v1/ai/parse-task` request body. `text` is required to be\n1 to 4000 characters *after* trimming; the trimmed value is what the\nrouter and the model both see — an over-length, empty, whitespace-only,\nmissing or non-string `text` is rejected here, before the model is\never called.",
@@ -323,24 +305,29 @@
         "title": "ParsedTaskResponse",
         "type": "object"
       },
-      "PasswordChangeRequest": {
-        "additionalProperties": false,
-        "description": "`POST /api/v1/settings/password` request body (spec §3.2).\n\nPasswords are compared and hashed verbatim — never trimmed. Only\n`new_password`'s length is checked here (before any database or Argon2\nwork); `current_password` is validated by the router, against the\nstored hash, so an invalid `new_password` never costs an Argon2\nverification. The length rule itself is `security.password`'s shared\ndefinition (issue #33 moved it there so #33's administrative reset\ncommand can reuse it without a second copy of the rule).",
+      "ProfileId": {
+        "enum": [
+          "hamster_knight",
+          "ech_princess"
+        ],
+        "title": "ProfileId",
+        "type": "string"
+      },
+      "ProfileResponse": {
         "properties": {
-          "current_password": {
-            "title": "Current Password",
-            "type": "string"
+          "id": {
+            "$ref": "#/components/schemas/ProfileId"
           },
-          "new_password": {
-            "title": "New Password",
+          "name": {
+            "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "current_password",
-          "new_password"
+          "id",
+          "name"
         ],
-        "title": "PasswordChangeRequest",
+        "title": "ProfileResponse",
         "type": "object"
       },
       "SendMessageRequest": {
@@ -356,24 +343,6 @@
           "text"
         ],
         "title": "SendMessageRequest",
-        "type": "object"
-      },
-      "SessionResponse": {
-        "properties": {
-          "signed_in_at": {
-            "title": "Signed In At",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "username",
-          "signed_in_at"
-        ],
-        "title": "SessionResponse",
         "type": "object"
       },
       "SettingsResponse": {
@@ -833,6 +802,16 @@
     "/api/v1/ai/parse-task": {
       "post": {
         "operationId": "parse_task_api_v1_ai_parse_task_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -853,16 +832,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -949,6 +918,14 @@
               "title": "Page Size",
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -961,16 +938,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "422": {
             "content": {
@@ -1002,21 +969,19 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1066,6 +1031,14 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -1078,16 +1051,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "404": {
             "content": {
@@ -1129,6 +1092,14 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -1141,16 +1112,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1189,130 +1150,6 @@
         ]
       }
     },
-    "/api/v1/auth/login": {
-      "post": {
-        "operationId": "login_api_v1_auth_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request fields"
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          }
-        },
-        "summary": "Login",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/logout": {
-      "post": {
-        "operationId": "logout_api_v1_auth_logout_post",
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          }
-        },
-        "summary": "Logout",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
-    "/api/v1/auth/session": {
-      "get": {
-        "operationId": "read_session_api_v1_auth_session_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionResponse"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "title": "Response Read Session Api V1 Auth Session Get"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Read Session",
-        "tags": [
-          "auth"
-        ]
-      }
-    },
     "/api/v1/chat/actions/{action_id}/confirm": {
       "post": {
         "description": "Apply a pending proposal's write (spec §41). Calls no LLM. Every\ndocumented failure (`404`, `409 ACTION_ALREADY_REJECTED`,\n`409 ACTION_STALE`) is raised by `db.chat_action_repository.confirm`\nitself and propagates unchanged through this route.",
@@ -1327,6 +1164,14 @@
               "title": "Action Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -1339,16 +1184,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1411,6 +1246,14 @@
               "title": "Action Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -1423,16 +1266,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1484,6 +1317,16 @@
     "/api/v1/chat/conversation": {
       "get": {
         "operationId": "read_conversation_api_v1_chat_conversation_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1495,7 +1338,7 @@
             },
             "description": "Successful Response"
           },
-          "401": {
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1503,7 +1346,7 @@
                 }
               }
             },
-            "description": "API error envelope"
+            "description": "Invalid request fields"
           }
         },
         "summary": "Read Conversation",
@@ -1513,6 +1356,16 @@
       },
       "post": {
         "operationId": "reset_conversation_api_v1_chat_conversation_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "content": {
@@ -1524,16 +1377,6 @@
             },
             "description": "Successful Response"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
           "403": {
             "content": {
               "application/json": {
@@ -1543,6 +1386,16 @@
               }
             },
             "description": "API error envelope"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request fields"
           }
         },
         "summary": "Reset Conversation",
@@ -1555,6 +1408,16 @@
       "post": {
         "description": "Send one user message and return the full, updated conversation.\n\nNo write happens before `send_chat_message` returns successfully — a\nfailure anywhere in its tool-call loop (an `LLMUnavailableError`,\nsurfaced as `503 AI_UNAVAILABLE` by `ai.client.register_llm_error_\nhandler`) propagates straight out of this route, and `api.deps.get_db`\nrolls back the request's transaction, so neither the user turn, an\nassistant turn, nor any proposal is ever persisted (spec §10.4).\n\nIssue #41: the first proposal the turn produced (if any) is attached to\nthe one assistant message that carries the model's final text; each\nfurther proposal gets its own assistant message with empty text, in\ncall order — never a `task` row, which only a later confirm writes.",
         "operationId": "send_message_api_v1_chat_messages_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1575,16 +1438,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1645,9 +1498,44 @@
         "summary": "Health"
       }
     },
+    "/api/v1/profiles": {
+      "get": {
+        "operationId": "list_profiles_api_v1_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileResponse"
+                  },
+                  "title": "Response List Profiles Api V1 Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Profiles",
+        "tags": [
+          "profiles"
+        ]
+      }
+    },
     "/api/v1/settings": {
       "get": {
         "operationId": "read_settings_api_v1_settings_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1659,7 +1547,7 @@
             },
             "description": "Successful Response"
           },
-          "401": {
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1667,7 +1555,7 @@
                 }
               }
             },
-            "description": "API error envelope"
+            "description": "Invalid request fields"
           }
         },
         "summary": "Read Settings",
@@ -1677,6 +1565,16 @@
       },
       "patch": {
         "operationId": "update_settings_api_v1_settings_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1697,16 +1595,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1735,73 +1623,19 @@
         ]
       }
     },
-    "/api/v1/settings/password": {
-      "post": {
-        "operationId": "change_password_api_v1_settings_password_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PasswordChangeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request fields"
-          }
-        },
-        "summary": "Change Password",
-        "tags": [
-          "settings"
-        ]
-      }
-    },
     "/api/v1/tasks": {
       "get": {
         "operationId": "list_tasks_api_v1_tasks_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -1816,16 +1650,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "422": {
             "content": {
@@ -1845,6 +1669,16 @@
       },
       "post": {
         "operationId": "create_task_api_v1_tasks_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1865,16 +1699,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -1906,6 +1730,16 @@
     "/api/v1/tasks/reorder": {
       "post": {
         "operationId": "reorder_tasks_api_v1_tasks_reorder_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1931,7 +1765,7 @@
             },
             "description": "Successful Response"
           },
-          "401": {
+          "403": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1941,7 +1775,7 @@
             },
             "description": "API error envelope"
           },
-          "403": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1981,21 +1815,19 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -2045,6 +1877,14 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "responses": {
@@ -2057,16 +1897,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "404": {
             "content": {
@@ -2106,6 +1936,14 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "requestBody": {
@@ -2128,16 +1966,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {
@@ -2190,6 +2018,14 @@
               "title": "Task Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Planora-Profile",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ProfileId"
+            }
           }
         ],
         "requestBody": {
@@ -2216,16 +2052,6 @@
               }
             },
             "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "API error envelope"
           },
           "403": {
             "content": {

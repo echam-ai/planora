@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -23,3 +23,5 @@ Element.prototype.releasePointerCapture ??= () => {};
 afterEach(() => {
   cleanup();
 });
+
+beforeEach(() => window.localStorage.setItem("planora.profile", "hamster_knight"));

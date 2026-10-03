@@ -5,8 +5,8 @@ import { apiEnv, runSettings, uvArgs } from "./e2e-http/env";
 // The HTTP-mode smoke suite (#88): a real uvicorn API plus the web dev server
 // in `VITE_API_MODE=http`, on a fresh migrated SQLite file, with free ports
 // chosen once by `e2e-http/run.ts`. Kept apart from `playwright.config.ts`
-// so `bun run e2e` never lists or runs it. Chromium only, one worker: every
-// test shares one database and one account. No retries, default timeouts.
+// so `bun run e2e` never lists or runs it. Desktop and mobile Chromium, one worker: every
+// test shares one database with two profiles. No retries, default timeouts.
 const { dir, webOrigin, apiOrigin, apiPort } = runSettings();
 const webPort = new URL(webOrigin).port;
 
@@ -19,7 +19,10 @@ export default defineConfig({
   workers: 1,
   reporter: "html",
   use: { baseURL: webOrigin },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile-chromium", use: { ...devices["Pixel 5"] } },
+  ],
   webServer: [
     {
       // cwd is the run directory, which holds no `.env`, so the developer's

@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import select
@@ -346,11 +346,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def test_after_a_run_an_archived_task_leaves_the_board_and_appears_in_the_archive(
@@ -366,7 +363,7 @@ def test_after_a_run_an_archived_task_leaves_the_board_and_appears_in_the_archiv
 
     async def before_scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get("/api/v1/tasks")
 
     before = _run(before_scenario)
@@ -376,7 +373,7 @@ def test_after_a_run_an_archived_task_leaves_the_board_and_appears_in_the_archiv
 
     async def after_scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             board = await client.get("/api/v1/tasks")
             archived = await client.get("/api/v1/archive")
             return board, archived

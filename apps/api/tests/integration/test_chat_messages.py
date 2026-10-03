@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import event, select
@@ -54,11 +54,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _fixed_clock(app: FastAPI, now: datetime = NOW) -> None:
@@ -151,7 +148,7 @@ def test_user_asks_what_is_overdue(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "What is overdue?"})
 
     response = _run(scenario)
@@ -202,7 +199,7 @@ def test_due_soon_boundary(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "What is due soon?"})
 
     response = _run(scenario)
@@ -246,7 +243,7 @@ def test_user_searches_the_archive(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "Did I archive anything about my passport?"})
 
     response = _run(scenario)
@@ -279,7 +276,7 @@ def test_model_requests_a_write_or_sends_bad_arguments(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "Create a task and show urgent ones"})
 
     response = _run(scenario)
@@ -318,7 +315,7 @@ def test_injected_closing_delimiter_cannot_trigger_a_write(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             benign = await client.post(MESSAGES_URL, json={"text": "hello"})
             injected = await client.post(MESSAGES_URL, json={"text": injected_text})
             return benign, injected
@@ -373,7 +370,7 @@ def test_llm_fails_mid_loop(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "hi"})
 
     response = _run(scenario)
@@ -407,7 +404,7 @@ def test_llm_fails_via_client_disconnect(
 
     async def scenario() -> tuple[Response, float]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             started = time.perf_counter()
             response = await client.post(MESSAGES_URL, json={"text": "hi"})
             return response, time.perf_counter() - started
@@ -435,7 +432,7 @@ def test_loop_bound_reached(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "keep searching"})
 
     response = _run(scenario)
@@ -458,7 +455,7 @@ def test_final_completion_with_blank_content_is_treated_as_a_failure(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "hi"})
 
     response = _run(scenario)
@@ -488,7 +485,7 @@ def test_settings_model_override_is_used_on_every_call(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch("/api/v1/settings", json={"model_name": "override-model"})
             return await client.post(MESSAGES_URL, json={"text": "hi"})
 
@@ -520,7 +517,7 @@ def test_success_returns_full_conversation_with_new_turns_last(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "new question"})
 
     response = _run(scenario)
@@ -549,7 +546,7 @@ def test_conversation_is_lazily_created_by_the_first_send(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "hi"})
 
     response = _run(scenario)
@@ -577,7 +574,7 @@ def test_more_than_20_prior_messages_are_capped_to_the_most_recent_20(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "the newest question"})
 
     response = _run(scenario)
@@ -608,8 +605,8 @@ def test_requires_a_session(
             return await client.post(MESSAGES_URL, json={"text": "hello"})
 
     response = _run(scenario)
-    assert response.status_code == 401
-    assert response.json()["code"] == "NOT_AUTHENTICATED"
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
     assert fake.calls == []
     assert _all_messages(migrated_session_factory) == []
 
@@ -625,7 +622,7 @@ def test_rejects_a_foreign_origin_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
         async with make_client(app, origin=FOREIGN_ORIGIN) as foreign_client:
             return await foreign_client.post(MESSAGES_URL, json={"text": "hello"})
 
@@ -659,7 +656,7 @@ def test_invalid_text_gives_422_and_never_calls_the_model(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json=body)
 
     response = _run(scenario)
@@ -681,7 +678,7 @@ def test_exactly_4000_characters_is_accepted(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "x" * 4000})
 
     response = _run(scenario)
@@ -727,7 +724,7 @@ def test_no_non_select_statement_precedes_the_final_completion_returning(
         # Login first, outside the listener, so its own session-row insert
         # (unrelated to the chat send) isn't counted.
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
 
             engine = app.state.session_factory.kw["bind"]
 
@@ -772,7 +769,7 @@ def test_read_tools_write_nothing_end_to_end(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "what do I have?"})
 
     response = _run(scenario)
@@ -815,7 +812,7 @@ def test_nothing_sensitive_is_logged(
 
     async def success_scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": text_sentinel})
 
     success_response = _run(success_scenario)
@@ -831,7 +828,7 @@ def test_nothing_sensitive_is_logged(
 
     async def invalid_tool_scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "please create a task"})
 
     invalid_response = _run(invalid_tool_scenario)
@@ -844,7 +841,7 @@ def test_nothing_sensitive_is_logged(
 
     async def failing_scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": text_sentinel})
 
     failing_response = _run(failing_scenario)

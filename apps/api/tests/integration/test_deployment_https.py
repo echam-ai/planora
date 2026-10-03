@@ -17,7 +17,7 @@ DOMAIN = "planora.localhost"
 ORIGIN = f"https://{DOMAIN}"
 
 
-def test_caddy_https_redirect_auth_origin_and_persistent_certificates(tmp_path):
+def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_path):
     project = os.environ.get("PLANORA_TLS_SMOKE_PROJECT")
     if not project:
         pytest.skip("opt-in: PLANORA_TLS_SMOKE_PROJECT=planora46-...; see deploy runbook")
@@ -86,7 +86,8 @@ def test_caddy_https_redirect_auth_origin_and_persistent_certificates(tmp_path):
                 "--connect-to", f"{DOMAIN}:{port}:127.0.0.1:{target}",
                 "--dump-header", str(headers), "--output", str(content),
                 "--write-out", "%{http_code}", "--request", method,
-                "--cookie", str(cookies), "--cookie-jar", str(cookies)]
+                "--cookie", str(cookies), "--cookie-jar", str(cookies),
+                "--header", "X-Planora-Profile: hamster_knight"]
         if secure:
             args += ["--cacert", str(ca)]
         if origin is not None:
@@ -100,20 +101,6 @@ def test_caddy_https_redirect_auth_origin_and_persistent_certificates(tmp_path):
     try:
         run("up", "-d", "--wait", "db")
         run("run", "--rm", "--no-deps", "api", "alembic", "upgrade", "head")
-        # Only the unique fixture database: never administrative production writes.
-        seed = """from datetime import datetime, UTC
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from planora_api.config import Settings
-from planora_api.db.models import AppUser
-from planora_api.security.password import hash_password
-with Session(create_engine(Settings().database_url)) as session:
-    now = datetime.now(UTC)
-    session.merge(AppUser(id=1, username='tls-fixture',
-        password_hash=hash_password('Disposable46!Password'), created_at=now, updated_at=now))
-    session.commit()
-"""
-        run("run", "--rm", "--no-deps", "-T", "api", "python", "-c", seed)
         run("up", "-d", "--wait", "--wait-timeout", "120", "caddy", "api", "web", "db")
         # Scheduler intentionally disables the API image healthcheck. Some
         # Compose versions reject --wait for such a worker, so start separately.
@@ -136,11 +123,9 @@ with Session(create_engine(Settings().database_url)) as session:
         assert request("/login")[0] == 200
         status, _, body = request("/api/v1/does-not-exist")
         assert status == 404 and json.loads(body)["code"] == "NOT_FOUND"
-        status, headers, _ = request("/api/v1/auth/login", method="POST", origin=ORIGIN,
-                                     body={"username": "tls-fixture", "password": "Disposable46!Password"})
-        assert status == 200
-        cookie = next(line.lower() for line in headers.splitlines() if line.lower().startswith("set-cookie:"))
-        assert all(attribute in cookie for attribute in ("secure", "httponly", "samesite=lax"))
+        status, headers, body = request("/api/v1/profiles")
+        assert status == 200 and len(json.loads(body)) == 2
+        assert "set-cookie:" not in headers.lower()
         status, _, body = request("/api/v1/tasks", method="POST", origin=ORIGIN,
                                  body={"title": "HTTPS transport", "content": "Fixture write"})
         assert status == 201
@@ -155,9 +140,9 @@ with Session(create_engine(Settings().database_url)) as session:
         run("cp", "caddy:/data/caddy/pki/authorities/local/root.crt", str(ca))
         assert ca.read_bytes() == root_before
         assert request(f"/api/v1/tasks/{task_id}")[0] == 200
-        print("308 path/query redirect; CA-validated HTTPS health/prefix; Secure HttpOnly SameSite cookie")
+        print("308 path/query redirect; CA-validated HTTPS health/prefix; no login cookies")
         print("HTTPS Origin write accepted; missing/wrong Origin rejected; all service ports private")
-        print("Caddy leaf/root state and authenticated task survive proxy recreation")
+        print("Caddy leaf/root state and profile-owned task survive proxy recreation")
     finally:
         # This named project's disposable state only. Production commands never use -v.
         run("down", "--volumes", "--remove-orphans")

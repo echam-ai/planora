@@ -1,12 +1,15 @@
 import { ApiError, type Task, type TaskStatus } from "@/types";
 import { uid } from "@/lib/id";
 import type { ApiClient } from "../ApiClient";
-import { delay, ensureTasks, maybeFail, normalisePositions, nowIso, saveTasks } from "./store";
+import { delay, normalisePositions, nowIso, createStore, type MockStore } from "./store";
 
-export function createTasksClient(): Pick<
+export function createTasksClient(
+  store: MockStore = createStore("hamster_knight"),
+): Pick<
   ApiClient,
   "listTasks" | "getTask" | "createTask" | "updateTask" | "deleteTask" | "moveTask" | "reorderTasks"
 > {
+  const { ensureTasks, maybeFail, saveTasks, hasForeignTask } = store;
   return {
     async listTasks() {
       await delay();
@@ -14,8 +17,8 @@ export function createTasksClient(): Pick<
     },
     async getTask(id) {
       await delay(150, 300);
-      const task = ensureTasks().find((candidate) => candidate.id === id);
-      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.");
+      const task = ensureTasks().find((candidate) => candidate.id === id && !candidate.archivedAt);
+      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.", { status: 404 });
       return task;
     },
     async createTask(draft) {
@@ -40,8 +43,8 @@ export function createTasksClient(): Pick<
       await delay();
       maybeFail("save the task");
       const tasks = ensureTasks();
-      const task = tasks.find((candidate) => candidate.id === id);
-      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.");
+      const task = tasks.find((candidate) => candidate.id === id && !candidate.archivedAt);
+      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.", { status: 404 });
       Object.assign(task, patch, { updatedAt: nowIso() });
       if (patch.status === "done" && !task.completedAt) task.completedAt = nowIso();
       if (patch.status && patch.status !== "done") task.completedAt = null;
@@ -51,14 +54,17 @@ export function createTasksClient(): Pick<
     async deleteTask(id) {
       await delay();
       maybeFail("delete the task");
-      saveTasks(normalisePositions(ensureTasks().filter((task) => task.id !== id)));
+      const tasks = ensureTasks();
+      if (!tasks.some((task) => task.id === id && !task.archivedAt))
+        throw new ApiError("NOT_FOUND", "That task no longer exists.", { status: 404 });
+      saveTasks(normalisePositions(tasks.filter((task) => task.id !== id)));
     },
     async moveTask(id, status, position) {
       await delay();
       maybeFail("move the task");
       const tasks = ensureTasks();
-      const task = tasks.find((candidate) => candidate.id === id);
-      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.");
+      const task = tasks.find((candidate) => candidate.id === id && !candidate.archivedAt);
+      if (!task) throw new ApiError("NOT_FOUND", "That task no longer exists.", { status: 404 });
       const target = tasks
         .filter(
           (candidate) =>
@@ -80,8 +86,12 @@ export function createTasksClient(): Pick<
       await delay();
       maybeFail("reorder tasks");
       const tasks = ensureTasks();
+      if (orderedIds.some((id) => hasForeignTask(id)))
+        throw new ApiError("NOT_FOUND", "That task no longer exists.", { status: 404 });
+      if (orderedIds.some((id) => !tasks.some((task) => task.id === id)))
+        throw new ApiError("VALIDATION_ERROR", "Unknown task in ordering.", { status: 422 });
       orderedIds.forEach((id, index) => {
-        const task = tasks.find((candidate) => candidate.id === id);
+        const task = tasks.find((candidate) => candidate.id === id && !candidate.archivedAt);
         if (task && task.status === status) task.position = index;
       });
       saveTasks(tasks);

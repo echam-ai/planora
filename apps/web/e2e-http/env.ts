@@ -12,9 +12,6 @@ import { resolve } from "node:path";
 export const apiDir = resolve(import.meta.dirname, "../../api");
 export const seedScript = resolve(import.meta.dirname, "seed.py");
 
-export const USERNAME = "smoke";
-export const PASSWORD = "smoke-password-1";
-
 function required(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is not set; run the suite with \`bun run e2e:http\`.`);
@@ -38,7 +35,6 @@ export function apiEnv(): Record<string, string> {
   const { dir, webOrigin } = runSettings();
   return {
     DATABASE_URL: `sqlite:///${dir}/planora.db`,
-    SESSION_SECRET: "e2e-http-session-secret",
     LLM_BASE_URL: "http://127.0.0.1:9",
     LLM_API_KEY: "e2e-http-placeholder-key",
     LLM_MODEL: "kimi-k3",

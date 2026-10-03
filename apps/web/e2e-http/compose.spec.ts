@@ -19,7 +19,7 @@ test("Caddy serves web assets and preserves API routing", async ({ page, request
   );
   await page.goto("/login");
   expect((await assetResponse).status()).toBe(200);
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hamster Knight" })).toBeVisible();
 });
 
 test("logs in and writes a task through one origin while preserving CSRF protection", async ({
@@ -35,14 +35,10 @@ test("logs in and writes a task through one origin while preserving CSRF protect
   });
   const title = `Compose task ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   await page.goto("/login");
-  await page.getByLabel("Username").fill(process.env["PLANORA_E2E_COMPOSE_USERNAME"]!);
-  await page.getByLabel("Password").fill(process.env["PLANORA_E2E_COMPOSE_PASSWORD"]!);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 
-  const session = (await context.cookies()).find((cookie) => cookie.name === "planora_session");
-  expect(session?.domain).toBe(new URL(origin).hostname);
-  expect(session?.httpOnly).toBe(true);
+  expect(await context.cookies()).toEqual([]);
 
   await page.getByRole("button", { name: "Add task" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a task" });
@@ -56,7 +52,9 @@ test("logs in and writes a task through one origin while preserving CSRF protect
   await page.reload();
   await expect(card).toBeVisible();
 
-  const listed = await page.request.get("/api/v1/tasks");
+  const listed = await page.request.get("/api/v1/tasks", {
+    headers: { "X-Planora-Profile": "hamster_knight" },
+  });
   expect(listed.status()).toBe(200);
   const tasks = (await listed.json()) as Array<{ id: string; title: string; content: string }>;
   const stored = tasks.find((task) => task.title === title);
@@ -64,7 +62,7 @@ test("logs in and writes a task through one origin while preserving CSRF protect
 
   for (const headers of [{ Origin: "http://wrong-origin.invalid" }, {}]) {
     const rejected = await page.request.patch(`/api/v1/tasks/${stored!.id}`, {
-      headers,
+      headers: { ...headers, "X-Planora-Profile": "hamster_knight" },
       data: { content: "Rejected origin must not overwrite this task." },
     });
     expect(rejected.status()).toBe(403);
@@ -83,7 +81,9 @@ test("logs in and writes a task through one origin while preserving CSRF protect
   await page.getByRole("button", { name: "Delete task", exact: true }).click();
   await expect(sheet).toBeHidden();
   await expect(card).toHaveCount(0);
-  const remaining = await page.request.get("/api/v1/tasks");
+  const remaining = await page.request.get("/api/v1/tasks", {
+    headers: { "X-Planora-Profile": "hamster_knight" },
+  });
   expect(remaining.status()).toBe(200);
   expect((await remaining.json()) as Array<{ id: string }>).not.toContainEqual(
     expect.objectContaining({ id: stored!.id }),

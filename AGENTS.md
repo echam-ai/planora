@@ -6,7 +6,7 @@ Treat a feature request or bug report as permission to run the pipeline's role a
 
 ## Project
 
-Planora — a private, single-user AI task manager. Three-column Kanban board, searchable archive, one AI chat conversation whose every write is user-confirmed, hourly archive job. One VPS behind Docker Compose. Exactly one user account, no multi-tenancy.
+Planora — a private AI task manager with two fixed unauthenticated profiles, Hamster Knight and Ech Princess. Each has independent tasks, board order, searchable archive, one AI conversation whose every write is user-confirmed, timezone and model preferences. A no-login chooser selects the profile; anyone who can reach the app may choose either. Active and archived tasks support irreversible confirmed permanent deletion. One VPS behind Docker Compose; hourly archival handles both profiles.
 
 | | |
 | --- | --- |

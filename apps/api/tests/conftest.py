@@ -203,36 +203,9 @@ AUTH_USERNAME = "owner"
 AUTH_PASSWORD = "correct horse battery staple"
 
 
-def seed_app_user(
-    session_factory: sessionmaker[Session],
-    *,
-    username: str = AUTH_USERNAME,
-    password: str = AUTH_PASSWORD,
-    now: object | None = None,
-) -> None:
-    """Create the single `app_user` row directly through the repository
-    function #25 provides for #33, so auth tests don't need a real signup
-    endpoint (there isn't one — #25 creates no user, see the issue)."""
-    from datetime import UTC, datetime
-
-    from planora_api.db import auth_repository
-    from planora_api.security.password import hash_password
-
-    if now is None:
-        now = datetime.now(UTC)
-    with session_factory() as session:
-        auth_repository.upsert_app_user(
-            session, username=username, password_hash=hash_password(password), now=now
-        )
-        session.commit()
-
-
 @pytest.fixture
-def seeded_user(
-    migrated_session_factory: sessionmaker[Session],
-) -> tuple[str, str]:
-    """The single account, seeded with `AUTH_USERNAME`/`AUTH_PASSWORD`."""
-    seed_app_user(migrated_session_factory)
+def seeded_user(migrated_session_factory: sessionmaker[Session]) -> tuple[str, str]:
+    """Legacy fixture name: ensure migrations exist, without creating credentials."""
     return AUTH_USERNAME, AUTH_PASSWORD
 
 

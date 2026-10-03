@@ -1,6 +1,7 @@
 # Planora
 
-Planora is a private, single-user AI task manager: a three-column Kanban
+Planora is a private AI task manager with two fixed unauthenticated profiles,
+**Hamster Knight** and **Ech Princess**: a three-column Kanban
 board, a searchable archive, and one AI chat conversation whose every write
 you confirm before it happens.
 
@@ -54,21 +55,11 @@ cp apps/api/.env.example apps/api/.env
 
 Edit `apps/api/.env` and fill in **only `LLM_API_KEY`** — use `LLM_API_KEY=placeholder`
 if you don't have a real key yet, which leaves AI parsing and chat
-unavailable (see the note below for a real key). Leave `SESSION_SECRET`
-and `APP_ORIGIN` blank. The local launcher generates a private random
-session secret and uses `http://localhost:5173` automatically.
-
-**One-time account creation**, from the repository root:
-
-```sh
-scripts/run-local.sh --setup-account
-```
-
-This installs API dependencies and applies migrations to the local database,
-then runs the existing interactive account command with the same local defaults.
-Follow the prompts to set the single account's username and password. Run this
-mode again only when you want to reset the password; normal launch keeps your
-account credentials.
+unavailable (see the note below for a real key). Leave `APP_ORIGIN` blank;
+the launcher uses `http://localhost:5173` automatically. No account setup,
+username, password or session secret is required. Open the landing page and
+choose **Hamster Knight** or **Ech Princess**. Profile choice separates saved
+data and is not identity protection.
 
 **Launch**, from the repository root:
 
@@ -87,14 +78,8 @@ the existing launcher using the shutdown steps below, then retry.
 Optional overrides belong in `apps/api/.env`: set `APP_ORIGIN` to
 `http://localhost:<port>` or `http://127.0.0.1:<port>` (port 1–65535) to
 choose the exact web address. A busy port fails rather than selecting another.
-Set a stable `SESSION_SECRET` (for example, generate one with
-`openssl rand -hex 32`) to keep sessions usable across restarts. When it is
-blank, each launcher invocation uses a new secret: sign in again after
-restarting. Generated secrets are never printed, saved or written to `.env`.
-
-These defaults apply only to `scripts/run-local.sh` and its account setup mode.
-Direct API, scheduler and administrative commands, and deployment, still
-require explicit nonblank `SESSION_SECRET`, `APP_ORIGIN` and `LLM_API_KEY`.
+Direct API and scheduler commands and deployment require explicit nonblank
+`APP_ORIGIN` and `LLM_API_KEY`. Neither profile needs credential setup.
 
 A placeholder `LLM_API_KEY` (e.g. `LLM_API_KEY=placeholder`) is enough to
 start everything — the board, tasks and archive all work — but AI parsing
@@ -183,3 +168,14 @@ confirm its owning process before sending any signal.
 - [Development process](docs/PROCESS.md)
 - [Backlog](docs/tasks.md)
 - [Architecture decisions](docs/adr/)
+
+Profile selection separates tasks, ordering, archive/search, chat/proposals and
+preferences. It is not identity protection: anyone who can reach the app can
+choose either account. `/` always shows the chooser; refresh and direct links
+remember a valid browser selection. Use **Switch account** to discard unsaved
+views and return to the chooser. Legacy data belongs to Hamster Knight; Ech
+Princess starts empty with deployment defaults.
+
+Active and archived task details offer permanent deletion. Review the task title
+and irreversible warning, then cancel or confirm. There is no trash or undo;
+past chat text and backups remain.

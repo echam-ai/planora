@@ -58,18 +58,6 @@ if args == ["run", "alembic", "upgrade", "head"]:
     cfg = Config(os.environ["ALEMBIC_CONFIG"])
     cfg.set_main_option("script_location", os.environ["MIGRATIONS"])
     command.upgrade(cfg, "head")
-elif args == ["run", "python", "-m", "planora_api.admin.reset_password"]:
-    from planora_api.admin.reset_password import main
-    prompts = []
-    def read(prompt):
-        prompts.append(prompt)
-        return "local-user"
-    def password(prompt):
-        prompts.append(prompt)
-        return "local-test-password"
-    result = main([], read_line=read, prompt=password, stdin_is_tty=lambda: True)
-    Path(os.environ["PROMPTS"]).write_text(json.dumps(prompts))
-    sys.exit(result)
 elif "uvicorn" in args or "dev" in args or "planora_api.jobs.scheduler" in args:
     if "dev" in args and os.environ.get("BUSY_PORT"):
         sys.exit(1)
@@ -171,11 +159,11 @@ def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     records = launcher.records()
     configured = [r for r in records if r["name"] in {"uv", "bun"} and r["args"] != ["sync", "--locked"]]
     secret = configured[0]["secret"]
-    assert len(bytes.fromhex(secret)) >= 32
+    assert secret is None
     assert all(r["secret"] == secret for r in configured)
     assert all(r["origin"] == launcher.origin for r in configured)
     assert all(r["key"] == "placeholder" for r in configured)
-    assert secret not in output
+    assert "SESSION_SECRET" not in output
     assert f"Ready. Open {launcher.origin}" in output
     web = next(r for r in records if "dev" in r["args"])
     assert web["args"] == ["run", "dev", "--", "--host", "localhost", "--port", str(launcher.web_port), "--strictPort"]
@@ -186,8 +174,8 @@ def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     code, output = launcher.run(ready=True)
     assert code == 0, output
     new_secret = launcher.records()[len(records) + 1]["secret"]
-    assert new_secret != secret
-    assert new_secret not in output
+    assert new_secret is None
+    assert "SESSION_SECRET" not in output
     assert launcher.env_file.read_text() == original
 
 
@@ -198,9 +186,9 @@ def test_overrides_are_preserved_without_shell_execution(launcher: Launcher, hos
     original = launcher.configure(f"SESSION_SECRET={secret}\nAPP_ORIGIN={origin}\n")
     code, output = launcher.run(ready=True)
     assert code == 0, output
-    assert all(r["secret"] == secret and r["origin"] == origin
+    assert all(r["secret"] is None and r["origin"] == origin
                for r in launcher.records() if r["args"] != ["sync", "--locked"])
-    assert secret not in output
+    assert "SESSION_SECRET" not in output
     assert not (launcher.root / "SHOULD_NOT_EXIST").exists()
     assert launcher.env_file.read_text() == original
 
@@ -278,65 +266,38 @@ def test_ready_waits_for_web_and_proxied_api(launcher: Launcher) -> None:
 
 
 @pytest.mark.parametrize("host", [None, "127.0.0.1"])
-def test_setup_migrates_creates_account_then_login_and_csrf_work(
+def test_launcher_migrates_and_both_profiles_work_without_setup(
     launcher: Launcher, monkeypatch: pytest.MonkeyPatch, host: str | None,
 ) -> None:
     origin = None if host is None else f"http://{host}:{launcher.web_port}"
-    # Follow README exactly: copy the template and fill in only the LLM key.
     template = (REPO / "apps/api/.env.example").read_text()
     content = template.replace("LLM_API_KEY=\n", "LLM_API_KEY=placeholder\n")
     if origin is not None:
         content = content.replace("APP_ORIGIN=\n", f"APP_ORIGIN={origin}\n")
     launcher.env_file.write_text(content)
-    code, output = launcher.run("--setup-account")
+    code, output = launcher.run(ready=True)
     assert code == 0, output
     records = launcher.records()
-    assert [r["args"] for r in records] == [
-        ["sync", "--locked"], ["run", "alembic", "upgrade", "head"],
-        ["run", "python", "-m", "planora_api.admin.reset_password"],
-    ]
-    assert json.loads((launcher.root / "prompts.json").read_text()) == [
-        "Username: ", "New password: ", "Confirm new password: ",
-    ]
+    assert any(r["args"] == ["run", "alembic", "upgrade", "head"] for r in records)
+    assert not any("reset_password" in str(r["args"]) for r in records)
+    assert not (launcher.root / "prompts.json").exists()
     for name in ENV_VAR_NAMES:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.chdir(launcher.root / "apps/api")
-    # Use the ordinary launch's generated configuration, not the setup secret.
-    code, output = launcher.run(ready=True)
-    assert code == 0, output
-    config = next(r for r in launcher.records()[len(records):] if "uvicorn" in r["args"])
-    monkeypatch.setenv("SESSION_SECRET", config["secret"])
+    config = next(r for r in records if "uvicorn" in r["args"])
     monkeypatch.setenv("APP_ORIGIN", config["origin"])
     monkeypatch.setenv("LLM_API_KEY", "placeholder")
     app = create_app()
-
     async def scenario() -> None:
         async with make_client(app, origin=config["origin"], base_url=config["origin"]) as client:
-            login = await client.post("/api/v1/auth/login", json={
-                "username": "local-user", "password": PASSWORD,
-            })
-            assert login.status_code == 200
-            assert client.cookies.get("planora_session")
-            assert (await client.get("/api/v1/tasks")).status_code == 200
+            for profile in ("hamster_knight", "ech_princess"):
+                client.headers["X-Planora-Profile"] = profile
+                assert (await client.get("/api/v1/tasks")).status_code == 200
+                assert not client.cookies
             wrong_host = "127.0.0.1" if origin is None else "localhost"
-            wrong = f"http://{wrong_host}:{launcher.web_port}"
-            rejected = await client.post("/api/v1/auth/logout", headers={"Origin": wrong})
-            assert rejected.status_code == 403
-            token = client.cookies.get("planora_session")
-            count = len(launcher.records())
-            code, output = launcher.run(ready=True)
-            assert code == 0, output
-            restarted = next(r for r in launcher.records()[count:] if "uvicorn" in r["args"])
-            monkeypatch.setenv("SESSION_SECRET", restarted["secret"])
-            restarted_app = create_app()
-            try:
-                async with make_client(restarted_app, origin=config["origin"],
-                                       base_url=config["origin"]) as restarted_client:
-                    restarted_client.cookies.set("planora_session", token)
-                    assert (await restarted_client.get("/api/v1/tasks")).status_code == 401
-            finally:
-                restarted_app.state.session_factory.kw["bind"].dispose()
-
+            response = await client.post("/api/v1/tasks", json={"title": "x", "content": "y"},
+                                         headers={"Origin": f"http://{wrong_host}:{launcher.web_port}"})
+            assert response.status_code == 403
     try:
         asyncio.run(scenario())
         assert load_settings().app_origin == config["origin"]
@@ -347,6 +308,14 @@ def test_setup_migrates_creates_account_then_login_and_csrf_work(
 def test_unknown_mode_fails_before_commands(launcher: Launcher) -> None:
     launcher.configure()
     code, output = launcher.run("--unknown")
+    assert code != 0
+    assert "Usage" in output
+    assert launcher.records() == []
+
+
+def test_retired_setup_mode_is_rejected(launcher: Launcher) -> None:
+    launcher.configure()
+    code, output = launcher.run("--setup-account")
     assert code != 0
     assert "Usage" in output
     assert launcher.records() == []

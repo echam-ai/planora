@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import select
@@ -48,12 +48,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _seed_task(
@@ -141,7 +137,7 @@ def test_get_on_empty_database_lazily_creates_one_empty_conversation(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(CONVERSATION_URL)
 
     response = _run(scenario)
@@ -164,7 +160,7 @@ def test_two_consecutive_gets_return_the_same_id_and_one_row(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             first = await client.get(CONVERSATION_URL)
             second = await client.get(CONVERSATION_URL)
             return first, second
@@ -187,7 +183,7 @@ def test_messages_come_back_in_append_order_including_a_shared_created_at(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(CONVERSATION_URL)
 
     response = _run(scenario)
@@ -218,7 +214,7 @@ def test_reset_returns_201_with_a_new_id_and_no_messages(
 
     async def scenario() -> tuple[str, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             before = await client.get(CONVERSATION_URL)
             reset_response = await client.post(CONVERSATION_URL)
             return before.json()["id"], reset_response
@@ -245,11 +241,11 @@ def test_reset_is_visible_to_a_second_authenticated_client(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as first_client:
-            await _login(first_client)
+            await _select_profile(first_client)
             reset_response = await first_client.post(CONVERSATION_URL)
 
         async with make_client(app) as second_client:
-            await _login(second_client)
+            await _select_profile(second_client)
             get_response = await second_client.get(CONVERSATION_URL)
 
         return reset_response, get_response
@@ -285,7 +281,7 @@ def test_reset_leaves_active_and_archived_task_rows_field_for_field_identical(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(CONVERSATION_URL)
 
     reset_response = _run(scenario)
@@ -298,7 +294,7 @@ def test_reset_leaves_active_and_archived_task_rows_field_for_field_identical(
 # --- Single-conversation invariant, enforced by the schema ------------------
 
 
-def test_inserting_a_second_conversation_row_raises_an_integrity_error(
+def test_inserting_a_unknown_profile_conversation_row_raises_an_integrity_error(
     migrated_session_factory: sessionmaker[Session],
 ) -> None:
     with migrated_session_factory() as session:
@@ -307,7 +303,7 @@ def test_inserting_a_second_conversation_row_raises_an_integrity_error(
 
     with migrated_session_factory() as session:
         session.add(
-            Conversation(id=2, conversation_id=uuid.uuid4(), created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+            Conversation(id=3, conversation_id=uuid.uuid4(), created_at=datetime.now(UTC), updated_at=datetime.now(UTC))
         )
         with pytest.raises(IntegrityError):
             session.commit()
@@ -339,7 +335,7 @@ def test_invalid_role_is_rejected_at_the_database_layer(
 # --- Auth and CSRF -----------------------------------------------------------
 
 
-def test_get_without_session_returns_401(
+def test_get_without_session_returns_422(
     valid_env: pytest.MonkeyPatch,
     migrated_session_factory: sessionmaker[Session],
     app_factory: Callable[[], FastAPI],
@@ -352,11 +348,11 @@ def test_get_without_session_returns_401(
 
     response = _run(scenario)
 
-    assert response.status_code == 401
-    assert response.json()["code"] == "NOT_AUTHENTICATED"
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
 
 
-def test_post_without_session_returns_401(
+def test_post_without_session_returns_422(
     valid_env: pytest.MonkeyPatch,
     migrated_session_factory: sessionmaker[Session],
     app_factory: Callable[[], FastAPI],
@@ -369,8 +365,8 @@ def test_post_without_session_returns_401(
 
     response = _run(scenario)
 
-    assert response.status_code == 401
-    assert response.json()["code"] == "NOT_AUTHENTICATED"
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
 
 
 def test_post_with_mismatched_origin_returns_403_and_writes_nothing(
@@ -385,7 +381,7 @@ def test_post_with_mismatched_origin_returns_403_and_writes_nothing(
 
     async def scenario() -> tuple[str, Response]:
         async with make_client(app) as login_client:
-            await _login(login_client)
+            await _select_profile(login_client)
             cookies = dict(login_client.cookies)
             before = await login_client.get(CONVERSATION_URL)
 
@@ -429,7 +425,7 @@ def test_message_text_never_appears_in_logs_from_get_or_reset(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             get_response = await client.get(CONVERSATION_URL)
             reset_response = await client.post(CONVERSATION_URL)
             return get_response, reset_response

@@ -26,7 +26,6 @@ from planora_api.db.models import (
     Conversation,
     Task,
 )
-from planora_api.security.password import hash_password
 
 ROOT = Path(__file__).resolve().parents[4]
 MARKERS = ("issue45-password-marker", "issue45-session-marker",
@@ -82,7 +81,7 @@ def test_actual_dump_restore_credentials_and_container_persistence(valid_env, al
         engines += [source_engine, restored_engine]
         now = datetime(2026, 10, 1, 4, 5, 6, 123456, tzinfo=UTC)
         task_id, archive_id, message_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-        password_hash = hash_password(MARKERS[0])
+        password_hash = "retired-historical-hash"
         with Session(source_engine) as session:
             session.add_all([
                 AppUser(id=1, username="backup-owner", password_hash=password_hash,

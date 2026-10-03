@@ -25,7 +25,7 @@ async function expectApiError(promise: Promise<unknown>, code: string, message: 
 }
 
 function storedTasks(): Task[] {
-  return JSON.parse(window.localStorage.getItem("planora.tasks") ?? "[]") as Task[];
+  return JSON.parse(window.localStorage.getItem("planora.hamster_knight.tasks") ?? "[]") as Task[];
 }
 
 describe("mock API client characterization", () => {
@@ -35,6 +35,7 @@ describe("mock API client characterization", () => {
     let random = 0;
     vi.spyOn(Math, "random").mockImplementation(() => (random += 0.0001));
     window.localStorage.clear();
+    window.localStorage.setItem("planora.profile", "hamster_knight");
     mockDevTools.setErrorMode(false);
   });
 
@@ -42,17 +43,10 @@ describe("mock API client characterization", () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     window.localStorage.clear();
+    window.localStorage.setItem("planora.profile", "hamster_knight");
   });
 
-  it("preserves authentication, settings, password, and session storage behavior", async () => {
-    await expectApiError(
-      mockApiClient.login("demo", "wrong"),
-      "INVALID_CREDENTIALS",
-      "That username or password isn't right.",
-    );
-    const session = await resolve(mockApiClient.login(" DEMO ", "focusboard"));
-    expect(session).toEqual({ username: "demo", signedInAt: "2026-09-24T08:00:00.500Z" });
-    expect(await resolve(mockApiClient.getSession())).toEqual(session);
+  it("preserves settings defaults and timezone writes", async () => {
     expect(await resolve(mockApiClient.getSettings())).toEqual({
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
@@ -63,15 +57,6 @@ describe("mock API client characterization", () => {
       modelName: "kimi-k3",
       availableModels: ["kimi-k3"],
     });
-    await expectApiError(
-      mockApiClient.changePassword("wrong", "new-password"),
-      "WRONG_PASSWORD",
-      "Your current password is incorrect.",
-    );
-    await resolve(mockApiClient.changePassword("focusboard", "new-password"));
-    await resolve(mockApiClient.logout());
-    expect(await resolve(mockApiClient.getSession())).toBeNull();
-    await resolve(mockApiClient.login("demo", "new-password"));
   });
 
   it("preserves task CRUD, ordering, timestamps, persistence, and mutation errors", async () => {
@@ -129,7 +114,7 @@ describe("mock API client characterization", () => {
       completedAt: `2026-09-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
       archivedAt: `2026-09-${String(index + 1).padStart(2, "0")}T01:00:00.000Z`,
     }));
-    window.localStorage.setItem("planora.tasks", JSON.stringify(archived));
+    window.localStorage.setItem("planora.hamster_knight.tasks", JSON.stringify(archived));
     const pageOne = await resolve(mockApiClient.listArchive(" archive "));
     expect(pageOne).toMatchObject({ total: 12, page: 1, pageSize: 10 });
     expect(pageOne.items.map((task) => task.id)).toEqual([
@@ -185,7 +170,7 @@ describe("mock API client characterization", () => {
       completedAt: null,
       archivedAt: `2026-09-0${index + 1}T00:00:00.000Z`,
     }));
-    window.localStorage.setItem("planora.tasks", JSON.stringify(archived));
+    window.localStorage.setItem("planora.hamster_knight.tasks", JSON.stringify(archived));
     const page = await resolve(mockApiClient.listArchive());
     expect(page.items.map((task) => task.id)).toEqual(["b", "a"]);
     await expectApiError(
@@ -422,7 +407,7 @@ describe("mock API client characterization", () => {
           "archived",
           async (id: string) => {
             window.localStorage.setItem(
-              "planora.tasks",
+              "planora.hamster_knight.tasks",
               JSON.stringify(
                 storedTasks().map((task) =>
                   task.id === id ? { ...task, archivedAt: "2026-09-24T07:00:00.000Z" } : task,
@@ -490,7 +475,7 @@ describe("mock API client characterization", () => {
 
     it("a failed send persists nothing", async () => {
       await resolve(mockApiClient.getCurrentConversation());
-      const before = window.localStorage.getItem("planora.conversation");
+      const before = window.localStorage.getItem("planora.hamster_knight.conversation");
       mockDevTools.setErrorMode(true);
       await expectApiError(
         mockApiClient.sendChatMessage("hello"),
@@ -498,7 +483,7 @@ describe("mock API client characterization", () => {
         "The assistant is unavailable right now. Try again.",
       );
       mockDevTools.setErrorMode(false);
-      expect(window.localStorage.getItem("planora.conversation")).toBe(before);
+      expect(window.localStorage.getItem("planora.hamster_knight.conversation")).toBe(before);
     });
   });
 
@@ -523,7 +508,7 @@ describe("mock API client characterization", () => {
   });
 
   it("preserves current conversation, reset behavior, developer errors, and malformed storage fallbacks", async () => {
-    window.localStorage.setItem("planora.settings", "not json");
+    window.localStorage.setItem("planora.hamster_knight.settings", "not json");
     expect(await resolve(mockApiClient.getSettings())).toEqual({
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
@@ -542,8 +527,8 @@ describe("mock API client characterization", () => {
     );
     mockDevTools.setErrorMode(false);
     await resolve(mockApiClient.resetDemoData());
-    expect(window.localStorage.getItem("planora.settings")).toBeNull();
-    expect(window.localStorage.getItem("planora.conversation")).toBeNull();
+    expect(window.localStorage.getItem("planora.hamster_knight.settings")).toBeNull();
+    expect(window.localStorage.getItem("planora.hamster_knight.conversation")).toBeNull();
     expect(storedTasks().length).toBeGreaterThan(0);
   });
 
@@ -558,8 +543,9 @@ describe("mock API client characterization", () => {
 
   describe("settings mirror the API (stale model, trimming, atomic rejection)", () => {
     const seed = (value: unknown) =>
-      window.localStorage.setItem("planora.settings", JSON.stringify(value));
-    const stored = () => JSON.parse(window.localStorage.getItem("planora.settings") ?? "{}");
+      window.localStorage.setItem("planora.hamster_knight.settings", JSON.stringify(value));
+    const stored = () =>
+      JSON.parse(window.localStorage.getItem("planora.hamster_knight.settings") ?? "{}");
 
     it("falls back to the default model when the stored one is not listed", async () => {
       seed({ timezone: "Asia/Tokyo", modelName: "planora-pro" });
@@ -604,20 +590,19 @@ describe("mock API client characterization", () => {
 
     it("stores nothing when the model is rejected, timezone included", async () => {
       seed({ timezone: "Asia/Tokyo", modelName: "kimi-k3" });
-      const before = window.localStorage.getItem("planora.settings");
+      const before = window.localStorage.getItem("planora.hamster_knight.settings");
       await expectApiError(
         mockApiClient.updateSettings({ timezone: "UTC", modelName: "planora-pro" }),
         "VALIDATION_ERROR",
         "Choose one of the available models.",
       );
-      expect(window.localStorage.getItem("planora.settings")).toBe(before);
+      expect(window.localStorage.getItem("planora.hamster_knight.settings")).toBe(before);
     });
   });
 
   it("uses browser-less storage fallbacks without throwing", async () => {
     vi.stubGlobal("window", undefined);
     try {
-      expect(await resolve(mockApiClient.getSession())).toBeNull();
       expect(await resolve(mockApiClient.getSettings())).toEqual({
         timezone: "Asia/Singapore",
         modelName: "kimi-k3",

@@ -22,11 +22,9 @@ from planora_api.api.deps import (
     DbSession,
     get_current_time,
     get_settings,
-    require_session,
 )
 from planora_api.config import Settings
 from planora_api.db import settings_repository
-from planora_api.db.models import AuthSession
 from planora_api.errors import (
     ERROR_RESPONSE,
     VALIDATION_RESPONSE,
@@ -52,7 +50,6 @@ async def parse_task(
     settings: Annotated[Settings, Depends(get_settings)],
     now: Annotated[datetime, Depends(get_current_time)],
     llm: Annotated[LLMClient, Depends(get_llm_client)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ParsedTaskResponse:
     effective = settings_repository.get_effective_settings(db, settings)
 

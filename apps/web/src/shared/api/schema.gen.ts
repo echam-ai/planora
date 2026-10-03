@@ -73,57 +73,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Login */
-        post: operations["login_api_v1_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Logout */
-        post: operations["logout_api_v1_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Session */
-        get: operations["read_session_api_v1_auth_session_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/chat/actions/{action_id}/confirm": {
         parameters: {
             query?: never;
@@ -236,6 +185,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Profiles */
+        get: operations["list_profiles_api_v1_profiles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -252,23 +218,6 @@ export interface paths {
         head?: never;
         /** Update Settings */
         patch: operations["update_settings_api_v1_settings_patch"];
-        trace?: never;
-    };
-    "/api/v1/settings/password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Change Password */
-        post: operations["change_password_api_v1_settings_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/tasks": {
@@ -469,13 +418,6 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** LoginRequest */
-        LoginRequest: {
-            /** Password */
-            password: string;
-            /** Username */
-            username: string;
-        };
         /**
          * ParseTaskRequest
          * @description `POST /api/v1/ai/parse-task` request body. `text` is required to be
@@ -515,22 +457,15 @@ export interface components {
             urls?: components["schemas"]["TaskUrl"][];
         };
         /**
-         * PasswordChangeRequest
-         * @description `POST /api/v1/settings/password` request body (spec §3.2).
-         *
-         *     Passwords are compared and hashed verbatim — never trimmed. Only
-         *     `new_password`'s length is checked here (before any database or Argon2
-         *     work); `current_password` is validated by the router, against the
-         *     stored hash, so an invalid `new_password` never costs an Argon2
-         *     verification. The length rule itself is `security.password`'s shared
-         *     definition (issue #33 moved it there so #33's administrative reset
-         *     command can reuse it without a second copy of the rule).
+         * ProfileId
+         * @enum {string}
          */
-        PasswordChangeRequest: {
-            /** Current Password */
-            current_password: string;
-            /** New Password */
-            new_password: string;
+        ProfileId: "hamster_knight" | "ech_princess";
+        /** ProfileResponse */
+        ProfileResponse: {
+            id: components["schemas"]["ProfileId"];
+            /** Name */
+            name: string;
         };
         /**
          * SendMessageRequest
@@ -544,13 +479,6 @@ export interface components {
         SendMessageRequest: {
             /** Text */
             text: string;
-        };
-        /** SessionResponse */
-        SessionResponse: {
-            /** Signed In At */
-            signed_in_at: string;
-            /** Username */
-            username: string;
         };
         /**
          * SettingsResponse
@@ -771,7 +699,9 @@ export interface operations {
     parse_task_api_v1_ai_parse_task_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -788,15 +718,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParsedTaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -838,7 +759,9 @@ export interface operations {
                 /** @description Items per page, up to 100. */
                 page_size?: number;
             };
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -851,15 +774,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ArchiveListResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Invalid request fields */
@@ -876,7 +790,9 @@ export interface operations {
     get_archived_task_api_v1_archive__task_id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -891,15 +807,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -925,7 +832,9 @@ export interface operations {
     delete_archived_task_api_v1_archive__task_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -939,15 +848,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
             };
             /** @description API error envelope */
             403: {
@@ -981,7 +881,9 @@ export interface operations {
     restore_task_api_v1_archive__task_id__restore_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -996,15 +898,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1036,117 +929,12 @@ export interface operations {
             };
         };
     };
-    login_api_v1_auth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description API error envelope */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid request fields */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description API error envelope */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    logout_api_v1_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API error envelope */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    read_session_api_v1_auth_session_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"] | null;
-                };
-            };
-        };
-    };
     confirm_action_api_v1_chat_actions__action_id__confirm_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 action_id: string;
             };
@@ -1161,15 +949,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1213,7 +992,9 @@ export interface operations {
     reject_action_api_v1_chat_actions__action_id__reject_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 action_id: string;
             };
@@ -1228,15 +1009,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1280,7 +1052,9 @@ export interface operations {
     read_conversation_api_v1_chat_conversation_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1295,8 +1069,8 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationResponse"];
                 };
             };
-            /** @description API error envelope */
-            401: {
+            /** @description Invalid request fields */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1309,7 +1083,9 @@ export interface operations {
     reset_conversation_api_v1_chat_conversation_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1325,7 +1101,7 @@ export interface operations {
                 };
             };
             /** @description API error envelope */
-            401: {
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1333,8 +1109,8 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description API error envelope */
-            403: {
+            /** @description Invalid request fields */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1347,7 +1123,9 @@ export interface operations {
     send_message_api_v1_chat_messages_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1364,15 +1142,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1426,7 +1195,7 @@ export interface operations {
             };
         };
     };
-    read_settings_api_v1_settings_get: {
+    list_profiles_api_v1_profiles_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -1441,11 +1210,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["ProfileResponse"][];
+                };
+            };
+        };
+    };
+    read_settings_api_v1_settings_get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["SettingsResponse"];
                 };
             };
-            /** @description API error envelope */
-            401: {
+            /** @description Invalid request fields */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1458,7 +1249,9 @@ export interface operations {
     update_settings_api_v1_settings_patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1475,73 +1268,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettingsResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description API error envelope */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid request fields */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    change_password_api_v1_settings_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PasswordChangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description API error envelope */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1567,7 +1293,9 @@ export interface operations {
     list_tasks_api_v1_tasks_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1580,15 +1308,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"][];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Invalid request fields */
@@ -1605,7 +1324,9 @@ export interface operations {
     create_task_api_v1_tasks_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1622,15 +1343,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1656,7 +1368,9 @@ export interface operations {
     reorder_tasks_api_v1_tasks_reorder_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1676,56 +1390,7 @@ export interface operations {
                 };
             };
             /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description API error envelope */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Invalid request fields */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_task_api_v1_tasks__task_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1753,10 +1418,54 @@ export interface operations {
             };
         };
     };
+    get_task_api_v1_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description API error envelope */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Invalid request fields */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     delete_task_api_v1_tasks__task_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -1770,15 +1479,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
             };
             /** @description API error envelope */
             403: {
@@ -1812,7 +1512,9 @@ export interface operations {
     update_task_api_v1_tasks__task_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -1831,15 +1533,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */
@@ -1874,7 +1567,9 @@ export interface operations {
     move_task_api_v1_tasks__task_id__move_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Planora-Profile": components["schemas"]["ProfileId"];
+            };
             path: {
                 task_id: string;
             };
@@ -1893,15 +1588,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaskResponse"][];
-                };
-            };
-            /** @description API error envelope */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description API error envelope */

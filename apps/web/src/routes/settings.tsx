@@ -3,7 +3,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -14,8 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSettings, useSettingsMutations } from "@/features/settings/hooks";
-import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
-import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useProfileGuard } from "@/hooks/useProfileGuard";
 import { DemoDataSection } from "@/features/settings/components/DemoDataSection";
 import type { AppSettings } from "@/types";
 import { DEMO_UI_ENABLED } from "@/services/api/demoUi";
@@ -26,12 +24,12 @@ export const Route = createFileRoute("/settings")({
       { title: "Settings — Planora" },
       {
         name: "description",
-        content: "Set your timezone, choose the assistant model, and change your password.",
+        content: "Set your timezone and choose the assistant model.",
       },
       { property: "og:title", content: "Settings — Planora" },
       {
         property: "og:description",
-        content: "Set your timezone, choose the assistant model, and change your password.",
+        content: "Set your timezone and choose the assistant model.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -104,37 +102,8 @@ function PreferencesForm({ settings }: { settings: AppSettings }) {
 }
 
 function SettingsPage() {
-  useAuthGuard();
+  useProfileGuard();
   const { data: settings, isError, refetch } = useSettings();
-  const { changePassword } = useSettingsMutations();
-
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  // Fields are usable before hydration; keep whatever was typed then.
-  const currentRef = useAdoptDomValue<HTMLInputElement>(setCurrent);
-  const nextRef = useAdoptDomValue<HTMLInputElement>(setNext);
-  const [pwError, setPwError] = useState<string | null>(null);
-
-  const onChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwError(null);
-    if (next.length < 6) {
-      setPwError("New password must be at least 6 characters.");
-      return;
-    }
-    changePassword.mutate(
-      { current, next },
-      {
-        onSuccess: () => {
-          toast.success("Password updated");
-          setCurrent("");
-          setNext("");
-        },
-        onError: (e2) => setPwError(e2 instanceof Error ? e2.message : "Couldn't update password"),
-      },
-    );
-  };
-
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-2xl space-y-6 px-4 py-6">
@@ -160,43 +129,6 @@ function SettingsPage() {
             <Skeleton className="h-24 w-full" />
           )}
         </section>
-
-        <form
-          onSubmit={onChangePassword}
-          className="space-y-4 rounded-2xl border border-border bg-card p-6 shadow-card"
-        >
-          <h2 className="text-sm font-semibold">Change password</h2>
-          <div className="space-y-2">
-            <Label htmlFor="cur">Current password</Label>
-            <Input
-              id="cur"
-              ref={currentRef}
-              type="password"
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="new">New password</Label>
-            <Input
-              id="new"
-              ref={nextRef}
-              type="password"
-              autoComplete="new-password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-            />
-          </div>
-          {pwError && (
-            <p role="alert" className="text-sm text-destructive">
-              {pwError}
-            </p>
-          )}
-          <Button type="submit" className="min-h-11" disabled={changePassword.isPending}>
-            Update password
-          </Button>
-        </form>
 
         {DEMO_UI_ENABLED && <DemoDataSection />}
       </div>

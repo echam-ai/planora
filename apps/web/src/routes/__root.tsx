@@ -1,3 +1,4 @@
+import { getSelectedProfile, useSelectedProfile } from "@/services/api/profiles";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -6,8 +7,10 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  useLocation,
+  useNavigate,
 } from "@tanstack/react-router";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRootBoundaryError } from "../lib/root-error-reporting";
@@ -126,14 +129,30 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
+function ScopedContent() {
+  const profile = useSelectedProfile();
+  // Keep the SSR tree through the first browser snapshot so inputs typed
+  // before hydration survive. Actual account changes still remount its cache.
+  const [initialProfile] = useState(getSelectedProfile);
+  const scopeKey =
+    profile === undefined || profile === initialProfile ? "initial" : (profile ?? "chooser");
+  const location = useLocation();
+  const navigate = useNavigate();
+  const publicRoute = location.pathname === "/" || location.pathname === "/login";
+  useEffect(() => {
+    if (profile === null && !publicRoute) navigate({ to: "/", replace: true });
+  }, [profile, publicRoute, navigate]);
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+    <WorkspaceQueries key={scopeKey}>
+      {(publicRoute || profile !== null) && <Outlet />}
       <Toaster richColors position="top-right" />
-    </QueryClientProvider>
+    </WorkspaceQueries>
   );
+}
+function WorkspaceQueries({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient());
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+function RootComponent() {
+  return <ScopedContent />;
 }

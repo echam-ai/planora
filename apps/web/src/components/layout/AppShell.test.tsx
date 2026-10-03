@@ -119,15 +119,15 @@ describe("AppShell", () => {
 
   it("logs out through the account menu: clears cached queries and navigates to login", async () => {
     setViewportWidth(320);
-    const logout = vi.spyOn(api, "logout").mockResolvedValue(undefined);
+    window.localStorage.setItem("planora.profile", "hamster_knight");
     renderShell();
     const clearSpy = vi.spyOn(qc, "clear");
 
     fireEvent.pointerDown(screen.getByRole("button", { name: "Account menu" }), { button: 0 });
-    fireEvent.click(await screen.findByText("Log out"));
+    fireEvent.click(await screen.findByText("Switch account"));
 
-    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+    expect(window.localStorage.getItem("planora.profile")).toBeNull();
     expect(clearSpy).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith({ to: "/login" });
+    expect(navigate).toHaveBeenCalledWith({ to: "/" });
   });
 });

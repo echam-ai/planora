@@ -1,28 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";
+import { captureApi } from "@/services/api";
 import { qk } from "@/shared/queryKeys";
 import type { Task, TaskDraft, TaskStatus } from "@/types";
 
-export const useTasks = () => useQuery({ queryKey: qk.tasks, queryFn: () => api.listTasks() });
+export function useTasks() {
+  const api = captureApi();
+  return useQuery({ queryKey: qk.tasks, queryFn: () => api.listTasks() });
+}
 
-export const useArchive = (search: string, page = 1) =>
-  useQuery({ queryKey: qk.archive(search, page), queryFn: () => api.listArchive(search, page) });
+export function useArchive(search: string, page = 1) {
+  const api = captureApi();
+  return useQuery({
+    queryKey: qk.archive(search, page),
+    queryFn: () => api.listArchive(search, page),
+  });
+}
 
 /**
  * Archive pages are filtered and paginated, so they cannot be the authority
  * for an open detail sheet. Keep the task query keyed solely by its ID while
  * retaining the archive prefix for the normal mutation invalidation lifecycle.
  */
-export const useArchivedTask = (id: string | null) =>
-  useQuery({
+export function useArchivedTask(id: string | null) {
+  const api = captureApi();
+  return useQuery({
     queryKey: qk.archivedTask(id ?? ""),
     queryFn: () => api.getArchivedTask(id!),
     enabled: id !== null,
     retry: false,
   });
+}
 
 export function useTaskMutations() {
   const qc = useQueryClient();
+  const api = captureApi();
   const invalidateTasks = () => qc.invalidateQueries({ queryKey: qk.tasks });
   // move/reorder already return the full ordered active task list.
   const setTasks = (tasks: Task[]) => qc.setQueryData(qk.tasks, tasks);

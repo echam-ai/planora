@@ -32,9 +32,32 @@ test("archive detail is read-only and archive actions retain their confirmation 
   await page.getByRole("button", { name: `Delete ${ARCHIVED} permanently` }).click();
   const confirm = page.getByRole("alertdialog");
   await expect(confirm).toContainText(ARCHIVED);
-  await confirm.getByRole("button", { name: "Cancel" }).click();
+  await confirm.getByRole("button", { name: "Keep task" }).click();
   await expect(confirm).toBeHidden();
 
   await page.getByRole("button", { name: "Restore" }).click();
   await expect(page.getByRole("button", { name: `Open archived task ${ARCHIVED}` })).toHaveCount(0);
+});
+
+test("archived details delete permanently and remain absent from search after refresh", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/archive");
+  await page.getByLabel("Search archived tasks").fill("postgres");
+  const card = page.getByRole("button", { name: `Open archived task ${ARCHIVED}` });
+  await card.click();
+  await page
+    .getByRole("dialog", { name: ARCHIVED })
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  const confirm = page.getByRole("alertdialog");
+  await expect(confirm).toContainText(ARCHIVED);
+  await expect(confirm).toContainText("cannot be undone");
+  await confirm.getByRole("button", { name: "Delete task" }).press("Enter");
+  await expect(confirm).toBeHidden();
+  await expect(card).toHaveCount(0);
+  await page.reload();
+  await page.getByLabel("Search archived tasks").fill("postgres");
+  await expect(card).toHaveCount(0);
 });

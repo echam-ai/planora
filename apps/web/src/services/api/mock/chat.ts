@@ -16,8 +16,8 @@ import {
   type TaskStatus,
 } from "@/types";
 import type { ApiClient } from "../ApiClient";
-import { currentTimezone } from "./auth";
-import { KEYS, delay, ensureTasks, nowIso, read, write } from "./store";
+import { currentTimezone } from "./settings";
+import { KEYS, delay, nowIso, createStore, type MockStore } from "./store";
 
 const textTooLongError = () =>
   new ApiError("VALIDATION_ERROR", "Request validation failed.", {
@@ -289,6 +289,7 @@ const ALREADY_APPLIED_MESSAGE = "This change has already been applied.";
 
 export function createChatClient(
   tasksClient: Pick<ApiClient, "createTask" | "moveTask" | "updateTask">,
+  store: MockStore = createStore("hamster_knight"),
 ): Pick<
   ApiClient,
   | "parseTaskText"
@@ -298,13 +299,14 @@ export function createChatClient(
   | "confirmChatAction"
   | "rejectChatAction"
 > {
+  const { read, write, ensureTasks } = store;
   return {
     async parseTaskText(text) {
       await delay(700, 1400);
       if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT) throw textTooLongError();
       if (read<boolean>(KEYS.forceError, false) || /\bfail\b/i.test(text))
         throw assistantUnavailableError();
-      return parseText(text, currentTimezone());
+      return parseText(text, currentTimezone(store));
     },
     async getCurrentConversation() {
       await delay(150, 300);
@@ -323,7 +325,7 @@ export function createChatClient(
       const conversation =
         read<Conversation | null>(KEYS.conversation, null) ?? emptyConversation();
       conversation.messages.push({ id: uid("msg"), role: "user", text, createdAt: nowIso() });
-      conversation.messages.push(buildAssistantReply(text, ensureTasks(), currentTimezone()));
+      conversation.messages.push(buildAssistantReply(text, ensureTasks(), currentTimezone(store)));
       write(KEYS.conversation, conversation);
       return conversation;
     },

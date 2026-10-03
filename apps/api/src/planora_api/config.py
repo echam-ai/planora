@@ -1,16 +1,8 @@
-"""Application configuration loaded from the environment.
+"""Server configuration: LLM key/origin required, no authentication secret.
 
-The seven variable names below are fixed (see issue #21): `DATABASE_URL`,
-`SESSION_SECRET`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `APP_ORIGIN`,
-`DEFAULT_TIMEZONE`. Downstream issues (#22, #25, #26, #37, #43) rely on these
-exact names.
-
-`SESSION_SECRET` and `LLM_API_KEY` are secrets: they have no default, an
-unset or blank value fails startup, and their values never appear in a
-`repr()`/`str()` of `Settings` or in an error raised for a different,
-invalid variable.
+An optional legacy SESSION_SECRET is accepted solely for redaction when old
+configuration files are reused. It is never used to authenticate requests.
 """
-
 from __future__ import annotations
 
 from urllib.parse import urlsplit
@@ -62,7 +54,8 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "sqlite:///./planora.db"
-    session_secret: str
+    # Accepted only to redact legacy environment values; never used for auth.
+    session_secret: str = ""
     llm_base_url: str = "https://api.moonshot.ai/v1"
     llm_api_key: str
     llm_model: str = "kimi-k3"
@@ -73,7 +66,7 @@ class Settings(BaseSettings):
     default_timezone: str = "Asia/Singapore"
     log_level: str = "INFO"
 
-    @field_validator("session_secret", "llm_api_key")
+    @field_validator("llm_api_key")
     @classmethod
     def _secret_must_not_be_blank(cls, value: str) -> str:
         if value.strip() == "":
@@ -137,7 +130,7 @@ def load_settings() -> Settings:
     """Load `Settings` from the environment, failing fast with a clear error.
 
     Raises `ConfigurationError` naming every missing or invalid variable. If
-    both secrets are absent, one error names both. The message never
+    required values are absent, one error names all of them. The message never
     includes a secret's value — only field names invalid for a reason other
     than the secret itself ever appear.
     """

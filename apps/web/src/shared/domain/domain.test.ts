@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { taskDraftSchema, taskFormSchema, taskSchema, taskUrlSchema } from "@/shared/domain/task";
 import { chatActionSchema, chatMessageSchema, conversationSchema } from "@/shared/domain/chat";
 import { settingsSchema } from "@/shared/domain/settings";
-import { credentialsSchema, sessionSchema } from "@/shared/domain/session";
 
 const draft = {
   title: "Prepare review",
@@ -40,10 +39,6 @@ describe("shared domain schemas", () => {
       timezone: "Asia/Singapore",
       modelName: "kimi-k3",
       availableModels: ["kimi-k3"],
-    });
-    expect(sessionSchema.parse({ username: "demo", signedInAt: task.createdAt })).toEqual({
-      username: "demo",
-      signedInAt: task.createdAt,
     });
   });
 
@@ -122,7 +117,6 @@ describe("shared domain schemas", () => {
     expect(taskUrlSchema.safeParse({ id: "url_1", url: 42 }).success).toBe(false);
     expect(chatActionSchema.safeParse({ id: "act_1", kind: "delete" }).success).toBe(false);
     expect(settingsSchema.safeParse({ timezone: 42, modelName: "kimi-k3" }).success).toBe(false);
-    expect(sessionSchema.safeParse({ username: "demo" }).success).toBe(false);
   });
 });
 
@@ -176,18 +170,5 @@ describe("shared form schemas", () => {
       taskFormSchema.safeParse({ ...base, deadlineDate: "2026-09-25", deadlineTime: "17:00" })
         .success,
     ).toBe(true);
-  });
-
-  it("keeps login messages and forwards surrounding spaces unchanged", () => {
-    expect(credentialsSchema.parse({ username: " demo ", password: " pass " })).toEqual({
-      username: " demo ",
-      password: " pass ",
-    });
-    expect(
-      credentialsSchema.safeParse({ username: "", password: "pass" }).error?.issues[0]?.message,
-    ).toBe("Enter your username");
-    expect(
-      credentialsSchema.safeParse({ username: "demo", password: "" }).error?.issues[0]?.message,
-    ).toBe("Enter your password");
   });
 });

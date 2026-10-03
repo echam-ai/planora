@@ -28,7 +28,7 @@ def test_loads_all_seven_values_when_valid(valid_env: pytest.MonkeyPatch) -> Non
     assert settings.default_timezone == VALID_ENV["DEFAULT_TIMEZONE"]
 
 
-@pytest.mark.parametrize("secret_name", ["SESSION_SECRET", "LLM_API_KEY"])
+@pytest.mark.parametrize("secret_name", ["LLM_API_KEY"])
 def test_missing_secret_raises_naming_it(
     valid_env: pytest.MonkeyPatch, secret_name: str
 ) -> None:
@@ -40,7 +40,7 @@ def test_missing_secret_raises_naming_it(
     assert secret_name in str(exc_info.value)
 
 
-@pytest.mark.parametrize("secret_name", ["SESSION_SECRET", "LLM_API_KEY"])
+@pytest.mark.parametrize("secret_name", ["LLM_API_KEY"])
 @pytest.mark.parametrize("blank_value", ["", "   ", "\t\n"])
 def test_blank_secret_treated_as_missing(
     valid_env: pytest.MonkeyPatch, secret_name: str, blank_value: str
@@ -70,7 +70,7 @@ def test_both_secrets_missing_names_both(valid_env: pytest.MonkeyPatch) -> None:
         load_settings()
 
     message = str(exc_info.value)
-    assert "SESSION_SECRET" in message
+    assert "SESSION_SECRET" not in message
     assert "LLM_API_KEY" in message
 
 
@@ -142,7 +142,7 @@ def test_non_secret_defaults_used_when_unset(valid_env: pytest.MonkeyPatch) -> N
 
 def test_no_secret_field_has_a_default() -> None:
     fields = Settings.model_fields
-    assert fields["session_secret"].is_required()
+    assert not fields["session_secret"].is_required()
     assert fields["llm_api_key"].is_required()
 
 
@@ -237,6 +237,6 @@ def test_unedited_env_example_fails_naming_all_three_required_values(
         load_settings()
 
     message = str(exc_info.value)
-    assert "SESSION_SECRET" in message
+    assert "SESSION_SECRET" not in message
     assert "LLM_API_KEY" in message
     assert "APP_ORIGIN" in message

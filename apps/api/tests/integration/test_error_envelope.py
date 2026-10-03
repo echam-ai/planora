@@ -43,13 +43,13 @@ def test_validation_errors_are_redacted_and_use_wire_field_names(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            return await client.post("/api/v1/auth/login", json={"username": sentinel})
+            return await client.post("/api/v1/tasks", json={"title": sentinel}, headers={"X-Planora-Profile": "hamster_knight"})
 
     response = _run(scenario())
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_ERROR"
     assert response.json()["details"] == [
-        {"field": "password", "code": "MISSING", "message": "Field required"}
+        {"field": "content", "code": "MISSING", "message": "Field required"}
     ]
     assert sentinel not in response.text
 
@@ -71,7 +71,7 @@ def test_wrong_method_keeps_allow_header_and_openapi_uses_error_components(
     schemas = app.openapi()["components"]["schemas"]
     assert {"ErrorResponse", "ValidationErrorDetail"} <= schemas.keys()
     assert "HTTPValidationError" not in schemas
-    login_422 = app.openapi()["paths"]["/api/v1/auth/login"]["post"]["responses"]["422"]
+    login_422 = app.openapi()["paths"]["/api/v1/tasks"]["post"]["responses"]["422"]
     assert login_422["content"]["application/json"]["schema"]["$ref"].endswith("/ErrorResponse")
 
 
@@ -155,9 +155,9 @@ def test_malformed_json_body_reports_a_null_field_and_never_echoes_the_sentinel(
     async def scenario() -> Response:
         async with make_client(app) as client:
             return await client.post(
-                "/api/v1/auth/login",
+                "/api/v1/tasks",
                 content=f'{{"password": "{sentinel}"'.encode(),
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "X-Planora-Profile": "hamster_knight"},
             )
 
     response = _run(scenario())
@@ -307,7 +307,7 @@ def test_csrf_origin_mismatch_still_renders_its_own_403_envelope(
 
     async def scenario() -> Response:
         async with make_client(app, origin="https://foreign.example") as client:
-            return await client.post("/api/v1/auth/logout")
+            return await client.post("/api/v1/tasks")
 
     response = _run(scenario())
 

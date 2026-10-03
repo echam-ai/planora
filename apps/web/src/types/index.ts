@@ -11,7 +11,6 @@ export type {
   Conversation,
 } from "@/shared/domain/chat";
 export type { AppSettings } from "@/shared/domain/settings";
-export type { Credentials, Session } from "@/shared/domain/session";
 export type {
   ParsedTaskText,
   Task,

@@ -2,9 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export async function signIn(page: Page) {
   await page.goto("/");
-  await page.getByLabel("Username").fill("demo");
-  await page.getByLabel("Password").fill("focusboard");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 }
 
@@ -27,7 +25,9 @@ export function statusControl(page: Page) {
 /** The stored completion timestamp — the sheet formats it in the user's timezone. */
 export async function readCompletedAt(page: Page, title: string): Promise<string | null> {
   return page.evaluate((t) => {
-    const tasks = JSON.parse(window.localStorage.getItem("planora.tasks") ?? "[]") as Array<{
+    const tasks = JSON.parse(
+      window.localStorage.getItem("planora.hamster_knight.tasks") ?? "[]",
+    ) as Array<{
       title: string;
       completedAt: string | null;
     }>;

@@ -149,7 +149,7 @@ describe("server entry: native login submission", () => {
     const response = await entry.fetch(post, {}, {});
 
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("location")).toBe("/");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.text()).toBe("");
     expect(post.bodyUsed).toBe(false);

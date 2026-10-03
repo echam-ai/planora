@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import func, select
@@ -44,11 +44,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _fixed_clock(app: FastAPI, now: datetime = NOW) -> None:
@@ -196,7 +193,7 @@ def test_confirm_create_action_creates_task_and_appends_confirmation_message(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(action_id))
 
     response = _run(scenario)
@@ -229,7 +226,7 @@ def test_confirming_an_applied_action_again_is_idempotent(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             first = await client.post(_confirm_url(action_id))
             second = await client.post(_confirm_url(action_id))
             return first, second
@@ -266,7 +263,7 @@ def test_reject_then_confirm_returns_already_rejected_and_writes_nothing(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             rejected = await client.post(_reject_url(action_id))
             confirmed = await client.post(_confirm_url(action_id))
             return rejected, confirmed
@@ -293,7 +290,7 @@ def test_rejecting_an_already_rejected_action_is_idempotent(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_reject_url(action_id))
 
     response = _run(scenario)
@@ -312,7 +309,7 @@ def test_confirming_a_rejected_action_directly_returns_409(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(action_id))
 
     response = _run(scenario)
@@ -333,7 +330,7 @@ def test_rejecting_an_applied_action_returns_409(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_reject_url(action_id))
 
     response = _run(scenario)
@@ -359,7 +356,7 @@ def test_confirmed_move_into_done_sets_completed_at_and_out_clears_it(
 
     async def confirm_into_done() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(into_done_action))
 
     response = _run(confirm_into_done)
@@ -377,7 +374,7 @@ def test_confirmed_move_into_done_sets_completed_at_and_out_clears_it(
 
     async def confirm_out_of_done() -> Response:
         async with make_client(app2) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(out_of_done_action))
 
     response2 = _run(confirm_out_of_done)
@@ -405,7 +402,7 @@ def test_confirm_update_after_task_patched_meanwhile_is_stale(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             patched = await client.patch(f"/api/v1/tasks/{task_id}", json={"priority": "medium"})
             assert patched.status_code == 200
             return await client.post(_confirm_url(action_id))
@@ -449,7 +446,7 @@ def test_confirm_update_after_task_deleted_or_archived_is_stale(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(action_id))
 
     response = _run(scenario)
@@ -472,7 +469,7 @@ def test_confirm_after_conversation_reset_returns_404(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             reset = await client.post("/api/v1/chat/conversation")
             assert reset.status_code == 201
             return await client.post(_confirm_url(action_id))
@@ -496,7 +493,7 @@ def test_confirm_unknown_id_returns_404(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_confirm_url(uuid.uuid4()))
 
     response = _run(scenario)
@@ -514,7 +511,7 @@ def test_reject_unknown_id_returns_404(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(_reject_url(uuid.uuid4()))
 
     response = _run(scenario)
@@ -539,7 +536,7 @@ def test_confirm_requires_a_session(
             return await client.post(_confirm_url(action_id))
 
     response = _run(scenario)
-    assert response.status_code == 401
+    assert response.status_code == 422
 
 
 def test_confirm_rejects_a_foreign_origin(
@@ -554,7 +551,7 @@ def test_confirm_rejects_a_foreign_origin(
 
     async def scenario() -> Response:
         async with make_client(app) as login_client:
-            await _login(login_client)
+            await _select_profile(login_client)
             cookies = dict(login_client.cookies)
 
         async with make_client(app, origin=FOREIGN_ORIGIN) as client:
@@ -576,7 +573,7 @@ def test_confirm_malformed_id_returns_422(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post("/api/v1/chat/actions/not-a-uuid/confirm")
 
     response = _run(scenario)
@@ -594,7 +591,7 @@ def test_reject_malformed_id_returns_422(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post("/api/v1/chat/actions/not-a-uuid/reject")
 
     response = _run(scenario)
@@ -644,7 +641,7 @@ def test_confirmed_deadline_unaffected_by_a_timezone_change_after_proposal(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             changed = await client.patch("/api/v1/settings", json={"timezone": "Asia/Tokyo"})
             assert changed.status_code == 200
             return await client.post(_confirm_url(action_id))

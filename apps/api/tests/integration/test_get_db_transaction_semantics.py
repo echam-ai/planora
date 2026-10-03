@@ -31,7 +31,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import APIRouter, Depends, FastAPI
 from httpx import Response
 from sqlalchemy import select
@@ -79,7 +79,7 @@ def test_get_db_rolls_back_a_write_when_the_route_raises_api_error(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            return await client.post("/api/v1/__test_only/write_then_error")
+            return await client.post("/api/v1/__test_only/write_then_error", headers={"X-Planora-Profile": "hamster_knight"})
 
     response = _run(scenario)
 
@@ -119,7 +119,7 @@ def test_a_failing_commit_returns_an_error_status_not_2xx(
         # still sends that response before re-raising for a caller that
         # wants the traceback, which is what the default `True` is for.
         async with make_client(app, raise_app_exceptions=False) as client:
-            return await client.post("/api/v1/__test_only/write_normally")
+            return await client.post("/api/v1/__test_only/write_normally", headers={"X-Planora-Profile": "hamster_knight"})
 
     response = _run(scenario)
 
@@ -127,44 +127,3 @@ def test_a_failing_commit_returns_an_error_status_not_2xx(
     # only do if it runs *before* the response is sent — proving
     # `scope="function"` is actually taking effect in this FastAPI build.
     assert not (200 <= response.status_code < 300)
-
-
-def test_login_sends_no_set_cookie_when_its_final_commit_fails(
-    valid_env: pytest.MonkeyPatch,
-    seeded_user: tuple[str, str],
-    app_factory: Callable[[], FastAPI],
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # A successful login commits `db` twice: once mid-request (releasing
-    # its transaction before the rate limiter's independent connection —
-    # see `get_session_factory`'s docstring), and once more by `get_db`
-    # itself after the route returns. Let the first commit on each session
-    # instance succeed (so the login logic proceeds normally, including
-    # setting the cookie on the response object) and fail only the
-    # second — which is `get_db`'s own, the one this test targets.
-    app = app_factory()
-    commit_counts: dict[int, int] = {}
-    real_commit = Session.commit
-
-    def flaky_commit(self: Session) -> None:
-        key = id(self)
-        commit_counts[key] = commit_counts.get(key, 0) + 1
-        if commit_counts[key] >= 2:
-            raise RuntimeError("commit failed (simulated)")
-        real_commit(self)
-
-    monkeypatch.setattr(Session, "commit", flaky_commit)
-
-    async def scenario() -> Response:
-        # See the sibling test above for why `raise_app_exceptions=False`
-        # is needed here too.
-        async with make_client(app, raise_app_exceptions=False) as client:
-            return await client.post(
-                "/api/v1/auth/login",
-                json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-            )
-
-    response = _run(scenario)
-
-    assert not (200 <= response.status_code < 300)
-    assert "set-cookie" not in response.headers

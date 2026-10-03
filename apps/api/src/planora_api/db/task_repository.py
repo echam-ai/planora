@@ -26,8 +26,10 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from planora_api.db.models import Task, TaskStatus
+from planora_api.db.profile import profile_id
 from planora_api.domain import ordering
 from planora_api.domain.completion import resolve_completed_at
+from planora_api.errors import not_found
 from planora_api.schemas.task import TaskCreate, TaskMove, TaskReorder, TaskUpdate
 
 # Board column order (spec §7.1): Todo, In Progress, Done. Used only to
@@ -45,7 +47,7 @@ def list_active_tasks(db: Session) -> list[Task]:
     ascending position — the deterministic order `GET /tasks` returns."""
     stmt = (
         select(Task)
-        .where(Task.archived_at.is_(None))
+        .where(Task.archived_at.is_(None), Task.profile_id == profile_id(db))
         .order_by(_STATUS_ORDER, Task.position)
     )
     return list(db.execute(stmt).scalars().all())
@@ -60,7 +62,7 @@ def list_active_tasks_by_status(
     `exclude_id` leaves out a task that is itself moving into this column,
     since its current row isn't part of the column being inserted into.
     """
-    stmt = select(Task).where(Task.archived_at.is_(None), Task.status == status)
+    stmt = select(Task).where(Task.archived_at.is_(None), Task.status == status, Task.profile_id == profile_id(db))
     if exclude_id is not None:
         stmt = stmt.where(Task.id != exclude_id)
     stmt = stmt.order_by(Task.position)
@@ -84,7 +86,7 @@ def list_done_unarchived_tasks(db: Session) -> list[Task]:
 def get_active_task(db: Session, task_id: uuid.UUID) -> Task | None:
     """The task with `task_id`, or `None` if it does not exist or is
     archived — an archived task is 404 here; #30 owns `/archive/{id}`."""
-    stmt = select(Task).where(Task.id == task_id, Task.archived_at.is_(None))
+    stmt = select(Task).where(Task.id == task_id, Task.archived_at.is_(None), Task.profile_id == profile_id(db))
     return db.execute(stmt).scalar_one_or_none()
 
 
@@ -93,6 +95,7 @@ def create_task(db: Session, task: Task) -> Task:
     position/timestamps the router set explicitly) are visible on the
     returned instance immediately — the router builds its response from
     this object without a separate read."""
+    task.profile_id = profile_id(db)
     db.add(task)
     db.flush()
     return task
@@ -201,6 +204,11 @@ def apply_task_reorder(db: Session, body: TaskReorder) -> None:
     `body.ordered_ids`. Raises `ValueError` for a stale/invalid id list."""
     column_tasks = list_active_tasks_by_status(db, body.status)
     column = [(t.id, t.position) for t in column_tasks]
+    foreign = db.execute(select(Task.id).where(
+        Task.id.in_(body.ordered_ids), Task.profile_id != profile_id(db),
+    )).first()
+    if foreign is not None:
+        raise not_found("Task not found.")
     changes = ordering.reorder_column(column, body.ordered_ids)
     apply_column_changes(changes, {t.id: t for t in column_tasks})
     db.flush()
@@ -297,7 +305,7 @@ def get_archived_task(db: Session, task_id: uuid.UUID) -> Task | None:
     """The task with `task_id`, or `None` if it does not exist or is not
     archived — an active task's id is 404 here; `db.task_repository.
     get_active_task` owns `/tasks/{id}`."""
-    stmt = select(Task).where(Task.id == task_id, Task.archived_at.is_not(None))
+    stmt = select(Task).where(Task.id == task_id, Task.archived_at.is_not(None), Task.profile_id == profile_id(db))
     return db.execute(stmt).scalar_one_or_none()
 
 
@@ -314,7 +322,7 @@ def list_archived_tasks(
     caller can report an accurate `total` alongside a possibly-empty page
     past the last one.
     """
-    base_filter = Task.archived_at.is_not(None)
+    base_filter = (Task.archived_at.is_not(None)) & (Task.profile_id == profile_id(db))
     term = (search or "").strip()
 
     stmt = select(Task).where(base_filter)

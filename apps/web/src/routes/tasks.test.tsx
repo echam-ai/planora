@@ -37,18 +37,15 @@ function renderTasksRoute() {
 }
 
 describe("TasksPage route", () => {
-  it("redirects an unauthenticated visit to login instead of loading the board", async () => {
-    vi.spyOn(api, "getSession").mockResolvedValue(null);
+  it("redirects a visit without a profile to the chooser", async () => {
+    window.localStorage.removeItem("planora.profile");
     renderTasksRoute();
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/login" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/", replace: true }));
   });
 
-  it("does not redirect once a session is present", async () => {
-    vi.spyOn(api, "getSession").mockResolvedValue({
-      username: "demo",
-      signedInAt: new Date().toISOString(),
-    });
+  it("does not redirect once a profile is selected", async () => {
+    window.localStorage.setItem("planora.profile", "hamster_knight");
     vi.spyOn(api, "getSettings").mockResolvedValue({
       timezone: "UTC",
       modelName: "kimi-k3",

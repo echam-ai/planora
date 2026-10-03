@@ -42,7 +42,6 @@ POSTGRES_DB=planora_smoke
 POSTGRES_USER=planora_smoke
 POSTGRES_PASSWORD=disposable43password
 DATABASE_URL=postgresql+psycopg://planora_smoke:disposable43password@db:5432/planora_smoke
-SESSION_SECRET=disposable43sessionsecret
 LLM_API_KEY=disposable43key
 LLM_BASE_URL=https://api.moonshot.ai/v1
 LLM_MODEL=kimi-k3
@@ -54,9 +53,9 @@ DEFAULT_TIMEZONE=Asia/Singapore
 Use a unique project name for each verification. The commands below use
 `planora43-smoke`; never run its destructive cleanup against an existing project.
 Builds use application directory contexts and committed lockfiles. Initialize
-the existing migration history before starting the scheduler. Account setup
-uses the existing interactive administrative command, including hidden password
-prompts; no password is passed on the command line.
+the existing migration history before starting the scheduler. No credential
+setup or session secret is required: select a fixed profile on `/`. Profile
+choice separates data and is not identity protection.
 
 The migration environment handles three known historical PostgreSQL duplicate
 Enum/check declarations while retaining their explicit canonical checks and
@@ -70,24 +69,23 @@ rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/co
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml build
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml up -d --wait db
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml run --rm --no-deps api alembic upgrade head
-rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml run --rm --no-deps api python -m planora_api.admin.reset_password
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml up -d
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml ps
 rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/health
 rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/api/v1/health
-rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/login
+rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:18080/
 ```
 
-Both health requests return `{"status":"ok"}`. The login page and its assets
+Both health requests return `{"status":"ok"}`. The profile chooser and its assets
 come from web. An unknown `/api/v1/*` route must return the API error JSON rather
-than an HTML page. Login and a non-AI task write use one browser origin and its
-first-party session cookie. Unsafe requests without `Origin`, or with a foreign
+than an HTML page. Profile selection and a non-AI task write use one browser origin and the
+explicit `X-Planora-Profile` header; no login cookie is used. Unsafe requests without `Origin`, or with a foreign
 one, must return `403 CSRF_ORIGIN_MISMATCH`.
 
 The committed Compose browser checks connect to the existing stack; they launch
 no development server and alter no schema. Install frozen web dependencies in
-the fresh checkout first, then run from `apps/web` with the disposable account
-created above. Use the exclusive shared host suite lock and do not overlap this
+the fresh checkout first, then run from `apps/web` against this disposable
+stack. Use the exclusive shared host suite lock and do not overlap this
 run with image builds or other suites:
 
 ```sh
@@ -98,23 +96,16 @@ rtk bun install --frozen-lockfile
   suite_process_status=$?
   [ "$suite_process_status" -eq 1 ] || exit 1
   PLANORA_E2E_COMPOSE_ORIGIN=http://127.0.0.1:18080 \
-  PLANORA_E2E_COMPOSE_USERNAME=smoke43 \
-  PLANORA_E2E_COMPOSE_PASSWORD='ComposeSmoke43!Account' \
   rtk bun run e2e:compose
 ) 9>/home/hamster/code/planora/.tmp/host-suites.lock
 ```
-
-Use those credentials only for the newly created disposable smoke project.
 
 Inspect port bindings with `docker inspect` for every project container: only
 Caddy may have nonempty bindings. On a quiet host with no unrelated service
 occupying those ports, direct loopback connections to 8000/5432 must fail.
 Inspect the API command to verify `--forwarded-allow-ips` is exactly `CADDY_IP`.
-For spoofing checks, send forged `X-Forwarded-For` through Caddy and directly
-from an untrusted proxy-network container to API; login-failure rows must record
-the actual peer, never the forged address. Keep two disposable client containers
-running on the proxy network to obtain distinct source IPs, drive five failed
-logins from one and one from the other, and verify only the first is blocked.
+Forwarded headers remain restricted to the fixed Caddy peer. The former login
+rate-limit check is retired along with credential authentication.
 
 ## Persistence and workers
 
@@ -125,7 +116,7 @@ rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/co
 rtk docker compose --env-file .tmp/compose43.env -p planora43-smoke -f deploy/compose.yml up -d
 ```
 
-Log in again if needed and read the task created before recreation. API and
+Choose the same profile and read the task created before recreation. API and
 scheduler use the same database and migrations; no parallel production schema
 exists. #44 adds comprehensive PostgreSQL/SQLite parity and PostgreSQL CI.
 

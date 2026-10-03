@@ -8,7 +8,7 @@ Keep runtime environment files private, outside git, with mode 0600. Never put
 real credentials in issue comments or print expanded Compose configuration.
 
 Plain-HTTP IP access is for initial setup only and is not approved for normal use
-because it exposes login credentials in transit. The base `compose.yml` and
+because it exposes task and chat data in transit. The base `compose.yml` and
 `Caddyfile` deliberately remain setup HTTP. Approved public access uses both
 `compose.yml` and `compose.production.yml` with a real public domain. An unset
 `PLANORA_DOMAIN` makes the production overlay fail configuration; it cannot
@@ -105,21 +105,22 @@ does not satisfy these checks. Record date/time, hostname and external
 client/network, HTTP status and Location for the redirect:
 
 ```sh
-rtk curl --silent --show-error --dump-header - --output /dev/null 'http://tasks.example.com/login?check=redirect'
+rtk curl --silent --show-error --dump-header - --output /dev/null 'http://tasks.example.com/?check=redirect'
 rtk curl --fail --show-error 'https://tasks.example.com/health'
 rtk curl --fail --show-error 'https://tasks.example.com/api/v1/health'
 rtk openssl s_client -connect tasks.example.com:443 -servername tasks.example.com -verify_hostname tasks.example.com -verify_return_error -showcerts </dev/null
 ```
 
-Expect HTTP 308 and `Location: https://tasks.example.com/login?check=redirect`;
+Expect HTTP 308 and `Location: https://tasks.example.com/?check=redirect`;
 both health responses must be `{"status":"ok"}` with normal trust validation.
 Inspect the leaf certificate in a normally validating browser or save the
 public leaf certificate to a scratch file and run
 `rtk openssl x509 -in leaf.pem -noout -issuer -subject -dates -ext subjectAltName`.
 Record issuer, exact hostname/SAN match, current validity dates, and the external
 client/network. Never use `curl -k`, a browser certificate bypass, or a fixture
-CA for these production checks. Login and create a non-AI task over the HTTPS
-origin; the cookie is Secure, HttpOnly, SameSite=Lax. Missing/foreign Origin must
+CA for these production checks. Choose Hamster Knight or Ech Princess on the
+landing page and create a non-AI task over the HTTPS origin. Scoped API requests
+carry `X-Planora-Profile`; no authentication cookie is used. Missing/foreign Origin must
 still return `403 CSRF_ORIGIN_MISMATCH`. Until off-host evidence exists, both
 issue #46 HUMAN checks remain unchecked; local success is not a public deployment.
 
@@ -151,7 +152,7 @@ The test starts/migrates/seeds only that disposable project, validates rendered
 production policy, checks actual port bindings, exports the fixture root CA into
 pytest scratch, and explicitly trusts it with `curl --cacert` (never `-k`).
 `--connect-to` directs hostname/SNI traffic to loopback ports without editing DNS.
-It checks 308 path/query, health and API prefix, cookie attributes, authenticated
+It checks 308 path/query, health and API prefix, profile context, profile-scoped
 task creation, unchanged HTTPS Origin handling, rejection of missing/wrong Origin,
 and identical root/leaf certificate state plus existing task access after proxy
 recreation. Cleanup deletes only this explicitly disposable project's volumes.

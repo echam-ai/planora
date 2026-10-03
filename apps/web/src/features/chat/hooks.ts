@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/services/api";
+import { captureApi } from "@/services/api";
 import { ApiError } from "@/types";
 import { qk } from "@/shared/queryKeys";
 
-export const useConversation = () =>
-  useQuery({ queryKey: qk.conversation, queryFn: () => api.getCurrentConversation() });
+export function useConversation() {
+  const api = captureApi();
+  return useQuery({ queryKey: qk.conversation, queryFn: () => api.getCurrentConversation() });
+}
 
 export function useChatMutations() {
   const qc = useQueryClient();
+  const api = captureApi();
   const sync = (conv: unknown) => qc.setQueryData(qk.conversation, conv);
   // Only a confirmed action can write tasks; send, reset and reject touch the conversation alone.
   const syncAndRefreshTasks = (conv: unknown) => {

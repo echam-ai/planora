@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
-import { countTasks, revokeSessions, seedArchivedTask, seedTask } from "./db";
-import { PASSWORD, USERNAME } from "./env";
+import { seedArchivedTask, seedTask } from "./db";
 
 // The HTTP-mode smoke suite (#88): five flows against a real API and a fresh
 // database, asserting on roles and visible text, never on browser storage.
@@ -21,10 +20,8 @@ function uniqueTitle(label: string): string {
 }
 
 async function signIn(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Username").fill(USERNAME);
-  await page.getByLabel("Password").fill(PASSWORD);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 }
 
@@ -37,7 +34,9 @@ function taskCard(page: Page, title: string) {
 }
 
 async function listTasks(request: APIRequestContext): Promise<WireTask[]> {
-  const response = await request.get("/api/v1/tasks");
+  const response = await request.get("/api/v1/tasks", {
+    headers: { "X-Planora-Profile": "hamster_knight" },
+  });
   expect(response.status()).toBe(200);
   return (await response.json()) as WireTask[];
 }
@@ -56,7 +55,7 @@ test("signs in through the login form against the real API", async ({ page, cont
   await signIn(page);
 
   const cookies = await context.cookies();
-  expect(cookies.map((cookie) => cookie.name)).toContain("planora_session");
+  expect(cookies).toEqual([]);
 });
 
 test("creates a task that the server stores", async ({ page }) => {
@@ -127,13 +126,15 @@ test("restores a seeded archived task to the end of To do", async ({ page }) => 
   );
 });
 
-test("redirects to /login when the session is revoked mid-use", async ({ page }) => {
-  const title = uniqueTitle("Rejected task");
+test("rejects missing profile and offers remembered selection without credentials", async ({
+  page,
+}) => {
+  expect((await page.request.get("/api/v1/tasks")).status()).toBe(422);
   await signIn(page);
-
-  revokeSessions();
-  await addTaskThroughForm(page, title);
-
-  await expect(page).toHaveURL(/\/login$/);
-  expect(countTasks(title)).toBe(0);
+  await page.goto("/settings");
+  await expect(page.getByRole("combobox", { name: "Timezone" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Selected account")).toHaveText("Hamster Knight");
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Ech Princess" })).toBeVisible();
 });

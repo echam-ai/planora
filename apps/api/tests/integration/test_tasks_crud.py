@@ -2,7 +2,7 @@
 §9.1, §13.1, §15.1).
 
 Uses the HTTPX `AsyncClient` against the real ASGI app, exactly like
-`tests/integration/test_auth_login.py` — no browser needed.
+`tests/integration/test_auth_select_profile.py` — no browser needed.
 `migrated_session_factory` applies the Alembic migration to a disposable
 SQLite file under the repo's `.tmp/`, and `app_factory()` builds a fresh app
 per test against that same database through `DATABASE_URL`. `make_client`
@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import select
@@ -36,12 +36,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _seed_task(
@@ -91,7 +87,7 @@ def test_create_with_only_required_fields_uses_defaults(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             create_response = await client.post(
                 TASKS_URL, json={"title": "Write report", "content": "Q3 numbers"}
             )
@@ -134,7 +130,7 @@ def test_new_tasks_go_to_the_end_of_the_todo_column(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL, json={"title": "C", "content": "third"}
             )
@@ -159,7 +155,7 @@ def test_task_created_done_gets_completed_at(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={"title": "Done already", "content": "x", "status": "done"},
@@ -183,7 +179,7 @@ def test_task_created_not_done_has_no_completed_at(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL, json={"title": "T", "content": "x", "status": status}
             )
@@ -217,7 +213,7 @@ def test_missing_or_blank_required_fields_are_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(TASKS_URL, json=body)
 
     response = _run(scenario)
@@ -254,7 +250,7 @@ def test_invalid_enum_values_are_rejected_on_create(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={"title": "T", "content": "c", field: value},
@@ -286,7 +282,7 @@ def test_invalid_enum_values_are_rejected_on_patch(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(f"{TASKS_URL}/{task_id}", json={field: value})
 
     response = _run(scenario)
@@ -310,7 +306,7 @@ def test_patch_unknown_id_returns_404_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{unknown_id}", json={"title": "x"}
             )
@@ -333,7 +329,7 @@ def test_patch_blank_title_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"title": "   "}
             )
@@ -357,7 +353,7 @@ def test_patch_unsafe_url_scheme_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}",
                 json={"urls": [{"url": "javascript:alert(1)"}]},
@@ -380,7 +376,7 @@ def test_patch_naive_deadline_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}",
                 json={"deadline_at": "2026-10-01T09:00:00"},
@@ -405,7 +401,7 @@ def test_url_entry_with_an_id_field_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={
@@ -434,7 +430,7 @@ def test_unsafe_url_scheme_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={
@@ -460,7 +456,7 @@ def test_naive_deadline_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={
@@ -488,7 +484,7 @@ def test_deadline_with_offset_is_normalized_to_utc(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={
@@ -524,7 +520,7 @@ def test_server_owned_field_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL, json={"title": "T", "content": "c", field: "x"}
             )
@@ -546,7 +542,7 @@ def test_unknown_field_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 TASKS_URL,
                 json={"title": "T", "content": "c", "not_a_real_field": True},
@@ -572,7 +568,7 @@ def test_list_is_empty_on_an_empty_database(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(TASKS_URL)
 
     response = _run(scenario)
@@ -598,7 +594,7 @@ def test_archived_tasks_are_hidden_from_active_endpoints(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             list_response = await client.get(TASKS_URL)
             get_response = await client.get(f"{TASKS_URL}/{archived_id}")
             patch_response = await client.patch(
@@ -633,7 +629,7 @@ def test_list_order_is_by_status_column_then_position(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(TASKS_URL)
 
     response = _run(scenario)
@@ -654,7 +650,7 @@ def test_get_unknown_id_returns_404(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(f"{TASKS_URL}/{unknown_id}")
 
     response = _run(scenario)
@@ -675,7 +671,7 @@ def test_malformed_id_returns_422_not_500(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             request = getattr(client, method)
             if method == "patch":
                 return await request(f"{TASKS_URL}/not-a-uuid", json={"title": "x"})
@@ -711,7 +707,7 @@ def test_partial_update_changes_only_given_fields(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}",
                 json={"title": "Renamed", "deadline_at": None},
@@ -741,7 +737,7 @@ def test_patch_explicit_null_title_or_content_is_rejected(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             title_response = await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"title": None}
             )
@@ -769,7 +765,7 @@ def test_patch_rejects_server_owned_and_unknown_fields(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             owned = await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"id": str(uuid.uuid4())}
             )
@@ -829,7 +825,7 @@ def test_patch_successfully_updates_a_single_field(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             patch_response = await client.patch(
                 f"{TASKS_URL}/{task_id}", json={field: value}
             )
@@ -875,7 +871,7 @@ def test_patch_replaces_the_urls_list(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             patch_response = await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"urls": new_urls}
             )
@@ -915,7 +911,7 @@ def test_patch_clears_the_urls_list_to_empty(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             patch_response = await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"urls": []}
             )
@@ -950,7 +946,7 @@ def test_status_change_through_patch_keeps_completed_at_consistent(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
 
             _fixed_clock(app, t1)
             to_done = await client.patch(
@@ -1001,7 +997,7 @@ def test_status_change_places_task_last_in_new_column(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{moving_id}", json={"status": "done"}
             )
@@ -1027,7 +1023,7 @@ def test_patch_same_status_leaves_position_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"status": "todo"}
             )
@@ -1055,7 +1051,7 @@ def test_rejected_patch_leaves_updated_at_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(
                 f"{TASKS_URL}/{task_id}", json={"priority": "urgent"}
             )
@@ -1083,7 +1079,7 @@ def test_delete_active_task_removes_row_and_keeps_sibling_positions(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             delete_response = await client.delete(f"{TASKS_URL}/{task_b}")
             get_response = await client.get(f"{TASKS_URL}/{task_b}")
             return delete_response, get_response
@@ -1116,7 +1112,7 @@ def test_delete_refuses_missing_archived_and_malformed_ids(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             unknown_response = await client.delete(f"{TASKS_URL}/{unknown_id}")
             archived_response = await client.delete(f"{TASKS_URL}/{archived_id}")
             malformed_response = await client.delete(f"{TASKS_URL}/not-a-uuid")
@@ -1135,7 +1131,7 @@ def test_delete_refuses_missing_archived_and_malformed_ids(
 # --- Auth and CSRF -------------------------------------------------------------
 
 
-def test_unauthenticated_requests_return_401(
+def test_unauthenticated_requests_return_422(
     valid_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     migrated_session_factory: sessionmaker[Session],
@@ -1157,8 +1153,8 @@ def test_unauthenticated_requests_return_401(
     responses = _run(scenario)
 
     for response in responses:
-        assert response.status_code == 401
-        assert response.json()["code"] == "NOT_AUTHENTICATED"
+        assert response.status_code == 422
+        assert response.json()["code"] == "VALIDATION_ERROR"
 
     assert _all_tasks(migrated_session_factory)[0].title != "x"
     assert len(_all_tasks(migrated_session_factory)) == 1
@@ -1175,7 +1171,7 @@ def test_cross_origin_writes_return_403_and_write_nothing(
 
     async def scenario() -> list[Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             foreign = {"Origin": FOREIGN_ORIGIN}
             return [
                 await client.post(
@@ -1211,7 +1207,7 @@ def test_a_failed_commit_is_not_reported_as_success(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
 
             original_commit = Session.commit
 
@@ -1247,7 +1243,7 @@ def test_openapi_documents_error_responses_and_enums(
         return ref.endswith("/ErrorResponse")
 
     post = paths["/api/v1/tasks"]["post"]["responses"]
-    assert _refs_error_response(post, "401")
+    assert "401" not in post
     assert _refs_error_response(post, "403")
     assert _refs_error_response(post, "422")
 
@@ -1255,13 +1251,13 @@ def test_openapi_documents_error_responses_and_enums(
     assert "404" in get_item
 
     patch_item = paths["/api/v1/tasks/{task_id}"]["patch"]["responses"]
-    assert _refs_error_response(patch_item, "401")
+    assert "401" not in patch_item
     assert _refs_error_response(patch_item, "403")
     assert _refs_error_response(patch_item, "422")
     assert "404" in patch_item
 
     delete_item = paths["/api/v1/tasks/{task_id}"]["delete"]["responses"]
-    assert _refs_error_response(delete_item, "401")
+    assert "401" not in delete_item
     assert _refs_error_response(delete_item, "403")
     assert _refs_error_response(delete_item, "422")
     assert "404" in delete_item

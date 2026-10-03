@@ -23,10 +23,7 @@ vi.mock("@tanstack/react-router", async () => {
 });
 
 function renderSettings() {
-  vi.spyOn(api, "getSession").mockResolvedValue({
-    username: "demo",
-    signedInAt: new Date().toISOString(),
-  });
+  window.localStorage.setItem("planora.profile", "hamster_knight");
   vi.spyOn(api, "getSettings").mockResolvedValue({
     timezone: "UTC",
     modelName: "kimi-k3",
@@ -50,7 +47,7 @@ describe("Settings route — HTTP mode", () => {
     await renderSettings();
 
     expect(screen.getByRole("heading", { name: "Preferences" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Change password" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Change password" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Demo data" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Reset demo data/ })).not.toBeInTheDocument();
   });

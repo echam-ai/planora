@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy.orm import Session, sessionmaker
@@ -46,11 +46,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _fixed_clock(app: FastAPI, now: datetime) -> None:
@@ -111,7 +108,7 @@ def test_success_leaks_no_sentinel(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": text})
 
     response = _run(scenario)
@@ -147,7 +144,7 @@ def test_invalid_model_output_leaks_no_sentinel(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": text})
 
     response = _run(scenario)
@@ -175,7 +172,7 @@ def test_llm_unavailable_error_leaks_no_sentinel(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": text})
 
     response = _run(scenario)
@@ -210,7 +207,7 @@ def test_cancellation_leaks_no_sentinel(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": text})
 
     response = _run(scenario)

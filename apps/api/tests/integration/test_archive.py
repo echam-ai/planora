@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import insert, select
@@ -37,12 +37,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login",
-        json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _seed_task(
@@ -124,7 +120,7 @@ def test_list_orders_newest_completion_first_and_hides_active_done(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL)
 
     response = _run(scenario)
@@ -151,7 +147,7 @@ def test_empty_archive_returns_empty_items_and_zero_total(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL)
 
     response = _run(scenario)
@@ -184,7 +180,7 @@ def test_tie_break_is_archived_at_then_id(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL)
 
     response = _run(scenario)
@@ -213,7 +209,7 @@ def test_pagination_covers_every_task_exactly_once(
 
     async def scenario() -> list[Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return [
                 await client.get(ARCHIVE_URL, params={"page": 1, "page_size": 5}),
                 await client.get(ARCHIVE_URL, params={"page": 2, "page_size": 5}),
@@ -252,7 +248,7 @@ def test_out_of_range_pagination_is_rejected_not_clamped(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL, params=params)
 
     response = _run(scenario)
@@ -293,7 +289,7 @@ def test_search_matches_title_substring_case_insensitively(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL, params={"search": "REPORT"})
 
     response = _run(scenario)
@@ -329,7 +325,7 @@ def test_search_does_not_match_content_or_notes(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL, params={"search": "unique"})
 
     response = _run(scenario)
@@ -354,7 +350,7 @@ def test_search_does_not_match_url_or_label(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL, params={"search": "unique"})
 
     response = _run(scenario)
@@ -383,7 +379,7 @@ def test_search_wildcard_characters_are_literal(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(ARCHIVE_URL, params={"search": "100%"})
 
     response = _run(scenario)
@@ -410,7 +406,7 @@ def test_search_is_trimmed_and_blank_means_no_filter(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             trimmed = await client.get(ARCHIVE_URL, params={"search": "  Report  "})
             blank = await client.get(ARCHIVE_URL, params={"search": "   "})
             empty = await client.get(ARCHIVE_URL, params={"search": ""})
@@ -449,7 +445,7 @@ def test_search_combines_with_pagination(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             page_one = await client.get(
                 ARCHIVE_URL, params={"search": "Match", "page": 1, "page_size": 5}
             )
@@ -484,7 +480,7 @@ def test_get_archived_task_returns_full_task_response(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(f"{ARCHIVE_URL}/{task_id}")
 
     response = _run(scenario)
@@ -506,7 +502,7 @@ def test_get_archived_task_404_for_unknown_and_active(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return (
                 await client.get(f"{ARCHIVE_URL}/{active_id}"),
                 await client.get(f"{ARCHIVE_URL}/{unknown_id}"),
@@ -540,7 +536,7 @@ def test_restore_returns_task_to_todo_and_appends_last(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             restore_response = await client.post(f"{ARCHIVE_URL}/{task_c}/restore")
             tasks_response = await client.get(TASKS_URL)
             archive_response = await client.get(ARCHIVE_URL)
@@ -582,7 +578,7 @@ def test_restore_into_empty_todo_column_succeeds(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(f"{ARCHIVE_URL}/{task_id}/restore")
 
     response = _run(scenario)
@@ -613,7 +609,7 @@ def test_restore_renumbers_the_column_when_appending_would_overflow(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(f"{ARCHIVE_URL}/{task_id}/restore")
 
     response = _run(scenario)
@@ -637,7 +633,7 @@ def test_restore_is_readable_via_tasks_endpoint(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             restore_response = await client.post(f"{ARCHIVE_URL}/{task_id}/restore")
             get_response = await client.get(f"{TASKS_URL}/{task_id}")
             return restore_response, get_response
@@ -661,7 +657,7 @@ def test_restore_unknown_or_active_task_returns_404_and_changes_nothing(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return (
                 await client.post(f"{ARCHIVE_URL}/{active_id}/restore"),
                 await client.post(f"{ARCHIVE_URL}/{unknown_id}/restore"),
@@ -696,7 +692,7 @@ def test_permanent_delete_removes_row(
 
     async def scenario() -> tuple[Response, Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             delete_response = await client.delete(f"{ARCHIVE_URL}/{task_id}")
             get_response = await client.get(f"{ARCHIVE_URL}/{task_id}")
             list_response = await client.get(ARCHIVE_URL)
@@ -722,7 +718,7 @@ def test_delete_active_task_via_archive_returns_404_and_leaves_it_untouched(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.delete(f"{ARCHIVE_URL}/{active_id}")
 
     response = _run(scenario)
@@ -745,7 +741,7 @@ def test_delete_unknown_id_returns_404(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.delete(f"{ARCHIVE_URL}/{unknown_id}")
 
     response = _run(scenario)
@@ -757,7 +753,7 @@ def test_delete_unknown_id_returns_404(
 # --- Security and malformed id --------------------------------------------------
 
 
-def test_unauthenticated_requests_return_401(
+def test_unauthenticated_requests_return_422(
     valid_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     migrated_session_factory: sessionmaker[Session],
@@ -780,8 +776,8 @@ def test_unauthenticated_requests_return_401(
     responses = _run(scenario)
 
     for response in responses:
-        assert response.status_code == 401
-        assert response.json()["code"] == "NOT_AUTHENTICATED"
+        assert response.status_code == 422
+        assert response.json()["code"] == "VALIDATION_ERROR"
 
     stored = _all_tasks(migrated_session_factory)
     assert len(stored) == 1
@@ -801,7 +797,7 @@ def test_cross_origin_writes_return_403_and_change_nothing(
 
     async def scenario() -> list[Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             foreign = {"Origin": FOREIGN_ORIGIN}
             return [
                 await client.post(f"{ARCHIVE_URL}/{task_id}/restore", headers=foreign),
@@ -831,7 +827,7 @@ def test_malformed_id_returns_422_not_500(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             if method == "post":
                 return await client.post(f"{ARCHIVE_URL}/not-a-uuid/restore")
             request = getattr(client, method)
@@ -858,24 +854,24 @@ def test_openapi_documents_all_operations_and_error_envelopes(
         return ref.endswith("/ErrorResponse")
 
     list_op = paths[ARCHIVE_URL]["get"]["responses"]
-    assert _refs_error_response(list_op, "401")
+    assert "401" not in list_op
     assert _refs_error_response(list_op, "422")
     list_schema_ref = list_op["200"]["content"]["application/json"]["schema"]["$ref"]
     assert list_schema_ref.endswith("/ArchiveListResponse")
 
     item_op = paths[f"{ARCHIVE_URL}/{{task_id}}"]["get"]["responses"]
-    assert _refs_error_response(item_op, "401")
+    assert "401" not in item_op
     assert _refs_error_response(item_op, "404")
     assert _refs_error_response(item_op, "422")
 
     restore_op = paths[f"{ARCHIVE_URL}/{{task_id}}/restore"]["post"]["responses"]
-    assert _refs_error_response(restore_op, "401")
+    assert "401" not in restore_op
     assert _refs_error_response(restore_op, "403")
     assert _refs_error_response(restore_op, "404")
     assert _refs_error_response(restore_op, "422")
 
     delete_op = paths[f"{ARCHIVE_URL}/{{task_id}}"]["delete"]["responses"]
-    assert _refs_error_response(delete_op, "401")
+    assert "401" not in delete_op
     assert _refs_error_response(delete_op, "403")
     assert _refs_error_response(delete_op, "404")
     assert _refs_error_response(delete_op, "422")
@@ -926,7 +922,7 @@ def test_search_over_ten_thousand_archived_tasks_is_fast(
 
     async def timed_scenario() -> tuple[Response, float]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             started = time.perf_counter()
             response = await client.get(ARCHIVE_URL, params={"search": "target"})
             elapsed = time.perf_counter() - started

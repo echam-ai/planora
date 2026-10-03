@@ -5,7 +5,7 @@ import { expectNoHorizontalScroll, expectSeparateBoxes, expectTouchTargets } fro
 // Sixteen states, on both projects; no mobile/desktop skips or weakened geometry checks.
 test("touch targets: login", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByLabel("Username")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hamster Knight" })).toBeVisible();
   await expectTouchTargets(page, "1: login");
 });
 
@@ -83,7 +83,7 @@ test("touch targets: filtered board and account menu", async ({ page }) => {
     await expectSeparateBoxes(handle, title, "drag handle must be clear of each seed title");
   }
   await page.getByRole("button", { name: "Account menu" }).click();
-  await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Switch account" })).toBeVisible();
   await expectTouchTargets(page, "3: account menu");
 });
 
@@ -238,7 +238,7 @@ for (const width of [390, 320]) {
     await expectTouchTargets(page, `${width}px header`, header);
     await expect(page.getByRole("navigation", { name: "Main mobile" })).toBeVisible();
     await header.getByRole("button", { name: "Account menu" }).click();
-    await expect(page.getByRole("menuitem", { name: "Log out" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Switch account" })).toBeVisible();
     await expectTouchTargets(page, `${width}px account menu`, page.getByRole("menu"));
     await expectNoHorizontalScroll(page, `${width}px account menu`);
     await page.keyboard.press("Escape");

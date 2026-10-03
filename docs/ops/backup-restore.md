@@ -94,33 +94,32 @@ snapshot's migration revision; use the matching application release first.
 docker compose --env-file .tmp/runtime.env -p planora -f deploy/compose.yml exec -T db sh -c 'psql --no-password --username "$POSTGRES_USER" --dbname "$1" --set ON_ERROR_STOP=1' sh "$RESTORE_DATABASE" <<'SQL'
 SET TIME ZONE 'UTC';
 SELECT version_num FROM alembic_version;
-SELECT id, username, created_at, updated_at FROM app_user;
 SELECT id, timezone, model_name, updated_at FROM app_settings;
-SELECT id, status, deadline_at, completed_at, archived_at, created_at, updated_at FROM task ORDER BY id;
+SELECT profile_id, id, status, deadline_at, completed_at, archived_at, created_at, updated_at FROM task ORDER BY id;
 SELECT id, conversation_id, created_at, updated_at FROM conversation;
-SELECT id, sequence, role, created_at FROM chat_message ORDER BY sequence;
-SELECT a.id, a.status, a.message_id, m.id AS linked_message, a.task_id, t.id AS linked_task
+SELECT profile_id, id, sequence, role, created_at FROM chat_message ORDER BY sequence;
+SELECT a.profile_id, a.id, a.status, a.message_id, m.id AS linked_message, a.task_id, t.id AS linked_task
 FROM chat_action a LEFT JOIN chat_message m ON m.id=a.message_id LEFT JOIN task t ON t.id=a.task_id;
 SQL
 ```
 
 Compare against known pre-backup counts/values, including archived task rows,
-chat order/proposal payloads, and UTC timestamps. Account password hashes are
-necessary for recovery; confirm them privately without displaying them. Session
-secret and LLM key remain deployment configuration, not restored settings.
-PostgreSQL database dumps exclude cluster role passwords. A password hash is
-stored for the account, never its plaintext password.
+chat order/proposal payloads, profile ownership, and UTC timestamps. LLM keys
+and database credentials remain deployment configuration, not profile settings.
+The authentication migration retires old credential/session rows. Dumps from
+older releases may still contain historical password hashes, so keep backups
+private. Permanent task deletion does not purge prior backup snapshots.
 
 ## Disposable automated restore and credential audit
 
 The committed opt-in smoke test uses a separate Compose file and fresh uniquely
 named source/restore databases, with four distinct fake credential markers.
-It migrates the actual source to Alembic head, hashes the fake account password,
+It migrates the actual source to Alembic head, seeds a historical credential residue,
 seeds settings, active/archived tasks and linked chat proposals, produces custom
 archives, and executes the restore wrapper above. It decodes the archive using
 `pg_restore --file=-` into captured memory and checks all four plaintext markers
 are absent; searching compressed bytes alone is insufficient. It verifies the
-hash remains recoverable without printing it or any decoded content.
+historical hash remains recoverable without printing it or any decoded content.
 Full table snapshots, relationships, and UTC timestamps must match; source and
 all retained archive SHA256 values must remain unchanged. Nine deterministic
 completion days leave readable days 3–9. Missing/truncated inputs and a restore

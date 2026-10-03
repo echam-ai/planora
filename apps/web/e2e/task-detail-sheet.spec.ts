@@ -97,14 +97,16 @@ test("scenario 8: a Done task without a deadline remains completed", async ({ pa
   const DONE_TASK = "Write the weekly status update";
   await signIn(page);
   await page.evaluate((title) => {
-    const tasks = JSON.parse(window.localStorage.getItem("planora.tasks") ?? "[]") as Array<{
+    const tasks = JSON.parse(
+      window.localStorage.getItem("planora.hamster_knight.tasks") ?? "[]",
+    ) as Array<{
       title: string;
       deadlineAt: string | null;
     }>;
     const task = tasks.find((item) => item.title === title);
     if (!task) throw new Error(`missing seeded task: ${title}`);
     task.deadlineAt = null;
-    window.localStorage.setItem("planora.tasks", JSON.stringify(tasks));
+    window.localStorage.setItem("planora.hamster_knight.tasks", JSON.stringify(tasks));
   }, DONE_TASK);
   await page.reload();
 

@@ -24,10 +24,10 @@ from integration.test_tasks_crud import (
     TASKS_URL,
     _all_tasks,
     _fixed_clock,
-    _login,
     _parse,
     _run,
     _seed_task,
+    _select_profile,
 )
 from planora_api.db.models import Task, TaskStatus
 
@@ -67,7 +67,7 @@ def test_move_into_another_column_at_an_index(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             move_response = await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "in_progress", "index": 1}
             )
@@ -101,7 +101,7 @@ def test_move_to_the_end_of_another_column_and_rejects_an_index_past_the_end(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             ok = await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "in_progress", "index": 2}
             )
@@ -132,7 +132,7 @@ def test_move_to_the_end_of_another_column_and_rejects_an_index_past_the_end(
     assert _titles_in_status(migrated_session_factory, TaskStatus.TODO) == ["E"]
 
 
-def test_reorder_persists_across_a_fresh_login(
+def test_reorder_persists_across_a_fresh_select_profile(
     valid_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     migrated_session_factory: sessionmaker[Session],
@@ -145,13 +145,13 @@ def test_reorder_persists_across_a_fresh_login(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as first_client:
-            await _login(first_client)
+            await _select_profile(first_client)
             reorder_response = await first_client.post(
                 f"{TASKS_URL}/reorder",
                 json={"status": "todo", "ordered_ids": [str(c), str(a), str(b)]},
             )
         async with make_client(app) as second_client:
-            await _login(second_client)
+            await _select_profile(second_client)
             list_response = await second_client.get(TASKS_URL)
         return reorder_response, list_response
 
@@ -176,7 +176,7 @@ def test_task_completes_when_dragged_into_done_at_a_fixed_clock(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "done", "index": 0}
             )
@@ -204,7 +204,7 @@ def test_task_clears_completed_at_when_dragged_out_of_done(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "todo", "index": 0}
             )
@@ -239,7 +239,7 @@ def test_reordering_done_column_leaves_completed_at_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/reorder",
                 json={"status": "done", "ordered_ids": [str(b), str(a)]},
@@ -271,7 +271,7 @@ def test_same_status_move_within_done_does_not_reset_the_timer(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "done", "index": 1}
             )
@@ -296,7 +296,7 @@ def test_ai_move_to_top_of_current_column_changes_no_status_or_completed_at(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{c}/move", json={"status": "todo", "index": 0}
             )
@@ -332,7 +332,7 @@ def test_reorder_to_the_current_order_changes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/reorder",
                 json={"status": "todo", "ordered_ids": [str(a), str(b)]},
@@ -367,7 +367,7 @@ def test_move_unknown_or_archived_id_returns_404_and_writes_nothing(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             unknown = await client.post(
                 f"{TASKS_URL}/{unknown_id}/move", json={"status": "todo", "index": 0}
             )
@@ -395,7 +395,7 @@ def test_move_negative_index_is_rejected_and_never_clamped(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "todo", "index": -1}
             )
@@ -422,7 +422,7 @@ def test_move_within_column_index_above_last_slot_is_rejected(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": "todo", "index": 2}
             )
@@ -447,7 +447,7 @@ def test_move_and_reorder_reject_an_invalid_status_enum(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             move = await client.post(
                 f"{TASKS_URL}/{a}/move", json={"status": bad_status, "index": 0}
             )
@@ -499,7 +499,7 @@ def test_stale_or_invalid_reorder_input_is_rejected_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 f"{TASKS_URL}/reorder",
                 json={
@@ -518,7 +518,7 @@ def test_stale_or_invalid_reorder_input_is_rejected_and_writes_nothing(
 # --- Auth and CSRF -------------------------------------------------------------
 
 
-def test_unauthenticated_move_and_reorder_return_401_and_write_nothing(
+def test_unauthenticated_move_and_reorder_return_422_and_write_nothing(
     valid_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     migrated_session_factory: sessionmaker[Session],
@@ -542,8 +542,8 @@ def test_unauthenticated_move_and_reorder_return_401_and_write_nothing(
     responses = _run(scenario)
 
     for response in responses:
-        assert response.status_code == 401
-        assert response.json()["code"] == "NOT_AUTHENTICATED"
+        assert response.status_code == 422
+        assert response.json()["code"] == "VALIDATION_ERROR"
 
     stored = _all_tasks(migrated_session_factory)[0]
     assert stored.status == TaskStatus.TODO
@@ -561,7 +561,7 @@ def test_cross_origin_move_and_reorder_return_403_and_write_nothing(
 
     async def scenario() -> list[Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             foreign = {"Origin": FOREIGN_ORIGIN}
             return [
                 await client.post(
@@ -604,7 +604,7 @@ def test_a_failed_commit_mid_move_leaves_every_row_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
 
             original_commit = Session.commit
 
@@ -641,7 +641,7 @@ def test_a_failed_commit_mid_reorder_leaves_every_row_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
 
             original_commit = Session.commit
 
@@ -687,13 +687,13 @@ def test_openapi_documents_move_and_reorder(
 
     move = paths["/api/v1/tasks/{task_id}/move"]["post"]["responses"]
     assert _returns_task_array(move)
-    assert _refs_error_response(move, "401")
+    assert "401" not in move
     assert _refs_error_response(move, "403")
     assert _refs_error_response(move, "422")
     assert "404" in move
 
     reorder = paths["/api/v1/tasks/reorder"]["post"]["responses"]
     assert _returns_task_array(reorder)
-    assert _refs_error_response(reorder, "401")
+    assert "401" not in reorder
     assert _refs_error_response(reorder, "403")
     assert _refs_error_response(reorder, "422")

@@ -11,8 +11,6 @@ const url = new URL(origin);
 if (!["http:", "https:"].includes(url.protocol) || url.origin !== origin) {
   throw new Error("PLANORA_E2E_COMPOSE_ORIGIN must be an HTTP(S) origin without a path.");
 }
-required("PLANORA_E2E_COMPOSE_USERNAME");
-required("PLANORA_E2E_COMPOSE_PASSWORD");
 
 // The operator starts and initializes a disposable stack first. Playwright
 // deliberately starts no server and performs no database/Compose operations.
