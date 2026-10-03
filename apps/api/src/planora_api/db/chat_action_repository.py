@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from functools import partial
 from typing import Any
@@ -114,6 +115,19 @@ def list_actions_by_message_id(db: Session) -> dict[uuid.UUID, ChatAction]:
     (spec §41: "Every `ChatMessageResponse` has an `action` key")."""
     actions = db.execute(select(ChatAction).where(ChatAction.profile_id == profile_id(db))).scalars().all()
     return {action.message_id: action for action in actions}
+
+
+def list_actions_for_messages(
+    db: Session, message_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, ChatAction]:
+    """The `chat_action` rows attached to just these messages, keyed by
+    `message_id` — the LLM history window's actions (issue #121)."""
+    if not message_ids:
+        return {}
+    stmt = select(ChatAction).where(
+        ChatAction.profile_id == profile_id(db), ChatAction.message_id.in_(message_ids)
+    )
+    return {action.message_id: action for action in db.execute(stmt).scalars().all()}
 
 
 def _try_transition(

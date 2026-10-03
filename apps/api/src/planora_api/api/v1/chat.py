@@ -21,7 +21,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from planora_api.ai.chat import send_chat_message
+from planora_api.ai.chat import MAX_HISTORY_MESSAGES, send_chat_message
 from planora_api.ai.chat_tools import PendingProposal
 from planora_api.ai.client import LLMClient
 from planora_api.ai.deps import get_llm_client
@@ -160,8 +160,10 @@ async def send_message(
     call order — never a `task` row, which only a later confirm writes.
     """
     effective = settings_repository.get_effective_settings(db, settings)
-    history = chat_repository.list_messages(db)
-    actions_by_message_id = chat_action_repository.list_actions_by_message_id(db)
+    history = chat_repository.list_recent_messages(db, limit=MAX_HISTORY_MESSAGES)
+    actions_by_message_id = chat_action_repository.list_actions_for_messages(
+        db, [message.id for message in history]
+    )
 
     turn = await send_chat_message(
         llm=llm,

@@ -86,7 +86,7 @@ TOOL_DEFINITIONS: tuple[Mapping[str, Any], ...] = tuple(
 # Tool-call/tool-result messages from *earlier* turns are never persisted
 # in the first place (`db.chat_repository` stores only user/assistant
 # text), so there is nothing of that kind to resend here either.
-_MAX_HISTORY_MESSAGES = 20
+MAX_HISTORY_MESSAGES = 20
 
 
 def _build_system_prompt(*, now: datetime, timezone_name: str) -> str:
@@ -131,7 +131,7 @@ def _build_initial_messages(
     prompt or any delimited block (see `ai.prompts`'s chat-prompt
     docstring)."""
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-    for message in history[-_MAX_HISTORY_MESSAGES:]:
+    for message in history[-MAX_HISTORY_MESSAGES:]:
         content = _history_content(message, actions_by_message_id.get(message.id))
         messages.append({"role": message.role.value, "content": content})
     messages.append({"role": "user", "content": text})
@@ -276,6 +276,12 @@ async def send_chat_message(
     proposals: list[PendingProposal] = []
 
     for call_number in range(1, MAX_TOOL_CALLS + 1):
+        # Nothing has been written yet (every executor is read-only), so
+        # ending the transaction the reads auto-began is a pure release of
+        # the pooled connection — never held "idle in transaction" across
+        # the LLM round trip (issue #121).
+        if db.in_transaction():
+            db.rollback()
         completion = await run_cancellable(
             request, llm.complete(messages, model=model, tools=TOOL_DEFINITIONS)
         )
