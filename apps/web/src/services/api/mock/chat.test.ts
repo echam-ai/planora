@@ -307,3 +307,54 @@ it("mock chat and quick capture accept Python whitespace at the API boundary", a
   expect(conversation.messages[0]).toMatchObject({ role: "user", text });
   await expect(resolve(mockApiClient.parseTaskText(raw))).resolves.toBeDefined();
 });
+
+describe("mock chat: cancellation", () => {
+  const stored = () => window.localStorage.getItem("planora.hamster_knight.conversation");
+
+  async function rejection(promise: Promise<unknown>) {
+    return promise.then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+  }
+
+  it("aborting a pending sendChatMessage rejects it and leaves the stored conversation unchanged", async () => {
+    await resolve(mockApiClient.getCurrentConversation());
+    const before = stored();
+    const controller = new AbortController();
+    const send = rejection(mockApiClient.sendChatMessage("Cancelled turn", controller.signal));
+    await vi.advanceTimersByTimeAsync(100);
+    controller.abort();
+
+    expect(await send).toMatchObject({ name: "AbortError" });
+    await vi.runAllTimersAsync();
+    expect(stored()).toBe(before);
+    expect((await resolve(mockApiClient.getCurrentConversation())).messages).toEqual([]);
+  });
+
+  it("aborting a pending parseTaskText rejects it", async () => {
+    const controller = new AbortController();
+    const parse = rejection(mockApiClient.parseTaskText("Cancelled draft", controller.signal));
+    controller.abort();
+
+    expect(await parse).toMatchObject({ name: "AbortError" });
+    await vi.runAllTimersAsync();
+  });
+
+  it("an already-aborted signal rejects before any work", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(
+      await rejection(mockApiClient.sendChatMessage("Never sent", controller.signal)),
+    ).toMatchObject({ name: "AbortError" });
+    expect(stored()).toBeNull();
+  });
+
+  it("a signal that is never aborted changes nothing", async () => {
+    const controller = new AbortController();
+    const conversation = await resolve(
+      mockApiClient.sendChatMessage("What is overdue?", controller.signal),
+    );
+    expect(conversation.messages).toHaveLength(2);
+  });
+});

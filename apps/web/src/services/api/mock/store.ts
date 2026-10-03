@@ -29,8 +29,23 @@ export function write<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-export function delay(min = 250, max = 600) {
-  return new Promise((resolve) => setTimeout(resolve, min + Math.random() * (max - min)));
+/** Resolves after a random wait. An aborted `signal` rejects at once with its reason. */
+export function delay(min = 250, max = 600, signal?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal!.reason);
+    };
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener("abort", onAbort);
+        resolve();
+      },
+      min + Math.random() * (max - min),
+    );
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export function nowIso() {

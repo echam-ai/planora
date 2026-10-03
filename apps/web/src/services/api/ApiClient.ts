@@ -30,7 +30,11 @@ export interface ApiClient {
   moveTask(id: string, status: TaskStatus, position: number): Promise<Task[]>;
   reorderTasks(status: TaskStatus, orderedIds: string[]): Promise<Task[]>;
 
-  parseTaskText(text: string): Promise<ParsedTaskText>;
+  /**
+   * `signal` is optional on both AI calls. Aborting it cancels the request and rejects with an
+   * `AbortError` (never an `ApiError`); a cancelled call has no effect on stored data.
+   */
+  parseTaskText(text: string, signal?: AbortSignal): Promise<ParsedTaskText>;
 
   listArchive(search?: string, page?: number): Promise<ArchivePage>;
   getArchivedTask(id: string): Promise<Task>;
@@ -38,7 +42,7 @@ export interface ApiClient {
   permanentlyDeleteTask(id: string): Promise<void>;
 
   getCurrentConversation(): Promise<Conversation>;
-  sendChatMessage(text: string): Promise<Conversation>;
+  sendChatMessage(text: string, signal?: AbortSignal): Promise<Conversation>;
   startNewConversation(): Promise<Conversation>;
   confirmChatAction(actionId: string): Promise<Conversation>;
   rejectChatAction(actionId: string): Promise<Conversation>;

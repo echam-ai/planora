@@ -560,3 +560,42 @@ describe("httpApiClient — parseTaskText", () => {
     });
   });
 });
+
+describe("httpApiClient — cancellation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["parseTaskText", "sendChatMessage"] as const)(
+    "%s forwards the signal to fetch and rejects with an abort error, not an ApiError",
+    async (method) => {
+      const controller = new AbortController();
+      const fetchSpy = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        expect(init.signal).toBe(controller.signal);
+        expect(new Headers(init.headers).get("X-Planora-Profile")).toBe("hamster_knight");
+        controller.abort();
+        return Promise.reject(controller.signal.reason);
+      });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const error = await createHttpApiClient("hamster_knight")
+        [method]("Pending", controller.signal)
+        .catch((e: unknown) => e);
+
+      expect(error).toMatchObject({ name: "AbortError" });
+      expect(error).not.toBeInstanceOf(ApiError);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["parseTaskText", "sendChatMessage"] as const)(
+    "%s without a signal sends none (existing callers are unchanged)",
+    async (method) => {
+      const fetchSpy = vi.fn().mockRejectedValue(new TypeError("offline"));
+      vi.stubGlobal("fetch", fetchSpy);
+
+      await expect(createHttpApiClient("hamster_knight")[method]("Hi")).rejects.toMatchObject({
+        code: "NETWORK_ERROR",
+      });
+      expect(fetchSpy.mock.calls[0]?.[1]).not.toHaveProperty("signal");
+    },
+  );
+});

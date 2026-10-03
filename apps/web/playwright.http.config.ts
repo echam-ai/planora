@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { apiEnv, runSettings, uvArgs } from "./e2e-http/env";
+import { apiEnv, llmOrigin, runSettings, uvArgs } from "./e2e-http/env";
 
 // The HTTP-mode smoke suite (#88): a real uvicorn API plus the web dev server
 // in `VITE_API_MODE=http`, on a fresh migrated SQLite file, with free ports
@@ -24,6 +24,16 @@ export default defineConfig({
     { name: "mobile-chromium", use: { ...devices["Pixel 5"] } },
   ],
   webServer: [
+    {
+      // The OpenAI-compatible provider the API talks to: loopback only, and it answers a
+      // request only when a test releases it, so cancellation is deterministic.
+      command: "bun e2e-http/delayed-provider.ts",
+      url: `${llmOrigin()}/health`,
+      reuseExistingServer: false,
+      timeout: WEB_SERVER_TIMEOUT_MS,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
     {
       // cwd is the run directory, which holds no `.env`, so the developer's
       // apps/api/.env is never read: `Settings` sees only `apiEnv()`.

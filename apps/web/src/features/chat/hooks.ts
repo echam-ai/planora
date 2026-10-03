@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { captureApi } from "@/services/api";
 import { ApiError } from "@/types";
 import { qk } from "@/shared/queryKeys";
+import { useCancellableRequest } from "@/shared/cancellation";
 
 export function useConversation() {
   const api = captureApi();
@@ -23,8 +24,26 @@ export function useChatMutations() {
     if (e instanceof ApiError && (e.status === 404 || e.status === 409))
       qc.invalidateQueries({ queryKey: qk.conversation });
   };
+  const request = useCancellableRequest();
+  const send = useMutation({
+    mutationFn: async (text: string) => {
+      const controller = request.begin();
+      const conversation = await api.sendChatMessage(text, controller.signal);
+      // An adapter may resolve even though it was cancelled; never sync that result.
+      controller.signal.throwIfAborted();
+      return conversation;
+    },
+    onSuccess: sync,
+  });
+  // Stops the request and drops the mutation's state at once, so neither the result nor an
+  // error can reach the panel. The same abort runs on unmount and on an account change.
+  const cancelSend = () => {
+    request.abort();
+    send.reset();
+  };
   return {
-    send: useMutation({ mutationFn: (text: string) => api.sendChatMessage(text), onSuccess: sync }),
+    send,
+    cancelSend,
     reset: useMutation({ mutationFn: () => api.startNewConversation(), onSuccess: sync }),
     confirm: useMutation({
       mutationFn: (actionId: string) => api.confirmChatAction(actionId),

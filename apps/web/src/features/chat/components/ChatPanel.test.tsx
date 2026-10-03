@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "@/services/api";
 import { qk } from "@/shared/queryKeys";
@@ -7,6 +7,7 @@ import { ApiError, type Conversation } from "@/types";
 import { createSeedTasks } from "@/data/seed";
 import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
 import { ChatPanel } from "./ChatPanel";
+import { selectProfile } from "@/services/api/profiles";
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -43,12 +44,12 @@ function proposal(status: "pending" | "applied" | "rejected"): Conversation {
 function renderPanel() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-  render(
+  const utils = render(
     <QueryClientProvider client={queryClient}>
       <ChatPanel onClose={() => {}} />
     </QueryClientProvider>,
   );
-  return { invalidate };
+  return { invalidate, queryClient, unmount: utils.unmount };
 }
 
 const UNAVAILABLE = "The assistant is unavailable right now. Try again.";
@@ -274,7 +275,7 @@ describe("ChatPanel", () => {
       fireEvent.click(await screen.findByRole("button", { name: "What is near deadline?" }));
 
       await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-      expect(send).toHaveBeenCalledWith("What is near deadline?");
+      expect(send).toHaveBeenCalledWith("What is near deadline?", expect.any(AbortSignal));
     });
   });
 
@@ -286,7 +287,9 @@ describe("ChatPanel", () => {
 
       fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
 
-      await waitFor(() => expect(send).toHaveBeenCalledWith("What is overdue?"));
+      await waitFor(() =>
+        expect(send).toHaveBeenCalledWith("What is overdue?", expect.any(AbortSignal)),
+      );
     });
 
     it("sends the trimmed text when Send is pressed", async () => {
@@ -300,7 +303,7 @@ describe("ChatPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
       await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-      expect(send).toHaveBeenCalledWith("hi");
+      expect(send).toHaveBeenCalledWith("hi", expect.any(AbortSignal));
     });
 
     it("does not send whitespace-only text", async () => {
@@ -365,7 +368,7 @@ describe("ChatPanel", () => {
       expect(input).toHaveValue("second");
       fireEvent.keyDown(input, { key: "Enter" });
       expect(send).toHaveBeenCalledTimes(1);
-      expect(send).toHaveBeenCalledWith("first");
+      expect(send).toHaveBeenCalledWith("first", expect.any(AbortSignal));
       expect(input).toHaveValue("second");
 
       reject(unavailable());
@@ -397,7 +400,7 @@ describe("ChatPanel", () => {
       send.mockResolvedValue(replied);
       fireEvent.keyDown(input, { key: "Enter" });
       await waitFor(() => expect(send).toHaveBeenCalledTimes(2));
-      expect(send).toHaveBeenLastCalledWith("first");
+      expect(send).toHaveBeenLastCalledWith("first", expect.any(AbortSignal));
     });
   });
 
@@ -412,7 +415,7 @@ describe("ChatPanel", () => {
       fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
 
       await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-      expect(send).toHaveBeenCalledWith("What is overdue?");
+      expect(send).toHaveBeenCalledWith("What is overdue?", expect.any(AbortSignal));
       expect(input).toHaveValue("draft");
       resolve(replied);
       expect(await screen.findByText("hello")).toBeInTheDocument();
@@ -564,7 +567,9 @@ describe("ChatPanel message limit", () => {
     expect(input).not.toHaveAttribute("aria-invalid");
     expect(input).not.toHaveAttribute("aria-describedby");
     fireEvent.keyDown(input, { key: "Enter" });
-    await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith("a".repeat(4000)));
+    await waitFor(() =>
+      expect(send).toHaveBeenCalledExactlyOnceWith("a".repeat(4000), expect.any(AbortSignal)),
+    );
   });
 
   it.each(["a", "😀"])(
@@ -581,7 +586,12 @@ describe("ChatPanel message limit", () => {
       expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
       fireEvent.keyDown(input, { key: "Enter" });
-      await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith(character.repeat(4000)));
+      await waitFor(() =>
+        expect(send).toHaveBeenCalledExactlyOnceWith(
+          character.repeat(4000),
+          expect.any(AbortSignal),
+        ),
+      );
     },
   );
 
@@ -640,7 +650,158 @@ describe("ChatPanel API whitespace parity", () => {
       expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
       expect(input).not.toHaveAttribute("aria-invalid");
       fireEvent.keyDown(input, { key: "Enter" });
-      await waitFor(() => expect(send).toHaveBeenCalledExactlyOnceWith(body));
+      await waitFor(() =>
+        expect(send).toHaveBeenCalledExactlyOnceWith(body, expect.any(AbortSignal)),
+      );
     },
   );
+});
+
+describe("ChatPanel cancellation", () => {
+  async function startPending(text = "What is overdue?") {
+    vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+    const d = deferredSend();
+    const panel = renderPanel();
+    const input = await screen.findByLabelText("Message the assistant");
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(d.send).toHaveBeenCalledTimes(1));
+    const signal = d.send.mock.calls[0]![1] as AbortSignal;
+    return { ...d, ...panel, input, signal };
+  }
+  const cancelButton = () => screen.queryByRole("button", { name: "Cancel request" });
+  const noFailureFeedback = () => {
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.queryByText(/The assistant didn't respond\./)).not.toBeInTheDocument();
+  };
+
+  it("offers Cancel request only while a send is pending, as a button in the form after the input", async () => {
+    vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+    renderPanel();
+    expect(await screen.findByLabelText("Message the assistant")).toBeInTheDocument();
+    expect(cancelButton()).not.toBeInTheDocument();
+
+    const { input } = await startPendingFrom();
+    const button = screen.getByRole("button", { name: "Cancel request" });
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("type", "button");
+    expect(button.closest("form")).toBe(input.closest("form"));
+    expect(input.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Send is disabled while pending, so Cancel request is the next tab stop after the input.
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  });
+
+  async function startPendingFrom() {
+    const d = deferredSend();
+    const input = screen.getByLabelText("Message the assistant");
+    fireEvent.change(input, { target: { value: "hi" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(d.send).toHaveBeenCalledTimes(1));
+    return { ...d, input };
+  }
+
+  it("returns to ready at once: aborts the request, restores the text and focuses the input, silently", async () => {
+    const { input, signal } = await startPending();
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
+    expect(input).toHaveValue("");
+    expect(signal.aborted).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+
+    expect(signal.aborted).toBe(true);
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(cancelButton()).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+    expect(input).toHaveValue("What is overdue?");
+    expect(input).toHaveFocus();
+    noFailureFeedback();
+  });
+
+  it("keeps whatever was typed while waiting", async () => {
+    const { input } = await startPending();
+    fireEvent.change(input, { target: { value: "draft" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+
+    expect(input).toHaveValue("draft");
+    expect(input).toHaveFocus();
+  });
+
+  it("returns a cancelled suggestion's text to the empty input", async () => {
+    vi.spyOn(api, "getCurrentConversation").mockResolvedValue(emptyConversation);
+    deferredSend();
+    renderPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "What is overdue?" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel request" }));
+
+    expect(screen.getByLabelText("Message the assistant")).toHaveValue("What is overdue?");
+  });
+
+  it("never shows a reply that arrives after the cancel, nor writes it to the cache", async () => {
+    const { resolve, queryClient } = await startPending();
+    const before = queryClient.getQueryData(qk.conversation);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+
+    await act(async () => resolve(replied));
+
+    expect(screen.queryByText("hello")).not.toBeInTheDocument();
+    expect(queryClient.getQueryData(qk.conversation)).toBe(before);
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    noFailureFeedback();
+  });
+
+  it("shows no notice or toast when the cancelled request rejects", async () => {
+    const { reject } = await startPending();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+
+    await act(async () => reject(new DOMException("Aborted", "AbortError")));
+
+    noFailureFeedback();
+    expect(screen.getByLabelText("Message the assistant")).toHaveValue("What is overdue?");
+  });
+
+  it("can send again right after a cancel, and only the new reply appears", async () => {
+    const { resolve: resolveFirst, send, input } = await startPending();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
+    send.mockResolvedValue({
+      id: "c1",
+      messages: [
+        { id: "n1", role: "user", text: "second", createdAt: "2026-09-28T10:00:00Z" },
+        { id: "n2", role: "assistant", text: "second reply", createdAt: "2026-09-28T10:00:01Z" },
+      ],
+    });
+    fireEvent.change(input, { target: { value: "second" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(await screen.findByText("second reply")).toBeInTheDocument();
+    await act(async () => resolveFirst(replied));
+    expect(screen.queryByText("hello")).not.toBeInTheDocument();
+    expect(screen.getByText("second reply")).toBeInTheDocument();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]![1]).not.toBe(send.mock.calls[0]![1]);
+    expect((send.mock.calls[1]![1] as AbortSignal).aborted).toBe(false);
+  });
+
+  it("aborts the request when the panel closes, and ignores a late reply", async () => {
+    const { resolve, signal, queryClient, unmount } = await startPending();
+    const before = queryClient.getQueryData(qk.conversation);
+
+    unmount();
+    expect(signal.aborted).toBe(true);
+    await act(async () => resolve(replied));
+
+    expect(queryClient.getQueryData(qk.conversation)).toBe(before);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("aborts the request when the account changes, showing no error while the panel lingers", async () => {
+    const { reject, signal } = await startPending();
+
+    act(() => selectProfile("ech_princess"));
+    expect(signal.aborted).toBe(true);
+    await act(async () => reject(new DOMException("Aborted", "AbortError")));
+
+    noFailureFeedback();
+  });
 });

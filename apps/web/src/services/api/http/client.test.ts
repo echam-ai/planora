@@ -22,6 +22,45 @@ describe("http/client request()", () => {
     vi.unstubAllGlobals();
   });
 
+  it("forwards the signal to fetch and rejects with the abort error itself, not an ApiError", async () => {
+    const controller = new AbortController();
+    const fetchSpy = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      expect(init.signal).toBe(controller.signal);
+      controller.abort();
+      return Promise.reject(controller.signal.reason);
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const error = await request({
+      method: "POST",
+      path: "/chat/messages",
+      body: { text: "hello" },
+      signal: controller.signal,
+    }).catch((e: unknown) => e);
+
+    expect(error).toBe(controller.signal.reason);
+    expect(error).not.toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ name: "AbortError" });
+  });
+
+  it("still maps a network failure to NETWORK_ERROR when the signal was not aborted", async () => {
+    const controller = new AbortController();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await expect(
+      request({ method: "GET", path: "/tasks", signal: controller.signal }),
+    ).rejects.toMatchObject({ code: "NETWORK_ERROR" });
+  });
+
+  it("sends no signal when none is given", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await request({ method: "GET", path: "/tasks" });
+
+    expect(fetchSpy.mock.calls[0]?.[1]).not.toHaveProperty("signal");
+  });
+
   it("does no work at import time — fetch is untouched until request() runs", async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

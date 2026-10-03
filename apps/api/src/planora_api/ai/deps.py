@@ -65,3 +65,21 @@ async def run_cancellable[T](request: Request, coro: Coroutine[Any, Any, T]) -> 
                 },
             )
             raise LLMUnavailableError("cancelled") from None
+
+
+async def ensure_request_connected(request: Request) -> None:
+    """Raise `LLMUnavailableError(reason="cancelled")` if `request`'s client
+    has already disconnected.
+
+    `run_cancellable` only watches while the provider call is in flight. A
+    route that persists the outcome calls this immediately before its first
+    write, so a client that went away after the provider returned still
+    leaves nothing behind: a cancelled request is a request that never
+    happened (issue #123). It must be the last `await` before the writes.
+    """
+    if await request.is_disconnected():
+        logger.warning(
+            "request_cancelled_before_save",
+            extra={"reason": "cancelled", "status": None},
+        )
+        raise LLMUnavailableError("cancelled") from None
