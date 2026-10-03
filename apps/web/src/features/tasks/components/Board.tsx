@@ -11,10 +11,11 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { Loader2 } from "lucide-react";
+import { CloudOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatePanel } from "@/components/layout/StatePanel";
 import { BoardColumn } from "@/features/tasks/components/BoardColumn";
 import { BoardFilters } from "@/features/tasks/components/BoardFilters";
 import {
@@ -55,6 +56,9 @@ export function Board() {
     return groups;
   }, [filtered]);
   const byStatus = (status: TaskStatus) => grouped[status];
+  const total = tasks?.length ?? 0;
+  const doneCount = (tasks ?? []).filter((task) => task.status === "done").length;
+  const filtering = filtered.length !== total;
   const openTask = useCallback((task: Task) => setSelectedId(task.id), []);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -105,20 +109,32 @@ export function Board() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-7xl px-4 py-6">
-        <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mx-auto w-full max-w-7xl px-4 py-8">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Active tasks</h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-3xl font-semibold tracking-tight">Active tasks</h1>
+            <p className="mt-1 text-muted-foreground">
               Drag cards between columns to update their status.
             </p>
           </div>
-          {isFetching && !isLoading && (
-            <Loader2
-              className="h-4 w-4 animate-spin text-muted-foreground"
-              aria-label="Refreshing"
-            />
-          )}
+          <div className="flex items-center gap-3">
+            {isFetching && !isLoading && (
+              <Loader2
+                className="h-4 w-4 animate-spin text-muted-foreground"
+                aria-label="Refreshing"
+              />
+            )}
+            {tasks && (
+              <p
+                className="rounded-full border border-border bg-card px-3 py-1 text-sm text-muted-foreground shadow-card"
+                data-testid="board-summary"
+              >
+                {filtering
+                  ? `Showing ${filtered.length} of ${total} ${total === 1 ? "task" : "tasks"}`
+                  : `${total} ${total === 1 ? "task" : "tasks"} · ${doneCount} done`}
+              </p>
+            )}
+          </div>
         </div>
         <BoardFilters
           search={search}
@@ -129,21 +145,29 @@ export function Board() {
         {isLoading && (
           <div className="grid gap-4 md:grid-cols-3">
             {columns.map((column) => (
-              <div key={column.status} className="space-y-3 rounded-2xl bg-secondary/50 p-3">
+              <div
+                key={column.status}
+                className="space-y-3 rounded-3xl border border-border bg-lane p-3"
+              >
                 <Skeleton className="h-5 w-24" />
-                <Skeleton className="h-28 w-full rounded-xl" />
-                <Skeleton className="h-28 w-full rounded-xl" />
+                <Skeleton className="h-28 w-full rounded-2xl" />
+                <Skeleton className="h-28 w-full rounded-2xl" />
               </div>
             ))}
           </div>
         )}
         {isError && (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-            <p className="text-sm text-destructive">We couldn't load your tasks.</p>
-            <Button className="mt-3 min-h-11" variant="outline" onClick={() => refetch()}>
-              Try again
-            </Button>
-          </div>
+          <StatePanel
+            icon={CloudOff}
+            tone="error"
+            action={
+              <Button className="min-h-11" variant="outline" onClick={() => refetch()}>
+                Try again
+              </Button>
+            }
+          >
+            We couldn't load your tasks.
+          </StatePanel>
         )}
         {!isLoading && !isError && (
           <DndContext

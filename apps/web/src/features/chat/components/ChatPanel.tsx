@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, RefreshCw, Send, Sparkles, X } from "lucide-react";
+import { Bot, Check, RefreshCw, Send, X } from "lucide-react";
+import { BrandMark } from "@/components/brand/BrandMark";
+import { StatePanel } from "@/components/layout/StatePanel";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,11 +45,9 @@ function ActionCard({
   stale: boolean;
 }) {
   return (
-    <div className="mt-2 rounded-xl border border-primary/30 bg-secondary/60 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-secondary-foreground">
-        {action.title}
-      </p>
-      <p className="mt-1 text-sm font-medium">{action.summary}</p>
+    <div className="mt-3 rounded-2xl border border-primary/30 bg-card p-3 text-card-foreground">
+      <p className="section-label text-primary">{action.title}</p>
+      <p className="mt-1.5 text-sm font-medium">{action.summary}</p>
       <dl className="mt-2 space-y-1 text-xs">
         {action.fields.map((f) => (
           <div key={f.label} className="flex gap-2">
@@ -124,13 +124,11 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex h-full flex-col bg-card">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+      <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-gradient text-primary-foreground">
-            <Sparkles className="h-4 w-4" aria-hidden />
-          </span>
+          <BrandMark className="size-9 rounded-full" />
           <div>
-            <p className="text-sm font-semibold">AI Assistant</p>
+            <p className="text-sm font-semibold tracking-tight">AI Assistant</p>
             <p className="text-xs text-muted-foreground">
               {send.isPending ? "Thinking…" : "Ready"}
             </p>
@@ -157,15 +155,14 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+      <div className="flex-1 space-y-4 overflow-y-auto bg-background/60 px-4 py-5">
         {isLoading && <p className="text-sm text-muted-foreground">Loading conversation…</p>}
         {!isLoading && messages.length === 0 && (
           <div className="space-y-3">
-            <div className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
-              <Bot className="mb-2 h-5 w-5" aria-hidden />
+            <StatePanel icon={Bot}>
               Ask about your tasks, or ask me to add, move or reschedule one. I never change
               anything without your confirmation.
-            </div>
+            </StatePanel>
             <div className="flex flex-col gap-2">
               {CHAT_SUGGESTIONS.map((s) => (
                 <button
@@ -173,7 +170,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => submit(s, false)}
                   disabled={send.isPending}
-                  className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+                  className="min-h-11 cursor-pointer rounded-2xl border border-border bg-card px-4 py-2.5 text-left text-sm shadow-card transition-colors duration-150 hover:border-primary/50 hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
                 >
                   {s}
                 </button>
@@ -189,10 +186,10 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           >
             <div
               className={cn(
-                "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap",
+                "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
                 m.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground",
+                  ? "rounded-br-md bg-primary text-primary-foreground shadow-card"
+                  : "rounded-bl-md border border-border bg-muted text-foreground",
               )}
             >
               {m.text}
@@ -230,7 +227,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           </div>
         )}
         {send.isError && !isTextValidationError(send.error) && (
-          <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-2xl border border-destructive/30 bg-card p-3 text-sm text-destructive">
             The assistant didn't respond.{" "}
             <button className="min-h-11 min-w-11 underline" onClick={() => send.reset()}>
               Dismiss
@@ -241,7 +238,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <form
-        className="border-t border-border p-3"
+        className="border-t border-border bg-card p-3"
         onSubmit={(e) => {
           e.preventDefault();
           submit(text, true);
@@ -250,13 +247,14 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         <label htmlFor="chat-input" className="sr-only">
           Message the assistant
         </label>
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-1.5 transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
           <Textarea
             id="chat-input"
             rows={2}
             value={text}
             aria-invalid={overLimit ? true : undefined}
             aria-describedby={overLimit ? LIMIT_MESSAGE_ID : undefined}
+            className="min-h-0 resize-none border-0 bg-transparent shadow-none focus-visible:ring-0"
             placeholder="Ask about your tasks…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -269,7 +267,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
           <Button
             type="submit"
             size="icon"
-            className="h-11 w-11"
+            className="h-11 w-11 shrink-0 rounded-xl bg-brand-gradient text-brand-foreground hover:brightness-110"
             disabled={send.isPending || overLimit}
             aria-label="Send"
           >

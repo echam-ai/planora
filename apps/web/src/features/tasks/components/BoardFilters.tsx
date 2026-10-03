@@ -58,13 +58,13 @@ function FilterGroup<T extends string>({
           ref={triggerRef}
           type="button"
           variant={selected.length ? "secondary" : "outline"}
-          className="gap-0.5 px-1.5 sm:gap-1 sm:px-2"
+          className="gap-0.5 rounded-full px-1.5 sm:gap-1 sm:px-3.5"
           aria-label={selected.length ? `${label} ${selected.length}` : label}
           aria-describedby={descriptionId}
         >
           {label}
           {selected.length > 0 && (
-            <span className="min-w-4 rounded-sm bg-primary/10 px-0.5 text-xs font-semibold text-primary">
+            <span className="min-w-4 rounded-full bg-primary px-1 text-center text-xs font-semibold text-primary-foreground sm:min-w-5 sm:px-1.5">
               {selected.length}
             </span>
           )}
@@ -77,6 +77,7 @@ function FilterGroup<T extends string>({
       <PopoverContent
         aria-label={`${label} filters`}
         align="start"
+        sideOffset={5}
         collisionPadding={8}
         className="w-56 max-w-[calc(100vw-1rem)] max-h-[min(20rem,var(--radix-popover-content-available-height))] overflow-y-auto p-2"
         onOpenAutoFocus={(event) => {
@@ -118,7 +119,7 @@ function FilterGroup<T extends string>({
         }}
       >
         <fieldset className="min-w-0">
-          <legend className="px-2 py-1 text-sm font-medium">{label}</legend>
+          <legend className="section-label px-2 py-1">{label}</legend>
           <div className="mt-1 space-y-1">
             {options.map((option, index) => (
               <Button
@@ -126,7 +127,7 @@ function FilterGroup<T extends string>({
                 ref={index === 0 ? firstOptionRef : undefined}
                 type="button"
                 variant={selected.includes(option.value) ? "secondary" : "ghost"}
-                className="w-full justify-start gap-2 px-2"
+                className="w-full justify-start gap-2 rounded-lg px-2"
                 aria-pressed={selected.includes(option.value)}
                 onClick={() => onToggle(option.value)}
               >
@@ -164,7 +165,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
   return (
     <section
       aria-label="Board filters"
-      className="mb-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:flex-wrap sm:items-center"
+      className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:flex sm:flex-wrap sm:items-center sm:rounded-2xl sm:border sm:border-border sm:bg-card/80 sm:p-1 sm:shadow-card sm:backdrop-blur-sm"
     >
       <div
         role="search"
@@ -172,7 +173,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
         className="relative col-start-1 row-start-1 min-w-0 sm:w-72 sm:flex-none"
       >
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           aria-hidden
         />
         <Input
@@ -181,7 +182,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search tasks"
           aria-label="Search tasks"
-          className="bg-background pl-9"
+          className="rounded-full bg-background pl-10"
         />
       </div>
       <div className="col-span-2 row-start-2 flex min-w-0 flex-wrap gap-1 sm:contents">
@@ -218,7 +219,7 @@ export function BoardFilters({ search, filters, onSearchChange, onFiltersChange 
           type="button"
           variant="ghost"
           aria-label="Clear all filters"
-          className="col-start-2 row-start-1 gap-1 px-2"
+          className="col-start-2 row-start-1 gap-1 rounded-full px-3"
           onClick={() => {
             onSearchChange("");
             onFiltersChange(emptyBoardFilters);

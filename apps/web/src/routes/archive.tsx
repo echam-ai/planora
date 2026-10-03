@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArchiveRestore, Search, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, CloudOff, Search, SearchX, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
+import { StatePanel } from "@/components/layout/StatePanel";
 import { taskCardDetailsId } from "@/features/tasks/cardIds";
 import { TaskCardContent } from "@/features/tasks/components/TaskCard";
 import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
@@ -80,13 +81,13 @@ function ArchivePage() {
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-5xl px-4 py-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Archive</h1>
-        <p className="text-sm text-muted-foreground">Completed and archived tasks.</p>
+      <div className="mx-auto w-full max-w-5xl px-4 py-8">
+        <h1 className="text-3xl font-semibold tracking-tight">Archive</h1>
+        <p className="mt-1 text-muted-foreground">Completed and archived tasks.</p>
 
-        <div className="relative my-5">
+        <div className="relative my-6">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden
           />
           <Input
@@ -95,43 +96,49 @@ function ArchivePage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search archived tasks"
             aria-label="Search archived tasks"
-            className="pl-9"
+            className="rounded-full pl-10 shadow-card"
           />
         </div>
 
         {isLoading && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Skeleton className="h-36 w-full rounded-xl" />
-            <Skeleton className="h-36 w-full rounded-xl" />
+            <Skeleton className="h-36 w-full rounded-2xl" />
+            <Skeleton className="h-36 w-full rounded-2xl" />
           </div>
         )}
 
         {isError && (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-            <p className="text-sm text-destructive">We couldn't load the archive.</p>
-            <Button className="mt-3 min-h-11" variant="outline" onClick={() => refetch()}>
-              Try again
-            </Button>
-          </div>
+          <StatePanel
+            icon={CloudOff}
+            tone="error"
+            action={
+              <Button className="min-h-11" variant="outline" onClick={() => refetch()}>
+                Try again
+              </Button>
+            }
+          >
+            We couldn't load the archive.
+          </StatePanel>
         )}
 
         {data && data.items.length === 0 && !isLoading && !isPlaceholderData && (
-          <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+          <StatePanel icon={settled.term ? SearchX : Archive} className="p-10">
             {settled.term ? "No archived tasks match that search." : "Nothing archived yet."}
-          </p>
+          </StatePanel>
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           {data?.items.map((task) => (
-            <div key={task.id} className="space-y-2">
+            <div key={task.id} className="flex flex-col gap-2">
               <button
                 type="button"
-                className="w-full text-left"
+                className="w-full flex-1 text-left"
                 onClick={() => setSelectedId(task.id)}
                 aria-label={`Open archived task ${task.title}`}
                 aria-describedby={taskCardDetailsId(task.id)}
               >
                 <TaskCardContent
+                  className="h-full"
                   task={task}
                   timezone={timezone}
                   detailsId={taskCardDetailsId(task.id)}
@@ -155,7 +162,7 @@ function ArchivePage() {
                 </Button>
                 <Button
                   variant="ghost"
-                  className="min-h-11 text-destructive hover:text-destructive"
+                  className="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
                   onClick={() => setPurgeTarget(task)}
                   aria-label={`Delete ${task.title} permanently`}
                 >

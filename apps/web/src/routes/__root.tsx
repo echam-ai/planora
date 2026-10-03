@@ -16,26 +16,63 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportRootBoundaryError } from "../lib/root-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { useTheme } from "@/lib/theme";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
+import { cn } from "@/lib/utils";
+import { Compass, TriangleAlert } from "lucide-react";
+
+function StatusPage({
+  icon,
+  title,
+  children,
+  actions,
+  code,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+  actions: ReactNode;
+  code?: string;
+}) {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-md rounded-3xl border border-border bg-card p-8 text-center shadow-pop">
+        <span
+          aria-hidden="true"
+          className="mx-auto flex size-14 items-center justify-center rounded-full bg-secondary text-secondary-foreground"
+        >
+          {icon}
+        </span>
+        {code ? (
+          <h1 className="mt-5 text-6xl font-bold tracking-tight text-foreground">{code}</h1>
+        ) : null}
+        {code ? (
+          <h2 className="mt-3 text-xl font-semibold tracking-tight text-foreground">{title}</h2>
+        ) : (
+          <h1 className="mt-5 text-xl font-semibold tracking-tight text-foreground">{title}</h1>
+        )}
+        <p className="mt-2 text-sm text-muted-foreground">{children}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-2">{actions}</div>
+      </div>
+    </div>
+  );
+}
 
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist or has been moved.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go home
-          </Link>
-        </div>
-      </div>
-    </div>
+    <StatusPage
+      code="404"
+      icon={<Compass className="size-6" />}
+      title="Page not found"
+      actions={
+        <Link to="/" className={cn(buttonVariants(), "rounded-full px-5")}>
+          Go home
+        </Link>
+      }
+    >
+      The page you're looking for doesn't exist or has been moved.
+    </StatusPage>
   );
 }
 
@@ -51,38 +88,35 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
   }, [error]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
+    <StatusPage
+      icon={<TriangleAlert className="size-6" />}
+      title="This page didn't load"
+      actions={
+        <>
           <button
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className={cn(buttonVariants(), "rounded-full px-5")}
           >
             Try again
           </button>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
+          <a href="/" className={cn(buttonVariants({ variant: "outline" }), "rounded-full px-5")}>
             Go home
           </a>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      Something went wrong on our end. You can try refreshing or head back home.
+    </StatusPage>
   );
 }
 
 export const Route = createRootRoute({
   head: () => ({
+    // Runs before first paint (see lib/theme-boot.ts), so it comes before the stylesheet.
+    scripts: [{ children: THEME_BOOT_SCRIPT }],
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -118,7 +152,9 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    // The inline theme script sets data-theme before React hydrates, so the attribute the server
+    // rendered (none) legitimately differs from the DOM.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -146,7 +182,7 @@ function ScopedContent() {
   return (
     <WorkspaceQueries key={scopeKey}>
       {(publicRoute || profile !== null) && <Outlet />}
-      <Toaster richColors position="top-right" />
+      <Toaster position="top-right" />
     </WorkspaceQueries>
   );
 }
@@ -154,6 +190,20 @@ function WorkspaceQueries({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
+/**
+ * Keeps the theme live app-wide, including on the account chooser: `System` follows the OS
+ * color scheme and another tab's choice arrives here. Subscribing also applies the stored
+ * preference, which covers a page the inline head script never ran for.
+ */
+function ThemeSync() {
+  useTheme();
+  return null;
+}
 function RootComponent() {
-  return <ScopedContent />;
+  return (
+    <>
+      <ThemeSync />
+      <ScopedContent />
+    </>
+  );
 }

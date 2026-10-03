@@ -176,11 +176,31 @@ describe("Board", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("We couldn't load your tasks.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn't load your tasks.");
     listTasks.mockResolvedValueOnce([makeTask({ id: "a", title: "First todo" })]);
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
     expect(await screen.findByRole("button", { name: "Open task First todo" })).toBeInTheDocument();
+  });
+
+  it("summarises the board, and says how many a filter leaves", async () => {
+    renderBoard([
+      makeTask({ id: "a", title: "Write spec", status: "done" }),
+      makeTask({ id: "b", title: "Plan sprint", position: 1 }),
+      makeTask({ id: "c", title: "Book flights", position: 2, category: "personal" }),
+    ]);
+    const summary = await screen.findByTestId("board-summary");
+    expect(summary).toHaveTextContent("3 tasks · 1 done");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Search tasks" }), {
+      target: { value: "flights" },
+    });
+    await waitFor(() => expect(summary).toHaveTextContent("Showing 1 of 3 tasks"));
+  });
+
+  it("uses the singular for a one-task board", async () => {
+    renderBoard([makeTask({ id: "a", title: "Only one" })]);
+    expect(await screen.findByTestId("board-summary")).toHaveTextContent("1 task · 0 done");
   });
 
   it("shows a refreshing indicator during a background refetch without hiding the board", async () => {
