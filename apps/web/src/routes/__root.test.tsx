@@ -1,7 +1,7 @@
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { selectProfile } from "@/services/api/profiles";
-import { QueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { createElement, StrictMode, type ComponentType, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,18 +13,12 @@ const profileContext = vi.hoisted(() => ({
 }));
 const invalidate = vi.fn();
 const reportRootBoundaryError = vi.fn();
-// Stands in for the real per-request client __root.tsx receives through
-// route context; only its identity matters for these tests.
-const routeQueryClient = new QueryClient();
 
 vi.mock("@tanstack/react-router", async () => {
   const ReactModule = await import("react");
   const QueryModule = await import("@tanstack/react-query");
   return {
-    createRootRouteWithContext: () => (options: unknown) => ({
-      options,
-      useRouteContext: () => ({ queryClient: routeQueryClient }),
-    }),
+    createRootRoute: (options: unknown) => ({ options }),
     Outlet: function MockOutlet() {
       profileContext.cache = QueryModule.useQueryClient();
       return ReactModule.createElement(
@@ -59,9 +53,9 @@ afterEach(() => {
   profileContext.pathname = "/";
 });
 
-// The real `createRootRouteWithContext<...>()({...})` return type is a deep
+// The real `createRootRoute({...})` return type is a deep
 // generic that assumes the actual TanStack Router runtime; the mock above
-// replaces that runtime with a plain `{ options, useRouteContext }` shape, so
+// replaces that runtime with a plain `{ options }` shape, so
 // the test accesses it through this matching local type instead of the real
 // (and here-inapplicable) ambient type.
 type RootRouteOptions = {

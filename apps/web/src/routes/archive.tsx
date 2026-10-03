@@ -16,6 +16,8 @@ import { useProfileGuard } from "@/hooks/useProfileGuard";
 import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
 import { ApiError, type Task } from "@/types";
 
+const SEARCH_DEBOUNCE_MS = 250;
+
 export const Route = createFileRoute("/archive")({
   head: () => ({
     meta: [
@@ -39,17 +41,24 @@ export const Route = createFileRoute("/archive")({
 function ArchivePage() {
   useProfileGuard();
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  // The term and page the query uses. They change in one update, so the old
+  // term is never requested at the new page.
+  const [settled, setSettled] = useState({ term: "", page: 1 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<Task | null>(null);
-  const updateSearch = (value: string) => {
-    setSearch(value);
-    setPage(1);
-  };
-  const searchRef = useAdoptDomValue<HTMLInputElement>(updateSearch);
+  const page = settled.page;
+  const setPage = (update: (page: number) => number) =>
+    setSettled((current) => ({ ...current, page: update(current.page) }));
+  const searchRef = useAdoptDomValue<HTMLInputElement>(setSearch);
+
+  useEffect(() => {
+    if (search === settled.term) return;
+    const timer = setTimeout(() => setSettled({ term: search, page: 1 }), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search, settled.term]);
 
   const { data: settings } = useSettings();
-  const { data, isLoading, isError, refetch } = useArchive(search, page);
+  const { data, isLoading, isError, isPlaceholderData, refetch } = useArchive(settled.term, page);
   const archivedTask = useArchivedTask(selectedId);
   const { restore } = useTaskMutations();
   // An archive page is only a filtered, paginated view. The detail query is
@@ -83,7 +92,7 @@ function ArchivePage() {
           <Input
             ref={searchRef}
             value={search}
-            onChange={(e) => updateSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search archived tasks"
             aria-label="Search archived tasks"
             className="pl-9"
@@ -106,9 +115,9 @@ function ArchivePage() {
           </div>
         )}
 
-        {data && data.items.length === 0 && !isLoading && (
+        {data && data.items.length === 0 && !isLoading && !isPlaceholderData && (
           <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-            {search ? "No archived tasks match that search." : "Nothing archived yet."}
+            {settled.term ? "No archived tasks match that search." : "Nothing archived yet."}
           </p>
         )}
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { captureApi } from "@/services/api";
 import { qk } from "@/shared/queryKeys";
 import type { Task, TaskDraft, TaskStatus } from "@/types";
@@ -13,6 +13,8 @@ export function useArchive(search: string, page = 1) {
   return useQuery({
     queryKey: qk.archive(search, page),
     queryFn: () => api.listArchive(search, page),
+    // Keep the previous term's cards on screen while a new term loads.
+    placeholderData: keepPreviousData,
   });
 }
 

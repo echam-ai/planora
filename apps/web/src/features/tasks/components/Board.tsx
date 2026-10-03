@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   closestCorners,
   DndContext,
@@ -55,6 +55,7 @@ export function Board() {
     return groups;
   }, [filtered]);
   const byStatus = (status: TaskStatus) => grouped[status];
+  const openTask = useCallback((task: Task) => setSelectedId(task.id), []);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -159,7 +160,7 @@ export function Board() {
                   {...column}
                   tasks={byStatus(column.status)}
                   timezone={timezone}
-                  onOpen={(task) => setSelectedId(task.id)}
+                  onOpen={openTask}
                 />
               ))}
             </div>

@@ -100,6 +100,19 @@ def list_messages(db: Session) -> list[ChatMessage]:
     return list(db.execute(stmt).scalars().all())
 
 
+def list_recent_messages(db: Session, *, limit: int) -> list[ChatMessage]:
+    """The last `limit` messages, in ascending `sequence` order — a bounded
+    read (`ORDER BY sequence DESC LIMIT n`, reversed) for the LLM history
+    window, so a long conversation is never loaded whole (issue #121)."""
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.profile_id == profile_id(db))
+        .order_by(ChatMessage.sequence.desc())
+        .limit(limit)
+    )
+    return list(reversed(db.execute(stmt).scalars().all()))
+
+
 def reset_conversation(db: Session, *, now: datetime) -> Conversation:
     """Replace the single conversation with a brand-new one: every message
     row is deleted (not hidden or orphaned — there is nothing left for a

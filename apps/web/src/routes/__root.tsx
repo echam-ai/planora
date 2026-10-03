@@ -1,9 +1,10 @@
 import { getSelectedProfile, useSelectedProfile } from "@/services/api/profiles";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createQueryClient } from "@/lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
@@ -80,7 +81,7 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -150,7 +151,7 @@ function ScopedContent() {
   );
 }
 function WorkspaceQueries({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(createQueryClient);
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 function RootComponent() {
