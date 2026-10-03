@@ -14,7 +14,6 @@ import type {
   ChatMessage,
   Conversation,
   ParsedTaskText,
-  Session,
   Task,
   TaskDraft,
   TaskStatus,
@@ -34,14 +33,10 @@ type WireConversation =
 type WireChatMessage = WireConversation["messages"][number];
 type WireChatAction = NonNullable<WireChatMessage["action"]>;
 type WireChatField = WireChatAction["fields"][number];
-type WireSession =
-  paths["/api/v1/auth/login"]["post"]["responses"][200]["content"]["application/json"];
 type WireSettings =
   paths["/api/v1/settings"]["get"]["responses"][200]["content"]["application/json"];
 type WireSettingsUpdate =
   paths["/api/v1/settings"]["patch"]["requestBody"]["content"]["application/json"];
-type WirePasswordChange =
-  paths["/api/v1/settings/password"]["post"]["requestBody"]["content"]["application/json"];
 type WireArchiveList =
   paths["/api/v1/archive"]["get"]["responses"][200]["content"]["application/json"];
 type WireTaskMove =
@@ -145,10 +140,6 @@ export function taskReorderToWire(status: TaskStatus, orderedIds: string[]): Wir
   return { status, ordered_ids: orderedIds };
 }
 
-export function sessionToDomain(wire: WireSession): Session {
-  return { username: wire.username, signedInAt: wire.signed_in_at };
-}
-
 export function settingsToDomain(wire: WireSettings): AppSettings {
   return {
     timezone: wire.timezone,
@@ -162,13 +153,6 @@ export function settingsPatchToWire(patch: Partial<AppSettings>): WireSettingsUp
   if (patch.timezone !== undefined) wire.timezone = patch.timezone;
   if (patch.modelName !== undefined) wire.model_name = patch.modelName;
   return wire;
-}
-
-export function passwordChangeToWire(
-  currentPassword: string,
-  newPassword: string,
-): WirePasswordChange {
-  return { current_password: currentPassword, new_password: newPassword };
 }
 
 export function archiveListToDomain(wire: WireArchiveList): ArchivePage {

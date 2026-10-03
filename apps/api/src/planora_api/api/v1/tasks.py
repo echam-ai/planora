@@ -19,12 +19,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 
-from planora_api.api.deps import DbSession, get_current_time, require_session
+from planora_api.api.deps import DbSession, get_current_time
 from planora_api.db import task_repository
-from planora_api.db.models import AuthSession, Task
+from planora_api.db.models import Task
 from planora_api.errors import (
-    AUTH_RESPONSES,
     ERROR_RESPONSE,
+    PROFILE_RESPONSES,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
     ApiError,
@@ -42,11 +42,11 @@ router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
 
 _NOT_FOUND_MESSAGE = "Task not found."
 
-_VALIDATED_RESPONSES = {**AUTH_RESPONSES, 422: VALIDATION_RESPONSE}
+_VALIDATED_RESPONSES = {**PROFILE_RESPONSES, 422: VALIDATION_RESPONSE}
 _ITEM_RESPONSES = {**_VALIDATED_RESPONSES, 404: ERROR_RESPONSE}
 _CREATE_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
 _MUTATE_ITEM_RESPONSES = {**WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
-_REORDER_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
+_REORDER_RESPONSES = {**WRITE_RESPONSES, 404: ERROR_RESPONSE, 422: VALIDATION_RESPONSE}
 
 
 def _ordering_error(exc: ValueError) -> ApiError:
@@ -58,7 +58,7 @@ def _ordering_error(exc: ValueError) -> ApiError:
 
 @router.get("", response_model=list[TaskResponse], responses=_VALIDATED_RESPONSES)
 def list_tasks(
-    db: DbSession, _session: Annotated[AuthSession, Depends(require_session)]
+    db: DbSession
 ) -> list[Task]:
     return task_repository.list_active_tasks(db)
 
@@ -70,7 +70,6 @@ def create_task(
     body: TaskCreate,
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> Task:
     return task_repository.create_task_from_request(db, body, now)
 
@@ -84,7 +83,6 @@ def create_task(
 def reorder_tasks(
     body: TaskReorder,
     db: DbSession,
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> list[Task]:
     try:
         task_repository.apply_task_reorder(db, body)
@@ -99,7 +97,6 @@ def reorder_tasks(
 def get_task(
     task_id: uuid.UUID,
     db: DbSession,
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> Task:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
@@ -115,7 +112,6 @@ def update_task(
     body: TaskUpdate,
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> Task:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
@@ -129,7 +125,6 @@ def update_task(
 def delete_task(
     task_id: uuid.UUID,
     db: DbSession,
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> Response:
     task = task_repository.get_active_task(db, task_id)
     if task is None:
@@ -148,7 +143,6 @@ def move_task(
     body: TaskMove,
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> list[Task]:
     """Board drag (or an AI-confirmed move), cross-column or within one
     column (issue #29). `completed_at` always goes through

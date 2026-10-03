@@ -16,9 +16,9 @@ import sys
 from conftest import ENV_VAR_NAMES, VALID_ENV
 
 
-def test_uvicorn_exits_fast_when_session_secret_missing() -> None:
+def test_uvicorn_exits_fast_when_llm_key_missing() -> None:
     env = {**VALID_ENV}
-    del env["SESSION_SECRET"]
+    del env["LLM_API_KEY"]
 
     process_env = _process_env(env)
 
@@ -42,7 +42,7 @@ def test_uvicorn_exits_fast_when_session_secret_missing() -> None:
     )
 
     assert result.returncode != 0
-    assert "SESSION_SECRET" in result.stderr
+    assert "LLM_API_KEY" in result.stderr
     # A process that exited before serving never printed uvicorn's
     # "Application startup complete" / "Uvicorn running" banner.
     assert "Uvicorn running" not in result.stdout

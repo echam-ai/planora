@@ -4,7 +4,7 @@ import { constants as osConstants } from "node:os";
 import { resolve } from "node:path";
 
 import { getFreePort } from "../e2e/port";
-import { PASSWORD, USERNAME, apiEnv, uvArgs } from "./env";
+import { apiEnv, uvArgs } from "./env";
 
 /**
  * Wraps `playwright test -c playwright.http.config.ts` for the HTTP-mode
@@ -15,7 +15,7 @@ import { PASSWORD, USERNAME, apiEnv, uvArgs } from "./env";
  *
  * On top of that it gives every run its own database: a new directory under
  * the repository's `.tmp/`, migrated with `alembic upgrade head` and seeded
- * with the single account before the API starts. Each command runs with that
+ * with the fixed profiles before the API starts. Each command runs with that
  * directory as its cwd, which holds no `.env`, so a developer's
  * `apps/api/.env` is never read; `apiEnv()` supplies every setting instead.
  * The directory is removed after a passing run and kept, with its database,
@@ -48,7 +48,6 @@ function prepare(command: string[]) {
 }
 
 prepare(["alembic", "-c", resolve(repoRoot, "apps/api/alembic.ini"), "upgrade", "head"]);
-prepare(["python", resolve(import.meta.dirname, "seed.py"), "seed-user", USERNAME, PASSWORD]);
 
 const child = spawn(
   "playwright",

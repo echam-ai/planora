@@ -11,6 +11,7 @@ from sqlalchemy import create_engine, inspect
 from alembic import command
 
 _EXPECTED_COLUMNS = {
+    "profile_id",
     "id",
     "title",
     "content",
@@ -103,7 +104,7 @@ def test_downgrade_one_step_drops_the_app_settings_table_and_upgrade_recreates_i
 # --- issue #39: conversation, chat_message ----------------------------------
 
 _EXPECTED_CONVERSATION_COLUMNS = {"id", "conversation_id", "created_at", "updated_at"}
-_EXPECTED_CHAT_MESSAGE_COLUMNS = {"id", "sequence", "role", "text", "created_at"}
+_EXPECTED_CHAT_MESSAGE_COLUMNS = {"profile_id", "id", "sequence", "role", "text", "created_at"}
 _PRE_CHAT_TABLES = {"task", "app_user", "auth_session", "login_failure", "app_settings"}
 
 
@@ -153,6 +154,7 @@ def test_downgrade_one_step_drops_the_chat_tables_and_upgrade_recreates_them(
 # --- issue #41: chat_action --------------------------------------------------
 
 _EXPECTED_CHAT_ACTION_COLUMNS = {
+    "profile_id",
     "id",
     "message_id",
     "kind",
@@ -186,7 +188,7 @@ def test_downgrade_one_step_drops_the_chat_action_table_and_upgrade_recreates_it
     migrated_database_url: str,
     alembic_config: Config,
 ) -> None:
-    command.downgrade(alembic_config, "-1")
+    command.downgrade(alembic_config, "ef184dd6772f")
     engine = create_engine(migrated_database_url)
     table_names = set(inspect(engine).get_table_names())
     assert "chat_action" not in table_names

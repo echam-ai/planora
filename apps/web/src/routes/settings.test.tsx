@@ -49,10 +49,7 @@ function renderSettings() {
 }
 
 function signedIn(availableModels: string[]) {
-  vi.spyOn(api, "getSession").mockResolvedValue({
-    username: "demo",
-    signedInAt: new Date().toISOString(),
-  });
+  window.localStorage.setItem("planora.profile", "hamster_knight");
   vi.spyOn(api, "getSettings").mockResolvedValue({
     timezone: "Asia/Singapore",
     modelName: "kimi-k3",
@@ -108,10 +105,7 @@ describe("Settings route — assistant model", () => {
 const TOKYO = { timezone: "Asia/Tokyo", modelName: "kimi-k3", availableModels: ["kimi-k3"] };
 
 function signedInOnly() {
-  vi.spyOn(api, "getSession").mockResolvedValue({
-    username: "demo",
-    signedInAt: new Date().toISOString(),
-  });
+  window.localStorage.setItem("planora.profile", "hamster_knight");
 }
 
 describe("Settings route — load failure", () => {
@@ -128,9 +122,6 @@ describe("Settings route — load failure", () => {
     expect(screen.queryByRole("combobox", { name: "Timezone" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Assistant model" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Current password")).toBeEnabled();
-    expect(screen.getByLabelText("New password")).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Update password" })).toBeEnabled();
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -293,87 +284,14 @@ describe("Settings route — saving preferences", () => {
   });
 });
 
-describe("Settings route — change password", () => {
-  async function fill(current: string, next: string) {
-    fireEvent.change(await screen.findByLabelText("Current password"), {
-      target: { value: current },
-    });
-    fireEvent.change(screen.getByLabelText("New password"), { target: { value: next } });
-    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
-  }
-
-  it("rejects a new password shorter than 6 characters without calling the API", async () => {
-    signedIn(["kimi-k3"]);
-    const change = vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
-    renderSettings();
-
-    await fill("old-secret", "12345");
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("New password must be at least 6 characters.");
-    expect(change).not.toHaveBeenCalled();
-  });
-
-  it("accepts a 6-character password, toasts, and clears both fields", async () => {
-    signedIn(["kimi-k3"]);
-    const change = vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
-    renderWithToaster();
-
-    await fill("old-secret", "123456");
-
-    expect((await screen.findAllByText("Password updated")).length).toBeGreaterThan(0);
-    expect(change).toHaveBeenCalledWith("old-secret", "123456");
-    expect(screen.getByLabelText("Current password")).toHaveValue("");
-    expect(screen.getByLabelText("New password")).toHaveValue("");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("shows the message of an Error rejection in an alert and keeps the fields", async () => {
-    signedIn(["kimi-k3"]);
-    vi.spyOn(api, "changePassword").mockRejectedValue(new Error("Current password is wrong"));
-    renderSettings();
-
-    await fill("old-secret", "123456");
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Current password is wrong");
-    expect(screen.getByLabelText("New password")).toHaveValue("123456");
-  });
-
-  it("shows a generic message when the rejection is not an Error", async () => {
-    signedIn(["kimi-k3"]);
-    vi.spyOn(api, "changePassword").mockRejectedValue("nope");
-    renderSettings();
-
-    await fill("old-secret", "123456");
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't update password");
-  });
-
-  it("clears a previous error when the form is submitted again", async () => {
-    signedIn(["kimi-k3"]);
-    vi.spyOn(api, "changePassword").mockResolvedValue(undefined);
-    renderSettings();
-
-    await fill("old-secret", "123");
-    await screen.findByRole("alert");
-    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: "Update password" }));
-
-    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
-  });
-});
-
 describe("Settings route — stale stored model (mock client)", () => {
   it("shows the default model and saves a timezone change instead of failing", async () => {
     window.localStorage.setItem(
-      "planora.settings",
+      "planora.hamster_knight.settings",
       JSON.stringify({ timezone: "Asia/Tokyo", modelName: "planora-pro" }),
     );
     try {
-      vi.spyOn(api, "getSession").mockResolvedValue({
-        username: "demo",
-        signedInAt: new Date().toISOString(),
-      });
+      window.localStorage.setItem("planora.profile", "hamster_knight");
       const update = vi.spyOn(api, "updateSettings"); // passthrough to the real mock
       renderWithToaster();
 
@@ -397,6 +315,7 @@ describe("Settings route — stale stored model (mock client)", () => {
       });
     } finally {
       window.localStorage.clear();
+      window.localStorage.setItem("planora.profile", "hamster_knight");
     }
   });
 });

@@ -29,12 +29,10 @@ from planora_api.api.deps import (
     DbSession,
     get_current_time,
     get_settings,
-    require_session,
 )
 from planora_api.config import Settings
 from planora_api.db import chat_action_repository, chat_repository, settings_repository
 from planora_api.db.models import (
-    AuthSession,
     ChatAction,
     ChatActionKind,
     ChatMessage,
@@ -42,8 +40,8 @@ from planora_api.db.models import (
     Conversation,
 )
 from planora_api.errors import (
-    AUTH_RESPONSES,
     ERROR_RESPONSE,
+    PROFILE_RESPONSES,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
 )
@@ -115,12 +113,11 @@ def _current_conversation_response(db: Session, now: datetime) -> ConversationRe
 
 
 @router.get(
-    "/conversation", response_model=ConversationResponse, responses=AUTH_RESPONSES
+    "/conversation", response_model=ConversationResponse, responses=PROFILE_RESPONSES
 )
 def read_conversation(
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
     return _current_conversation_response(db, now)
 
@@ -134,7 +131,6 @@ def read_conversation(
 def reset_conversation(
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
     conversation = chat_repository.reset_conversation(db, now=now)
     return _to_response(conversation, [], {})
@@ -148,7 +144,6 @@ async def send_message(
     settings: Annotated[Settings, Depends(get_settings)],
     now: Annotated[datetime, Depends(get_current_time)],
     llm: Annotated[LLMClient, Depends(get_llm_client)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
     """Send one user message and return the full, updated conversation.
 
@@ -228,7 +223,6 @@ def confirm_action(
     action_id: uuid.UUID,
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
     """Apply a pending proposal's write (spec §41). Calls no LLM. Every
     documented failure (`404`, `409 ACTION_ALREADY_REJECTED`,
@@ -247,7 +241,6 @@ def reject_action(
     action_id: uuid.UUID,
     db: DbSession,
     now: Annotated[datetime, Depends(get_current_time)],
-    _session: Annotated[AuthSession, Depends(require_session)],
 ) -> ConversationResponse:
     """Reject a pending proposal (spec §41). Calls no LLM. The documented
     failures (`404 NOT_FOUND`, `409 ACTION_ALREADY_APPLIED`) are raised by

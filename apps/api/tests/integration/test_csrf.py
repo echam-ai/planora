@@ -22,12 +22,10 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, DEFAULT_ORIGIN, make_client
+from conftest import DEFAULT_ORIGIN, make_client
 from fastapi import APIRouter, FastAPI
 from httpx import Response
 from sqlalchemy import select
-
-from planora_api.db.models import LoginFailure
 
 FOREIGN_ORIGIN = "https://evil.example"
 
@@ -324,7 +322,7 @@ def test_check_precedes_body_parsing_malformed_json_returns_403_not_422(
     async def scenario() -> Response:
         async with make_client(app, origin=FOREIGN_ORIGIN) as client:
             return await client.post(
-                "/api/v1/auth/login",
+                "/api/v1/tasks",
                 content=b"{not valid json",
                 headers={"Content-Type": "application/json"},
             )
@@ -335,68 +333,23 @@ def test_check_precedes_body_parsing_malformed_json_returns_403_not_422(
     assert response.json()["code"] == "CSRF_ORIGIN_MISMATCH"
 
 
-# --- Conditional on #25 (login/logout) being on main ------------------------
-
-
-def test_forged_login_is_refused_before_credentials_are_checked(
-    valid_env: pytest.MonkeyPatch,
-    seeded_user: tuple[str, str],
-    migrated_session_factory: object,
-    app_factory: Callable[[], FastAPI],
-) -> None:
+def test_forged_task_write_is_refused_without_mutation(
+    valid_env, seeded_user, migrated_session_factory, app_factory,
+):
+    from planora_api.db.models import Task
     app = app_factory()
-
-    async def scenario() -> Response:
-        async with make_client(app, origin=FOREIGN_ORIGIN) as client:
-            return await client.post(
-                "/api/v1/auth/login",
-                json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-            )
-
-    response = _run(scenario)
-
-    assert response.status_code == 403
-    assert response.json()["code"] == "CSRF_ORIGIN_MISMATCH"
-    assert "set-cookie" not in response.headers
-
-    with migrated_session_factory() as session:  # type: ignore[operator]
-        failures = session.execute(select(LoginFailure)).scalars().all()
-    assert failures == []
-
-
-def test_forged_logout_is_refused_and_the_session_survives(
-    valid_env: pytest.MonkeyPatch,
-    seeded_user: tuple[str, str],
-    app_factory: Callable[[], FastAPI],
-) -> None:
-    app = app_factory()
-
-    async def scenario() -> tuple[Response, Response]:
-        async with make_client(app) as client:  # correct origin to sign in
-            login_response = await client.post(
-                "/api/v1/auth/login",
-                json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD},
-            )
-            assert login_response.status_code == 200
-            cookie = client.cookies.get("planora_session")
-
-        async with make_client(app, origin=FOREIGN_ORIGIN) as forged_client:
-            forged_client.cookies.set("planora_session", cookie)
-            logout_response = await forged_client.post("/api/v1/auth/logout")
-
-        async with make_client(app) as client:  # safe GET, any origin would do
-            client.cookies.set("planora_session", cookie)
-            session_response = await client.get("/api/v1/auth/session")
-
-        return logout_response, session_response
-
-    logout_response, session_response = _run(scenario)
-
-    assert logout_response.status_code == 403
-    assert logout_response.json()["code"] == "CSRF_ORIGIN_MISMATCH"
-    assert session_response.status_code == 200
-    assert session_response.json() is not None
-    assert session_response.json()["username"] == AUTH_USERNAME
+    async def scenario():
+        async with make_client(app) as client:
+            client.headers["X-Planora-Profile"] = "hamster_knight"
+            task = (await client.post("/api/v1/tasks", json={"title": "Keep me", "content": "x"})).json()
+            response = await client.delete(f"/api/v1/tasks/{task['id']}", headers={"Origin": FOREIGN_ORIGIN})
+            assert response.status_code == 403
+            assert response.json()["code"] == "CSRF_ORIGIN_MISMATCH"
+            assert "set-cookie" not in response.headers
+            assert (await client.get(f"/api/v1/tasks/{task['id']}")).status_code == 200
+    _run(scenario)
+    with migrated_session_factory() as db:
+        assert len(db.execute(select(Task)).scalars().all()) == 1
 
 
 def test_default_origin_constant_matches_valid_env() -> None:

@@ -30,8 +30,8 @@ class ErrorResponse(BaseModel):
 
 ERROR_RESPONSE = {"model": ErrorResponse, "description": "API error envelope"}
 VALIDATION_RESPONSE = {"model": ErrorResponse, "description": "Invalid request fields"}
-AUTH_RESPONSES = {401: ERROR_RESPONSE}
-WRITE_RESPONSES = {**AUTH_RESPONSES, 403: ERROR_RESPONSE}
+PROFILE_RESPONSES = {422: VALIDATION_RESPONSE}
+WRITE_RESPONSES = {**PROFILE_RESPONSES, 403: ERROR_RESPONSE}
 
 
 class ApiError(Exception):

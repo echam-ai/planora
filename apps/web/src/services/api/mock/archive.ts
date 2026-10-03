@@ -1,11 +1,11 @@
 import { ApiError } from "@/types";
 import type { ApiClient, ArchivePage } from "../ApiClient";
-import { delay, ensureTasks, maybeFail, normalisePositions, nowIso, saveTasks } from "./store";
+import { delay, normalisePositions, nowIso, createStore, type MockStore } from "./store";
 
-export function createArchiveClient(): Pick<
-  ApiClient,
-  "listArchive" | "getArchivedTask" | "restoreTask" | "permanentlyDeleteTask"
-> {
+export function createArchiveClient(
+  store: MockStore = createStore("hamster_knight"),
+): Pick<ApiClient, "listArchive" | "getArchivedTask" | "restoreTask" | "permanentlyDeleteTask"> {
+  const { ensureTasks, maybeFail, saveTasks } = store;
   return {
     async listArchive(search = "", page = 1): Promise<ArchivePage> {
       await delay();
@@ -28,15 +28,17 @@ export function createArchiveClient(): Pick<
     async getArchivedTask(id) {
       await delay(150, 300);
       const task = ensureTasks().find((candidate) => candidate.id === id && candidate.archivedAt);
-      if (!task) throw new ApiError("NOT_FOUND", "That archived task no longer exists.");
+      if (!task)
+        throw new ApiError("NOT_FOUND", "That archived task no longer exists.", { status: 404 });
       return task;
     },
     async restoreTask(id) {
       await delay();
       maybeFail("restore the task");
       const tasks = ensureTasks();
-      const task = tasks.find((candidate) => candidate.id === id);
-      if (!task) throw new ApiError("NOT_FOUND", "That archived task no longer exists.");
+      const task = tasks.find((candidate) => candidate.id === id && candidate.archivedAt);
+      if (!task)
+        throw new ApiError("NOT_FOUND", "That archived task no longer exists.", { status: 404 });
       task.archivedAt = null;
       task.completedAt = null;
       task.status = "todo";
@@ -50,7 +52,10 @@ export function createArchiveClient(): Pick<
     async permanentlyDeleteTask(id) {
       await delay();
       maybeFail("delete the task");
-      saveTasks(ensureTasks().filter((task) => task.id !== id));
+      const tasks = ensureTasks();
+      if (!tasks.some((task) => task.id === id && task.archivedAt))
+        throw new ApiError("NOT_FOUND", "That archived task no longer exists.", { status: 404 });
+      saveTasks(tasks.filter((task) => task.id !== id));
     },
   };
 }

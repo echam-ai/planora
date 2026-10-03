@@ -11,20 +11,12 @@ export function seed(...args: string[]): string {
   }).trim();
 }
 
-export function seedUser(username: string, password: string): void {
-  seed("seed-user", username, password);
-}
-
 export function seedTask(title: string, status: "todo" | "in_progress" | "done"): void {
   seed("seed-task", title, status);
 }
 
 export function seedArchivedTask(title: string): void {
   seed("seed-archived-task", title);
-}
-
-export function revokeSessions(): void {
-  seed("revoke-sessions");
 }
 
 export function countTasks(title: string): number {

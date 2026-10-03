@@ -21,16 +21,15 @@ deployment.
 ## Start and check
 
 Use the following disposable configuration. The LLM key is deliberately fake;
-neither health endpoint calls an LLM, requires login, or depends on the other
+neither health endpoint calls an LLM, requires profile selection, or depends on the other
 application. SQLite lives in the container's writable `/app/data` directory and
 is removed with that container. Health checks do not require schema migration
-or account setup. Use real runtime configuration and migrate the database before
+or profile setup. Use real runtime configuration and migrate the database before
 using application features.
 
 ```sh
 rtk docker run -d --name planora-web-smoke -p 127.0.0.1:13000:3000 planora-web:issue-42
 rtk docker run -d --name planora-api-smoke -p 127.0.0.1:18000:8000 \
-  -e SESSION_SECRET=disposable-smoke-session-secret \
   -e LLM_API_KEY=disposable-smoke-key \
   -e APP_ORIGIN=http://127.0.0.1:13000 \
   -e DATABASE_URL=sqlite:////app/data/smoke.sqlite3 \

@@ -1,8 +1,8 @@
 # SQLite and PostgreSQL verification
 
 Production uses `deploy/compose.yml`: API and scheduler share the explicitly
-configured `postgresql+psycopg://...@db:5432/...` URL. Run migrations and the
-administrative account command in the API service environment, as described in
+configured `postgresql+psycopg://...@db:5432/...` URL. Run migrations in the
+API service environment, as described in
 [the Compose runbook](compose-stack.md). Development still defaults to
 `sqlite:///./planora.db`; no application model/repository or revision graph is
 swapped between environments. PostgreSQL 17 is used by production Compose, the
@@ -30,11 +30,11 @@ schemas only in the disposable database. Tests that intentionally need an empty
 unmigrated target use the same selected fixture. Configuration-only and fake
 local-launcher cases continue to exercise their documented development defaults.
 
-The shared integration corpus includes auth/session, tasks and reorder,
+The shared integration corpus includes profile context, tasks and reorder,
 archive/search/restore, settings, chat/action persistence, rollback, UTC
-timestamps, uniqueness, and the single-conversation model's intentional lack
+timestamps, uniqueness, and the one-conversation-per-profile model's intentional lack
 of foreign keys. No PostgreSQL-only core skips are introduced. Both selectors
-collect the same cases; the initial #44 state collects 554 integration cases.
+collect the same cases; the initial #44 state collects integration cases.
 No real LLM endpoint is called by these tests.
 
 ## Reproduce both complete integration runs
@@ -66,7 +66,7 @@ The pytest header identifies the selected backend. The shared
 `test_fixture_uses_selected_backend` also inspects the live connection dialect
 and PostgreSQL schema, proving that selection reaches the database. Compare
 collected IDs with `--collect-only -q` using the same commands/configuration;
-both must collect the same 554 cases and complete without unexpected skips.
+both must collect the same collected cases and complete without unexpected skips.
 The original SQLite full coverage/lint/OpenAPI CI gate remains independent.
 
 ## Empty and seeded migration verification
@@ -76,17 +76,17 @@ The shared migration spec uses the selected engine on both runs:
 ```sh
 # From apps/api; add the same explicit PostgreSQL test URL for the PG run.
 rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
-  rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py --db-backend=sqlite
+  rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py tests/integration/test_profile_migration.py --db-backend=sqlite
 rtk env PLANORA_TEST_POSTGRES_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
-  rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py --db-backend=postgresql
+  rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py tests/integration/test_profile_migration.py --db-backend=postgresql
 ```
 
 It applies the same committed history to empty databases, inspects tables and
 checks/uniqueness, reruns upgrade safely, and verifies the recorded head is
-`ea8f66633290`. The seeded regression starts at supported settings revision
+`209e984e239b`. The seeded regression starts at supported settings revision
 `0cf85705ba3d`, inserts representative account, settings, and task rows, then
-upgrades to head. It preserves identifiers, password hash, timestamps normalized
+upgrades to head. It retires legacy credential/session rows and preserves identifiers, timestamps normalized
 to UTC, position, JSON URLs, and task content/note. `metadata.create_all` is
 not used as a migration substitute. Historical revisions remain unchanged.
 
@@ -95,13 +95,13 @@ run from `apps/api` (credentials below are test-only):
 
 ```sh
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
-  SESSION_SECRET=disposable-test-session LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
-  SESSION_SECRET=disposable-test-session LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic current
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
-  SESSION_SECRET=disposable-test-session LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
 ```
 
@@ -124,9 +124,8 @@ rtk docker compose --env-file .tmp/compose44.env -p planora44-target -f deploy/c
 ```
 
 Both identify PostgreSQL and the same database at host `db`, without printing
-credentials. Migration and account administration use `run ... api alembic ...`
-and `run ... api python -m planora_api.admin.reset_password` with that same
-environment. Their shared integration cases also run on the selected engine.
+credentials. Migrations use `run ... api alembic ...` with that same
+environment. No account administration or session secret is required.
 To inspect the SQLite development default from `apps/api`, set only fake required
 secrets/origin and print `create_engine(load_settings()).dialect.name`; with
 `DATABASE_URL` unset and no local `.env` override it reports `sqlite`.

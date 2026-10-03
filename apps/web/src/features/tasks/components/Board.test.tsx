@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { Board } from "@/features/tasks/components/Board";
@@ -117,10 +117,16 @@ describe("Board", () => {
     const moveTask = vi.spyOn(api, "moveTask");
     renderBoard(tasks);
     await screen.findByRole("button", { name: "Open task Third notes" });
+    const toolbar = within(screen.getByRole("region", { name: "Board filters" }));
+    // Task cards expose explicit labels. Label lookup avoids recomputing every
+    // board button's accessible name/style on each order check; keep role and
+    // visibility assertions on the exact same cards.
     const titles = () =>
-      screen
-        .getAllByRole("button", { name: /^Open task / })
-        .map((button) => button.getAttribute("aria-label"));
+      screen.getAllByLabelText(/^Open task /, { selector: "button" }).map((button) => {
+        expect(button).toHaveRole("button");
+        expect(button).toBeVisible();
+        return button.getAttribute("aria-label");
+      });
     const original = titles();
     expect(original).toEqual([
       "Open task First notes",
@@ -132,16 +138,21 @@ describe("Board", () => {
       ["Priority", ["High", "Low"]],
       ["Deadline", ["No deadline"]],
     ] as const) {
-      fireEvent.click(screen.getByRole("button", { name: dimension }));
-      for (const name of choices) fireEvent.click(screen.getByRole("button", { name }));
+      fireEvent.click(toolbar.getByRole("button", { name: dimension }));
+      const popover = within(screen.getByRole("dialog", { name: `${dimension} filters` }));
+      for (const name of choices) fireEvent.click(popover.getByRole("button", { name }));
     }
     expect(titles()).toEqual(original.slice(0, 2));
     fireEvent.change(screen.getByLabelText("Search tasks"), { target: { value: "SECOND" } });
     expect(titles()).toEqual(["Open task Second notes"]);
-    fireEvent.click(screen.getByRole("button", { name: "Category 2" }));
-    fireEvent.click(screen.getByRole("button", { name: "Personal" }));
+    fireEvent.click(toolbar.getByRole("button", { name: "Category 2" }));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "Category filters" })).getByRole("button", {
+        name: "Personal",
+      }),
+    );
     expect(screen.queryByRole("button", { name: /^Open task / })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Clear all filters" }));
+    fireEvent.click(toolbar.getByRole("button", { name: "Clear all filters" }));
     expect(titles()).toEqual(original);
     expect(screen.getByLabelText("Search tasks")).toHaveValue("");
     expect(reorderTasks).not.toHaveBeenCalled();

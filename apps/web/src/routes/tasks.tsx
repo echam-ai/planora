@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/layout/AppShell";
 import { Board } from "@/features/tasks/components/Board";
-import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useProfileGuard } from "@/hooks/useProfileGuard";
 
 export const Route = createFileRoute("/tasks")({
   head: () => ({
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/tasks")({
 });
 
 function TasksPage() {
-  useAuthGuard();
+  useProfileGuard();
 
   return (
     <AppShell>

@@ -1,7 +1,7 @@
 # Planora — v1 Product Specification
 
 **Status:** Scope approved for implementation
-**Product type:** Private, single-user web application
+**Product type:** Private web application with two fixed profiles
 **Primary AI model:** Kimi-K3 through a configurable OpenAI-compatible API
 **Web tier:** TanStack Start (React 19, Vite, Nitro) — SSR application shell, browser-only data access
 **API tier:** Python FastAPI, versioned under `/api/v1`
@@ -18,7 +18,7 @@ Kanban workflow with an AI chat assistant. The application should make it fast
 to capture an unstructured request, review the fields extracted by AI, manage
 the task through completion, and retrieve completed work from an archive.
 
-The v1 product is intentionally single-user. It prioritizes reliable task
+The v1 product offers two fixed, separate profiles without authentication. It prioritizes reliable task
 capture, clear deadline visibility, explicit confirmation of AI actions, and a
 clean path from local development to VPS deployment.
 
@@ -26,7 +26,7 @@ clean path from local development to VPS deployment.
 
 v1 is successful when the user can:
 
-1. Sign in to the private application.
+1. Choose Hamster Knight or Ech Princess without credentials.
 2. Create a task using either a structured form or natural-language input.
 3. Review and correct every AI-extracted field before the task is saved.
 4. Move tasks among Todo, In Progress, and Done.
@@ -34,44 +34,50 @@ v1 is successful when the user can:
 6. Add and render a Markdown note on any task.
 7. Use chat to find, create, edit, move, and schedule tasks, with confirmation
    before every write.
-8. Find archived tasks by title and restore or permanently delete them.
+8. Find archived tasks by title, restore them, and permanently delete active or archived tasks after a titled irreversible confirmation.
 9. Use the application on desktop and mobile browsers.
 10. Deploy the application on a private VPS using Docker Compose.
 
 ## 3. Users and access
 
-### 3.1 User model
+### 3.1 Profile model
 
-- v1 supports exactly one private user account.
-- There are no invitations, teams, sharing permissions, assignees, or separate
-  workspaces.
+- Exactly two fixed profiles exist: **Hamster Knight** (`hamster_knight`) and
+  **Ech Princess** (`ech_princess`). Neither can be created, renamed, or removed.
+- Each owns independent tasks, board order, archive/search, one current chat
+  conversation/messages/proposals, timezone, and editable non-secret model overrides.
+- Profile choice is not identity protection: anyone who can reach the application
+  can select either profile. No registration, invitations, sharing, permissions,
+  username, password, or authenticated session exists.
+- Existing database and legacy mock browser data migrate intact to Hamster Knight;
+  Ech Princess begins empty with deployment-default settings.
 
-### 3.2 Authentication
+### 3.2 Profile selection and request context
 
-- Login uses one username and password.
-- The password is stored only as a strong password hash; plaintext passwords
-  must never be stored or logged.
-- An authenticated session uses a secure, HTTP-only, SameSite cookie.
-- **Single origin.** The reverse proxy serves the web tier and the API tier
-  from one hostname: `/api/v1/*` routes to the API, everything else routes to
-  the web tier. The session cookie is therefore first-party, CORS is not
-  involved, and `SameSite` provides its intended protection.
-- **CSRF.** The API rejects state-changing requests whose `Origin` does not
-  match the configured application origin. This is in addition to the
-  `SameSite` cookie attribute, not a replacement for it.
-- The user can change the password from Settings after entering the current
-  password.
-- A forgotten password is reset with an administrative command run directly on
-  the VPS.
-- Login attempts must be rate-limited.
-- The LLM API key and other secrets remain on the API tier and must never be
-  returned to the browser.
+- `/` always shows the account chooser, even after a previous selection. Choosing
+  a profile enters its Active Tasks board. The valid selection is remembered in
+  browser storage for refresh and direct tasks/archive/settings navigation.
+- Missing or invalid remembered selection returns to the chooser. Former `/login`
+  links also return there. The shell displays the selected name and **Switch account**.
+- Switching discards unsaved view state, task/chat panels, drafts, and confirmations.
+  Requests and writes retain their originating profile; late results cannot enter
+  the new profile's cache or alter its data.
+- Public `GET /api/v1/profiles` lists the fixed catalog. Every scoped data/AI request
+  requires `X-Planora-Profile: hamster_knight` or `ech_princess`; missing/invalid
+  context returns `422 VALIDATION_ERROR`, with no fallback or login cookie.
+- **Single origin.** `/api/v1/*` routes to the API on the same hostname as the web.
+  State-changing requests must have `Origin` matching the configured application
+  origin. Server-side validation and transactions remain authoritative.
+- Credential/session/password APIs and password administration are retired. Runtime
+  startup requires no authentication session secret.
+- LLM keys, endpoints, available models, deployment infrastructure and backup
+  scheduling remain global/server-owned; secrets never reach the browser.
 
 ### 3.3 Network access
 
 - Initial deployment may be reached by VPS IP during setup and testing.
 - Plain HTTP over a public IP is not approved for normal use because it exposes
-  login traffic.
+  task and chat content.
 - Regular internet use requires a domain and valid HTTPS certificate. The
   reverse proxy must redirect HTTP to HTTPS once the domain is configured.
 - Only the reverse proxy exposes public ports. The web tier, API tier,
@@ -80,14 +86,13 @@ v1 is successful when the user can:
 
 ## 4. Information architecture
 
-The authenticated application contains:
+After profile selection the application contains:
 
 1. **Active Tasks tab** — the primary three-column Kanban board.
 2. **Archive tab** — a searchable single list of archived tasks.
 3. **AI chat panel** — accessible from both tabs without becoming a third
    primary tab.
-4. **Settings page** — password, timezone, and non-secret LLM connection
-   settings.
+4. **Settings page** — profile timezone and editable non-secret model settings.
 
 On desktop, the AI chat panel appears as a collapsible right-side panel. On
 mobile, it opens as a full-height drawer or sheet. Closing and reopening it
@@ -95,26 +100,31 @@ must preserve the current conversation.
 
 ## 5. Task data model
 
+Every task belongs to one fixed profile. Ownership is server-controlled and never
+editable in task forms. All detail, mutation, ordering and archive queries are
+profile-scoped; another profile’s IDs are not found. The wire task shape below
+remains unchanged.
+
 The API wire format is **snake_case**; the TypeScript domain model is
 **camelCase**. Conversion happens in exactly one place on the web side (see
 §13.3 and ADR 0002).
 
-| Field (wire) | Type | Rules |
-| --- | --- | --- |
-| `id` | UUID | Generated by the API; immutable |
-| `title` | String | Required; concise; editable |
-| `content` | Text | Required task description; may be short |
-| `status` | Enum | `todo`, `in_progress`, or `done` |
-| `category` | Enum | `work`, `personal`, `study`, or `other` |
-| `priority` | Enum | `low`, `medium`, or `high` |
-| `deadline_at` | Zoned datetime or null | Optional date and time; interpreted in the configured timezone |
-| `urls` | List of URL objects | Zero or more links; each has a URL and optional label |
-| `markdown_note` | Text | One editable Markdown document per task; empty by default |
-| `position` | Ordering value | Supports manual ordering within a Kanban column |
-| `created_at` | UTC datetime | Set by the API |
-| `updated_at` | UTC datetime | Updated by the API |
-| `completed_at` | UTC datetime or null | Set when moved into Done; cleared if moved out |
-| `archived_at` | UTC datetime or null | Set by the automatic archive process |
+| Field (wire)    | Type                   | Rules                                                          |
+| --------------- | ---------------------- | -------------------------------------------------------------- |
+| `id`            | UUID                   | Generated by the API; immutable                                |
+| `title`         | String                 | Required; concise; editable                                    |
+| `content`       | Text                   | Required task description; may be short                        |
+| `status`        | Enum                   | `todo`, `in_progress`, or `done`                               |
+| `category`      | Enum                   | `work`, `personal`, `study`, or `other`                        |
+| `priority`      | Enum                   | `low`, `medium`, or `high`                                     |
+| `deadline_at`   | Zoned datetime or null | Optional date and time; interpreted in the configured timezone |
+| `urls`          | List of URL objects    | Zero or more links; each has a URL and optional label          |
+| `markdown_note` | Text                   | One editable Markdown document per task; empty by default      |
+| `position`      | Ordering value         | Supports manual ordering within a Kanban column                |
+| `created_at`    | UTC datetime           | Set by the API                                                 |
+| `updated_at`    | UTC datetime           | Updated by the API                                             |
+| `completed_at`  | UTC datetime or null   | Set when moved into Done; cleared if moved out                 |
+| `archived_at`   | UTC datetime or null   | Set by the automatic archive process                           |
 
 Database timestamps are stored in UTC. The web tier renders and edits them in
 the timezone selected in Settings.
@@ -214,13 +224,13 @@ Selecting a card opens a detail drawer or modal where all fields can be edited.
 
 Deadline state is derived rather than stored. There are **five** states.
 
-| State | Rule | Required visual treatment |
-| --- | --- | --- |
-| No deadline | `deadline_at` is null | Neutral |
-| Scheduled | More than 24 hours remain | Normal deadline treatment |
-| Near deadline | Deadline is in the future and no more than 24 hours remain | Amber tag/accent |
-| Overdue | Deadline is in the past and status is not Done | Red tag/accent |
-| Completed | Status is Done | Completed treatment; never shown as overdue |
+| State         | Rule                                                       | Required visual treatment                   |
+| ------------- | ---------------------------------------------------------- | ------------------------------------------- |
+| No deadline   | `deadline_at` is null                                      | Neutral                                     |
+| Scheduled     | More than 24 hours remain                                  | Normal deadline treatment                   |
+| Near deadline | Deadline is in the future and no more than 24 hours remain | Amber tag/accent                            |
+| Overdue       | Deadline is in the past and status is not Done             | Red tag/accent                              |
+| Completed     | Status is Done                                             | Completed treatment; never shown as overdue |
 
 `Completed` takes precedence over every other state: a Done task is never
 labelled Scheduled, Near deadline, or Overdue regardless of its deadline.
@@ -269,7 +279,7 @@ Filters affect only the visible board and do not change manual card order.
 - A task remains in the Done column for seven full days after `completed_at`.
 - Once seven days have elapsed, a scheduled job moves it to the archive by
   setting `archived_at`.
-- The job runs at least hourly, so archival may occur up to one hour after
+- The job processes both profiles without changing ownership and runs at least hourly, so archival may occur up to one hour after
   eligibility.
 - The job runs in a dedicated `scheduler` service, not inside an API worker
   process. In-process scheduling double-fires when more than one worker is
@@ -286,7 +296,7 @@ Filters affect only the visible board and do not change manual card order.
 - Search is not semantic and does not search content, notes, or URLs.
 - The list displays title, category, priority, completion date, and archived
   date.
-- Opening an item shows its complete read-only details.
+- Opening an item shows its complete read-only details and permanent-delete control.
 
 Available archive actions:
 
@@ -295,9 +305,23 @@ Available archive actions:
 - **Permanently delete:** requires an explicit destructive confirmation showing
   the task title. Deletion cannot be undone through the application.
 
+### 9.3 Permanent task deletion
+
+Active task details in Todo, In Progress and Done, and archived task details,
+expose permanent deletion. A destructive dialog names the task and explicitly
+states that it cannot be undone. Cancel makes no write; failure preserves the
+item with a visible error and retry. Keyboard and mobile controls are usable.
+Confirmation hard-deletes only the selected profile’s task, removes it from
+board/archive/search/detail after refresh, and prevents stale AI proposals from
+recreating it. There is no application trash or undo. Past chat text and backups
+are not erased by task deletion.
+
 ## 10. AI chat assistant
 
 ### 10.1 Allowed capabilities
+
+All task reads, searches, tools and proposals receive only the selected profile’s
+data. AI deletion/restore tools are not required; unsupported requests cause no write.
 
 The assistant can:
 
@@ -317,20 +341,20 @@ calendar integration.
 ### 10.2 Confirmation model
 
 - Read-only actions and answers do not require confirmation.
-- Every create, update, move, restore, archive-related, or delete action
-  requires confirmation before the API mutates data.
+- Every supported create, update, move, or schedule action requires explicit
+  confirmation before the API mutates data.
 - The chat displays a structured action-preview card showing the proposed
   changes.
 - For edits, the preview shows old and new values.
 - The user may confirm or cancel; cancellation performs no write.
 - Permanent deletion requires the same stronger destructive confirmation used
   in the Archive tab.
-- The API, not the model, validates authorization, field values, task
+- The API, not the model, validates profile ownership, field values, task
   existence, and state transitions.
 
 ### 10.3 Conversation retention
 
-- The application stores exactly one current conversation.
+- The application stores exactly one current conversation per profile.
 - The conversation persists across browser sessions and devices.
 - Starting a new conversation asks for confirmation and permanently replaces
   the prior conversation and messages.
@@ -352,11 +376,10 @@ calendar integration.
 
 ## 11. Settings
 
-The Settings page includes:
+The Settings page includes independently persisted preferences for the selected profile:
 
 - Application timezone, selected from IANA timezone names; default
   `Asia/Singapore`.
-- Password change form.
 - Non-secret LLM settings that deployment policy permits the user to edit, such
   as model name.
 
@@ -383,14 +406,13 @@ The web tier owns:
   implementation can be replaced with the FastAPI-backed client without
   rewriting page components.
 
-The web tier does **not** own the database, authentication, LLM integration, or
+The web tier does **not** own the database, LLM integration, or
 any authoritative business logic. Its validation exists to give immediate
 feedback; the API re-validates everything.
 
 **Data access is browser-only.** The Nitro server renders the application shell
 and serves static assets. It does not fetch application data, so there is no
-server-side session-forwarding path and authentication has exactly one call
-site.
+server-side data-forwarding path. Profile selection is local browser state.
 
 ### 12.2 Design direction
 
@@ -406,7 +428,7 @@ site.
 
 ### 12.3 Delivered state and required corrections
 
-A working frontend prototype exists, covering login, the three-column board
+A working frontend exists, covering profile choice, the three-column board
 with drag-and-drop, the task detail sheet, the structured task form, the
 natural-language preview flow, the archive list, Settings, and the chat panel
 with action-preview confirmation. It is backed by a mock `ApiClient`
@@ -436,26 +458,31 @@ that is the property acceptance criterion 16 protects.
 
 ### 13.1 Surface
 
+All endpoints except profiles and health require the explicit profile header in
+§3.2. Missing/invalid profile returns the standard `422 VALIDATION_ERROR` envelope.
+Other-profile task/proposal IDs return not-found without mutation (including
+reorder); unknown reorder IDs retain validation errors. `/auth/*` and
+`/settings/password` no longer perform credential/session operations.
+
 The API is a versioned JSON REST API under `/api/v1`, with a streaming response
 mechanism for chat if needed. Exact paths may change during API design, but the
 capabilities must include:
 
-| Capability | Suggested endpoint |
-| --- | --- |
-| Login/logout/session | `/auth/*` |
-| Read/update settings | `/settings` |
-| Change password | `/settings/password` |
-| List/create/read/update tasks | `/tasks` and `/tasks/{id}` |
-| Delete active task | `/tasks/{id}` (DELETE) |
-| Reorder or change status | `/tasks/reorder` or `/tasks/{id}/move` |
-| Parse free text | `/ai/parse-task` |
-| List/search archive | `/archive` |
-| Restore archived task | `/archive/{id}/restore` |
-| Delete archived task | `/archive/{id}` |
-| Read/reset conversation | `/chat/conversation` |
-| Send chat message | `/chat/messages` |
-| Confirm/reject AI action | `/chat/actions/{id}/confirm` and `/reject` |
-| Health check | `/health` |
+| Capability                       | Suggested endpoint                         |
+| -------------------------------- | ------------------------------------------ |
+| Public fixed profile catalog     | `/profiles`                                |
+| Read/update settings             | `/settings`                                |
+| List/create/read/update tasks    | `/tasks` and `/tasks/{id}`                 |
+| Permanently delete active task   | `/tasks/{id}` (DELETE)                     |
+| Reorder or change status         | `/tasks/reorder` or `/tasks/{id}/move`     |
+| Parse free text                  | `/ai/parse-task`                           |
+| List/search archive              | `/archive`                                 |
+| Restore archived task            | `/archive/{id}/restore`                    |
+| Permanently delete archived task | `/archive/{id}`                            |
+| Read/reset conversation          | `/chat/conversation`                       |
+| Send chat message                | `/chat/messages`                           |
+| Confirm/reject AI action         | `/chat/actions/{id}/confirm` and `/reject` |
+| Health check                     | `/health`                                  |
 
 Errors use a consistent machine-readable envelope with a stable `code`, a
 user-safe `message`, and optional field-level detail.
@@ -537,15 +564,15 @@ host mounts.
 - AI-proposed actions are idempotent so retrying confirmation cannot duplicate
   a task or apply an edit twice.
 - Reordering persists across refreshes and devices.
-- All state-changing API requests require authentication and pass the CSRF
-  origin check.
+- All state-changing API requests require validated explicit profile context
+  and pass the origin check.
 - User-provided Markdown, text, and URLs are treated as untrusted input.
 
 ### 15.2 Performance targets
 
 For a personal dataset of up to 10,000 tasks:
 
-- Initial authenticated board load: target under 2 seconds on a typical
+- Initial selected-profile board load: target under 2 seconds on a typical
   broadband connection, excluding cold VPS startup.
 - Normal non-AI mutations: target under 500 ms server response time.
 - Archive title search: target under 500 ms.
@@ -559,7 +586,7 @@ For a personal dataset of up to 10,000 tasks:
   modules specifically so they can be tested directly.
 - Integration tests for API endpoints and database operations, run against both
   SQLite and PostgreSQL.
-- End-to-end tests for the critical user flows: login, structured creation,
+- End-to-end tests for the critical user flows: profile choice/switching/isolation, permanent deletion, structured creation,
   natural-language capture and confirmation, board moves, archive restore, and
   a confirmed chat write.
 - Minimum 80% coverage on both tiers, enforced in CI.
@@ -576,12 +603,12 @@ For a personal dataset of up to 10,000 tasks:
   failures.
 - Logs must redact passwords, session tokens, API keys, full chat prompts, and
   sensitive task content by default.
-- A simple authenticated or internal health endpoint is required for deployment
+- A simple public or internal health endpoint is required for deployment
   checks.
 
 ## 16. Explicitly out of scope for v1
 
-- Multiple users, sharing, assignments, teams, or permissions.
+- Additional profiles, registration, authentication, sharing, assignments, teams, or permissions.
 - Recurring tasks.
 - Subtasks, dependencies, projects, custom tags, or custom categories.
 - Browser, push, email, SMS, or messaging reminders.
@@ -603,8 +630,11 @@ For a personal dataset of up to 10,000 tasks:
 
 v1 may be considered complete only when all of the following pass:
 
-1. A user can log in, log out, change the password, and reset it through the
-   documented VPS command.
+1. `/` always offers exactly Hamster Knight and Ech Princess without credentials
+   or sessions; valid selection persists for refresh/deep links. Switch account
+   clears unsaved views and isolates late requests. Tasks/order/archive/chat/
+   proposals/timezone/model overrides remain independent; legacy data is preserved
+   under Hamster Knight and Ech Princess begins empty/default.
 2. Structured creation rejects missing title/content and accepts an absent
    deadline.
 3. Natural-language capture returns an editable preview and never saves before
@@ -621,8 +651,10 @@ v1 may be considered complete only when all of the following pass:
 10. Filters can be combined and cleared without changing stored task order.
 11. Archive title search is case-insensitive and does not claim semantic
     behavior.
-12. Restore returns an archived task to Todo; permanent delete always requires
-    confirmation.
+12. Restore returns an archived task to Todo. Active tasks in every status and
+    archived details offer permanent deletion with a titled irreversible
+    cancel/confirm dialog, loading and recoverable error/retry states. Deletion
+    persists after refresh, and stale AI proposals cannot recreate the task.
 13. Every chat write shows a structured preview and requires confirmation;
     duplicate confirmations are harmless.
 14. Starting a new conversation asks for confirmation and removes the previous
@@ -637,7 +669,7 @@ v1 may be considered complete only when all of the following pass:
 19. Daily backup rotation retains seven backups, and the documented restore
     procedure succeeds.
 20. No frontend bundle or API response contains the LLM API key, database
-    credentials, or password hashes.
+    credentials, or historical password hashes.
 21. **Contract integrity.** Regenerating TypeScript types from the live
     `openapi.json` produces no diff against the committed output.
 22. **Filter composition.** Multi-select filters combine across category,
@@ -696,8 +728,8 @@ v1 may be considered complete only when all of the following pass:
 
 ### Phase 6 — Core API
 
-- Implement authentication, settings, task model, CRUD, ordering, filters,
-  archival, and migrations.
+- Implement the fixed-profile catalog and profile-scoped settings, task model,
+  CRUD, ordering, filters, archival, and migrations.
 - Replace the mock task/archive/settings adapters with the live client.
 
 ### Phase 7 — AI functions
@@ -746,7 +778,7 @@ domain/          pure logic: deadline, ordering, archive policy, chat actions
 db/              session, models, repositories
 ai/              client, parse_task, chat_tools, redact, prompts
 jobs/            archive_done_tasks, scheduler
-security/        password, session, rate_limit, csrf
+security/        mutation-origin checks
 logging.py       structured logging with redaction
 ```
 

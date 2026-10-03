@@ -9,16 +9,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { DeleteTaskDialog } from "./DeleteTaskDialog";
 import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { categoryLabels, priorityLabels } from "@/features/tasks/labels";
 import { MarkdownPreview } from "@/lib/markdown";
@@ -93,7 +84,7 @@ export function TaskDetailSheet({
   error?: string | null;
   onRetry?: () => void;
 }) {
-  const { update, remove } = useTaskMutations();
+  const { update } = useTaskMutations();
   const [confirmDelete, setConfirmDelete] = useState(false);
   // The status the user picked in this sheet, per task. Everything else about
   // status comes from the task itself so the control never shows stale state.
@@ -189,6 +180,14 @@ export function TaskDetailSheet({
               <div className="rounded-lg border border-border bg-card p-4">
                 <MarkdownPreview source={task.markdownNote} />
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                className="min-h-11 text-destructive"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
             </div>
           ) : (
             <>
@@ -236,32 +235,12 @@ export function TaskDetailSheet({
           )}
         </div>
 
-        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete “{task.title}”?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This removes the task from your board. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep task</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() =>
-                  remove.mutate(task.id, {
-                    onSuccess: () => {
-                      toast.success("Task deleted");
-                      onClose();
-                    },
-                    onError: (e: Error) => toast.error(e.message),
-                  })
-                }
-              >
-                Delete task
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <DeleteTaskDialog
+          task={task}
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          onDeleted={onClose}
+        />
       </SheetContent>
     </Sheet>
   );

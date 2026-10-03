@@ -21,7 +21,7 @@ async function tasks(): Promise<Task[]> {
 async function patchTasks(patch: (task: Task) => Partial<Task>) {
   const all = await tasks();
   window.localStorage.setItem(
-    "planora.tasks",
+    "planora.hamster_knight.tasks",
     JSON.stringify(all.map((task) => ({ ...task, ...patch(task) }))),
   );
 }
@@ -32,6 +32,7 @@ beforeEach(() => {
   let random = 0;
   vi.spyOn(Math, "random").mockImplementation(() => (random += 0.0001));
   window.localStorage.clear();
+  window.localStorage.setItem("planora.profile", "hamster_knight");
   mockDevTools.setErrorMode(false);
 });
 
@@ -39,6 +40,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   window.localStorage.clear();
+  window.localStorage.setItem("planora.profile", "hamster_knight");
 });
 
 describe("mock chat: overdue", () => {
@@ -268,7 +270,7 @@ describe("mock chat: message limit", () => {
     "rejects 4001 trimmed %s code points without changing storage",
     async (character) => {
       await ask("hello");
-      const before = window.localStorage.getItem("planora.conversation");
+      const before = window.localStorage.getItem("planora.hamster_knight.conversation");
       const result = mockApiClient
         .sendChatMessage(` ${character.repeat(4001)}\n`)
         .catch((error: unknown) => error);
@@ -281,7 +283,7 @@ describe("mock chat: message limit", () => {
         details: [{ field: "text", code: "VALUE_ERROR", message: expect.any(String) }],
       });
       expect((error as ApiError).details?.[0]?.message).not.toBe("");
-      expect(window.localStorage.getItem("planora.conversation")).toBe(before);
+      expect(window.localStorage.getItem("planora.hamster_knight.conversation")).toBe(before);
     },
   );
 
@@ -291,9 +293,9 @@ describe("mock chat: message limit", () => {
       const text = character.repeat(4000);
       const conversation = await resolve(mockApiClient.sendChatMessage(`  ${text}\n`));
       expect(conversation.messages[0]).toMatchObject({ role: "user", text });
-      expect(JSON.parse(window.localStorage.getItem("planora.conversation")!)).toEqual(
-        conversation,
-      );
+      expect(
+        JSON.parse(window.localStorage.getItem("planora.hamster_knight.conversation")!),
+      ).toEqual(conversation);
     },
   );
 });

@@ -56,9 +56,11 @@ def _enum_values(enum_class: type[enum.Enum]) -> list[str]:
 
 
 class Task(Base):
-    """The task row — exactly the 14 wire fields in spec §5."""
+    """A profile-owned task; ownership is server-only, not a wire field."""
 
     __tablename__ = "task"
+    __table_args__ = (CheckConstraint("profile_id IN (1, 2)", name="ck_task_profile"),)
+    profile_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", index=True)
 
     id: Mapped[uuid.UUID] = mapped_column(
         _Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -124,17 +126,7 @@ class Task(Base):
 
 
 class AppUser(Base):
-    """The single account row (issue #25, spec §3.1).
-
-    `CHECK (id = 1)` enforces exactly one account at the database layer, not
-    just in application code — a second row can never be inserted, on
-    SQLite or PostgreSQL. The table is named `app_user`, not `user`, because
-    `user` is a reserved word in PostgreSQL.
-
-    #25 creates this table but never inserts into it: #33's command calls
-    `db.auth_repository.upsert_app_user` to create the account on first run
-    and reset it later.
-    """
+    """Retired credential table retained to preserve historical migration metadata."""
 
     __tablename__ = "app_user"
     __table_args__ = (CheckConstraint("id = 1", name="ck_app_user_single_row"),)
@@ -151,19 +143,10 @@ class AppUser(Base):
 
 
 class AppSettings(Base):
-    """The single settings-overrides row (issue #31, spec §11).
-
-    `CHECK (id = 1)` enforces exactly one row, like `AppUser`. Both
-    columns are nullable *overrides*: `NULL` (or no row at all) means
-    "follow the deployment value" — `Settings.default_timezone` /
-    `Settings.llm_model` from `config.py` — rather than storing a copy of
-    that default here. No row exists until the first successful `PATCH
-    /api/v1/settings`; `db.settings_repository.get_effective_settings`
-    resolves override-vs-deployment-default for every reader.
-    """
+    """One overrides row per fixed profile (id 1 or 2); NULL follows deployment defaults."""
 
     __tablename__ = "app_settings"
-    __table_args__ = (CheckConstraint("id = 1", name="ck_app_settings_single_row"),)
+    __table_args__ = (CheckConstraint("id IN (1, 2)", name="ck_app_settings_profiles"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     timezone: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
@@ -174,12 +157,7 @@ class AppSettings(Base):
 
 
 class AuthSession(Base):
-    """A server-side session (issue #25).
-
-    `token_digest` stores only `HMAC-SHA256(SESSION_SECRET, token)` — never
-    the raw cookie token — so a database read alone cannot produce a working
-    cookie, and rotating `SESSION_SECRET` invalidates every session.
-    """
+    """Retired session table; the profile migration empties it and no runtime code uses it."""
 
     __tablename__ = "auth_session"
 
@@ -196,20 +174,10 @@ class ChatRole(str, enum.Enum):
 
 
 class Conversation(Base):
-    """The single current conversation row (issue #39, spec §10.3).
-
-    `CHECK (id = 1)` enforces exactly one row, like `AppUser`/`AppSettings`.
-    `conversation_id` is the wire-visible identifier (`Conversation.id` on
-    the wire, see `schemas/chat.py`) and is replaced with a fresh UUID on
-    every reset (`POST /api/v1/chat/conversation`); the fixed `id=1` primary
-    key never changes — it exists purely to enforce the single-row invariant
-    at the database layer, the same trick `AppSettings` uses. No foreign key
-    links this table to `task` (binding rule: chat tables never cascade into
-    task data).
-    """
+    """One current conversation per profile, keyed by profile id; reset replaces only its wire UUID."""
 
     __tablename__ = "conversation"
-    __table_args__ = (CheckConstraint("id = 1", name="ck_conversation_single_row"),)
+    __table_args__ = (CheckConstraint("id IN (1, 2)", name="ck_conversation_profiles"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
     conversation_id: Mapped[uuid.UUID] = mapped_column(
@@ -224,21 +192,14 @@ class Conversation(Base):
 
 
 class ChatMessage(Base):
-    """One message in the single current conversation (issue #39, spec
-    §10.3). Deleted in bulk on every reset, never updated in place.
-
-    No foreign key to `Conversation` — there is ever only one conversation
-    row, so a message's membership is implicit, and no foreign key links
-    this table to `task` either (chat rows can never cascade into task
-    data). `sequence` is assigned by `db.chat_repository.append_message`
-    itself (one greater than the current maximum), not by a database
-    autoincrement column, so ordering stays identical on SQLite and
-    PostgreSQL and survives two messages sharing an identical `created_at`
-    (the `created_at` column alone cannot break that tie).
-    """
+    """A profile-owned message, uniquely ordered by (profile_id, sequence), removed on that profile reset."""
 
     __tablename__ = "chat_message"
-    __table_args__ = (UniqueConstraint("sequence", name="uq_chat_message_sequence"),)
+    __table_args__ = (
+        UniqueConstraint("profile_id", "sequence", name="uq_chat_message_profile_sequence"),
+        CheckConstraint("profile_id IN (1, 2)", name="ck_chat_message_profile"),
+    )
+    profile_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", index=True)
 
     id: Mapped[uuid.UUID] = mapped_column(
         _Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -276,30 +237,11 @@ class ChatActionStatus(str, enum.Enum):
 
 
 class ChatAction(Base):
-    """One proposed write, attached to exactly one assistant `ChatMessage`
-    (issue #41, spec §10.1-§10.4).
-
-    No foreign key to `chat_message` or to `task` — matching `ChatMessage`'s
-    own no-FK-to-`Conversation` precedent, and binding rule: chat rows never
-    cascade into task data. `message_id`/`task_id` are plain columns; a
-    conversation reset (`db.chat_repository.reset_conversation`) deletes
-    every `chat_action` row in bulk, the same way it deletes every
-    `chat_message` row, so an action orphaned by a reset simply no longer
-    exists (its confirm/reject then correctly 404s).
-
-    `fields` and `payload` are the exact wire shapes `schemas.chat` returns
-    (label/from/to entries; the kind-specific payload dict) — built once at
-    proposal time and never recomputed. `stale_snapshot` holds the *raw*
-    (unformatted) current value of each field the proposal's preview shows,
-    for the confirm-time staleness check (`domain.chat_actions.is_stale`);
-    it is never sent on the wire. `changed_fields` is populated only for
-    `kind=UPDATE` — the raw new values for exactly the fields that changed,
-    which confirm applies through `schemas.task.TaskUpdate` (spec §41:
-    "confirm applies only changed fields", even though `payload["draft"]`
-    itself carries the *full* resulting draft for display).
-    """
+    """A profile-owned proposal attached to an assistant message; never applied without confirmation."""
 
     __tablename__ = "chat_action"
+    __table_args__ = (CheckConstraint("profile_id IN (1, 2)", name="ck_chat_action_profile"),)
+    profile_id: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", index=True)
 
     id: Mapped[uuid.UUID] = mapped_column(
         _Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -352,12 +294,7 @@ class ChatAction(Base):
 
 
 class LoginFailure(Base):
-    """One failed login attempt, keyed by client IP (issue #25).
-
-    Rows outside the 15-minute rate-limit window are pruned on write by
-    `security/rate_limit.py`; this table is the only state behind the
-    limit, so it survives a process restart.
-    """
+    """Retired login-limit table; retained only for historical schema compatibility."""
 
     __tablename__ = "login_failure"
 

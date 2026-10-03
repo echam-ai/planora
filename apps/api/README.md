@@ -4,7 +4,7 @@ Requires `uv`. Python 3.12 is the canonical interpreter, pinned by
 `.python-version` (`uv` reads it and downloads 3.12 if needed; CI and the
 production image must use the same version, so do not pass `--python`). The
 package itself accepts `>=3.12`. Copy `.env.example` to `.env` and
-fill in the three required values with no default — `SESSION_SECRET`,
+fill in the two required values with no default —
 `LLM_API_KEY` and `APP_ORIGIN` — plus any other values you want to change,
 before starting uvicorn. Startup fails fast, naming the missing variable, if
 a required value is left blank. Run these commands from `apps/api`:
@@ -46,7 +46,7 @@ uv run python -m planora_api.openapi
 
 This needs no running server, no database connection and no real secrets —
 it builds the app from fixed placeholder configuration
-(`planora_api/openapi.py`), so it works even with `SESSION_SECRET`,
+(`planora_api/openapi.py`), so it works even with
 `LLM_API_KEY` and `APP_ORIGIN` unset. The output is deterministic (fixed
 indent, sorted keys, a trailing newline), so re-running it with no contract
 change produces no diff. `uv run pytest` includes a test comparing the
@@ -84,7 +84,7 @@ header past #26's CSRF check. Standard library only (`argparse`, `signal`,
 cron) is added.
 
 Both need the **same environment as the `api` service** — `load_settings()`
-requires `SESSION_SECRET`, `LLM_API_KEY` and `APP_ORIGIN` even though
+requires `LLM_API_KEY` and `APP_ORIGIN` even though
 neither job uses them — and a database that already has migrations applied
 (`uv run alembic upgrade head`; neither job runs it itself). Neither
 publishes a port or exposes an HTTP health endpoint.
@@ -95,7 +95,7 @@ publishes a port or exposes an HTTP health endpoint.
 uv run python -m planora_api.jobs.archive_done_tasks
 ```
 
-Archives every Done task whose seven-day window (spec §9.1) has elapsed,
+Archives every Done task in either profile whose seven-day window (spec §9.1) has elapsed,
 then exits. For manual runs and cron-less testing.
 
 | Exit code | Meaning |
@@ -120,19 +120,22 @@ configuration exits `2`, the same convention as the run-once command.
 This is what #43's Compose `scheduler` service runs from the API image —
 Compose wiring itself belongs to that issue, not this one.
 
-## Administrative commands
+## Fixed profiles
 
-`src/planora_api/admin/` holds commands run directly on the host, never
-through the HTTP API or imported by `planora_api.main`/`api/` — the same
-isolation rule as `jobs/` above.
+Public `GET /api/v1/profiles` returns exactly Hamster Knight (`hamster_knight`)
+and Ech Princess (`ech_princess`). Every task, archive, settings and AI/chat
+request requires `X-Planora-Profile` with one of those IDs. Missing/unknown
+context returns `422 VALIDATION_ERROR`; another profile's resource returns
+`404 NOT_FOUND`. Selection is a data context, not authentication or access
+control. There are no login/logout/password/reset endpoints or setup commands.
 
-### Reset the password (or create the account on first run)
+Each profile owns its task order, archive, current conversation/proposals and
+settings overrides. Available models, secrets and endpoint config stay global.
+The new additive migration assigns existing data to Hamster Knight without
+changing IDs/timestamps. Ech Princess starts empty with deployment defaults.
+Downgrading to the old schema fails if Princess has saved data to avoid losing it.
 
-```sh
-uv run python -m planora_api.admin.reset_password
-```
-
-See **[`docs/ops/password-reset.md`](../../docs/ops/password-reset.md)**
-for the full walkthrough: the production invocation, why `-T` must not be
-passed, what a reset does (every session signed out, every login lockout
-cleared, all in one transaction), and the exit codes.
+`DELETE /api/v1/tasks/{task_id}` and `DELETE /api/v1/archive/{task_id}` hard-delete
+the selected profile's task after browser confirmation. There is no trash or
+undo. Existing chat text and backup snapshots remain; stale task proposals
+cannot recreate a deleted task.

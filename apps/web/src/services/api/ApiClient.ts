@@ -1,8 +1,8 @@
+import type { ProfileId } from "./profiles";
 import type {
   AppSettings,
   Conversation,
   ParsedTaskText,
-  Session,
   Task,
   TaskDraft,
   TaskStatus,
@@ -16,13 +16,10 @@ export type ArchivePage = {
 };
 
 export interface ApiClient {
-  login(username: string, password: string): Promise<Session>;
-  logout(): Promise<void>;
-  getSession(): Promise<Session | null>;
+  getProfiles(): Promise<ReadonlyArray<{ id: ProfileId; name: string }>>;
 
   getSettings(): Promise<AppSettings>;
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
-  changePassword(currentPassword: string, newPassword: string): Promise<void>;
 
   listTasks(): Promise<Task[]>;
   getTask(id: string): Promise<Task>;

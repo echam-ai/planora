@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/types";
-import { httpApiClient } from "./httpApiClient";
+import { httpApiClient, createHttpApiClient } from "./httpApiClient";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -24,51 +24,42 @@ function lastRequest(fetchSpy: ReturnType<typeof vi.fn>) {
   return { url, init, body: init.body ? JSON.parse(init.body as string) : undefined };
 }
 
-describe("httpApiClient — auth", () => {
+describe("httpApiClient — profiles", () => {
   afterEach(() => vi.unstubAllGlobals());
-
-  it("login: POST /api/v1/auth/login with credentials, resolving the session", async () => {
+  it("reads the public catalog without cookies or profile context", async () => {
     const fetchSpy = stubFetch(
-      jsonResponse(200, { username: "owner", signed_in_at: "2026-09-28T10:00:00+00:00" }),
+      jsonResponse(200, [
+        { id: "hamster_knight", name: "Hamster Knight" },
+        { id: "ech_princess", name: "Ech Princess" },
+      ]),
     );
-
-    const session = await httpApiClient.login("owner", "pw");
-
-    const { url, init, body } = lastRequest(fetchSpy);
-    expect(url).toBe("/api/v1/auth/login");
-    expect(init.method).toBe("POST");
-    expect(init.credentials).toBe("same-origin");
-    expect(body).toEqual({ username: "owner", password: "pw" });
-    expect(session).toEqual({ username: "owner", signedInAt: "2026-09-28T10:00:00+00:00" });
+    expect(await httpApiClient.getProfiles()).toHaveLength(2);
+    const { url, init } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/profiles");
+    expect(init.credentials).toBe("omit");
+    expect(new Headers(init.headers).has("X-Planora-Profile")).toBe(false);
   });
-
-  it("logout: POST /api/v1/auth/logout, expects 204", async () => {
-    const fetchSpy = stubFetch(noBodyResponse(204));
-
-    await expect(httpApiClient.logout()).resolves.toBeUndefined();
-    expect(lastRequest(fetchSpy).url).toBe("/api/v1/auth/logout");
-    expect(lastRequest(fetchSpy).init.method).toBe("POST");
+  it("captures the originating profile for every scoped endpoint", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, []));
+    const knight = createHttpApiClient("hamster_knight"),
+      princess = createHttpApiClient("ech_princess");
+    await knight.listTasks();
+    expect(new Headers(lastRequest(fetchSpy).init.headers).get("X-Planora-Profile")).toBe(
+      "hamster_knight",
+    );
+    fetchSpy.mockClear();
+    fetchSpy.mockResolvedValue(jsonResponse(200, []));
+    await princess.listTasks();
+    expect(new Headers(lastRequest(fetchSpy).init.headers).get("X-Planora-Profile")).toBe(
+      "ech_princess",
+    );
   });
-
-  it("getSession: GET /api/v1/auth/session, mapping null to null", async () => {
-    stubFetch(jsonResponse(200, null));
-    await expect(httpApiClient.getSession()).resolves.toBeNull();
-  });
-
-  it("getSession: maps a session body to camelCase", async () => {
-    stubFetch(jsonResponse(200, { username: "owner", signed_in_at: "2026-09-28T10:00:00+00:00" }));
-    await expect(httpApiClient.getSession()).resolves.toEqual({
-      username: "owner",
-      signedInAt: "2026-09-28T10:00:00+00:00",
+  it("surfaces a missing profile validation error without fallback", async () => {
+    stubFetch(jsonResponse(422, { code: "VALIDATION_ERROR", message: "Profile required." }));
+    await expect(httpApiClient.listTasks()).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+      status: 422,
     });
-  });
-
-  it("Scenario: session expires mid-use — listTasks rejects with ApiError NOT_AUTHENTICATED, status 401", async () => {
-    stubFetch(jsonResponse(401, { code: "NOT_AUTHENTICATED", message: "Sign in required." }));
-
-    const promise = httpApiClient.listTasks();
-    await expect(promise).rejects.toBeInstanceOf(ApiError);
-    await expect(promise).rejects.toMatchObject({ code: "NOT_AUTHENTICATED", status: 401 });
   });
 });
 
@@ -107,17 +98,6 @@ describe("httpApiClient — settings", () => {
     const { init, body } = lastRequest(fetchSpy);
     expect(init.method).toBe("PATCH");
     expect(body).toEqual({ timezone: "Asia/Singapore" });
-  });
-
-  it("changePassword: POST /api/v1/settings/password, expects 204", async () => {
-    const fetchSpy = stubFetch(noBodyResponse(204));
-
-    await httpApiClient.changePassword("old", "new");
-
-    const { url, init, body } = lastRequest(fetchSpy);
-    expect(url).toBe("/api/v1/settings/password");
-    expect(init.method).toBe("POST");
-    expect(body).toEqual({ current_password: "old", new_password: "new" });
   });
 
   it("Scenario: validation error carries field details", async () => {

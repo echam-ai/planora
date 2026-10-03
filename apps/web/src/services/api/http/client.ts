@@ -3,7 +3,7 @@
  * spec §3.2, §13.1).
  *
  * - Every request goes to a relative `/api/v1/...` URL with
- *   `credentials: "same-origin"` (the session cookie is first-party) and
+ *   `credentials: "omit"` (the session cookie is first-party) and
  *   `Accept: application/json`. A request with a body also sends
  *   `Content-Type: application/json`.
  * - The wrapper never sets `Origin` itself — the browser supplies it, and
@@ -30,6 +30,7 @@ export type RequestOptions = {
   path: string;
   query?: Record<string, QueryValue>;
   body?: unknown;
+  profile?: import("../profiles").ProfileId | null;
 };
 
 type WireValidationDetail = {
@@ -98,9 +99,10 @@ export async function request<TResponse>(options: RequestOptions): Promise<TResp
 
   const init: RequestInit = {
     method,
-    credentials: "same-origin",
+    credentials: "omit",
     headers: {
       Accept: "application/json",
+      ...(options.profile ? { "X-Planora-Profile": options.profile } : {}),
       ...(hasBody ? { "Content-Type": "application/json" } : {}),
     },
     ...(hasBody ? { body: JSON.stringify(body) } : {}),

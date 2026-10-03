@@ -4,7 +4,6 @@
  * identical across features without duplicating them.
  */
 export const qk = {
-  session: ["session"] as const,
   settings: ["settings"] as const,
   tasks: ["tasks"] as const,
   archiveAll: ["archive"] as const,

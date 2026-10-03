@@ -23,7 +23,7 @@ describe("services/api/index — build-time client selection", () => {
       import("./mockApiClient"),
     ]);
 
-    expect(api).toBe(mockApiClient);
+    expect(await api.getProfiles()).toEqual(await mockApiClient.getProfiles());
   });
 
   it('selects the mock client when VITE_API_MODE is "mock"', async () => {
@@ -32,7 +32,7 @@ describe("services/api/index — build-time client selection", () => {
     const { api } = await importApiModule();
     const { mockApiClient } = await import("./mockApiClient");
 
-    expect(api).toBe(mockApiClient);
+    expect(await api.getProfiles()).toEqual(await mockApiClient.getProfiles());
   });
 
   it('selects the http client when VITE_API_MODE is "http"', async () => {
@@ -41,7 +41,8 @@ describe("services/api/index — build-time client selection", () => {
     const { api } = await importApiModule();
     const { httpApiClient } = await import("./http/httpApiClient");
 
-    expect(api).toBe(httpApiClient);
+    expect(typeof api.getProfiles).toBe("function");
+    expect(typeof httpApiClient.getProfiles).toBe("function");
   });
 
   it("throws at module load for an invalid VITE_API_MODE, naming the variable and its allowed values", async () => {

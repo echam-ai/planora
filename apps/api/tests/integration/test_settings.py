@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, VALID_ENV, make_client
+from conftest import VALID_ENV, make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy.orm import Session, sessionmaker
@@ -43,11 +43,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _seed_task(
@@ -82,7 +79,7 @@ def test_get_with_no_row_returns_deployment_defaults_and_creates_no_row(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     response = _run(scenario)
@@ -106,7 +103,7 @@ def test_get_response_keys_are_exactly_timezone_model_name_and_available_models(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     response = _run(scenario)
@@ -139,9 +136,9 @@ def test_get_response_never_contains_a_secret_sentinel(
 
     async def scenario() -> tuple[Response, str]:
         async with make_client(app) as client:
-            await _login(client)
-            token = client.cookies.get("planora_session")
-            assert token is not None
+            await _select_profile(client)
+            token = "SENTINEL-retired-session-cookie"
+            client.cookies.set("planora_session", token)
             response = await client.get(SETTINGS_URL)
             return response, token
 
@@ -167,7 +164,7 @@ def test_patch_timezone_only_updates_and_get_agrees(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             patch_response = await client.patch(
                 SETTINGS_URL, json={"timezone": "America/New_York"}
             )
@@ -195,7 +192,7 @@ def test_patch_model_name_only_leaves_timezone_unchanged(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
             model_only = await client.patch(SETTINGS_URL, json={"model_name": "kimi-k3-turbo"})
             get_response = await client.get(SETTINGS_URL)
@@ -222,7 +219,7 @@ def test_patch_timezone_only_leaves_model_name_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"model_name": "kimi-k3-turbo"})
             return await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
 
@@ -245,7 +242,7 @@ def test_patch_unset_field_keeps_following_the_deployment_value_on_restart(
 
     async def set_timezone_only() -> None:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             response = await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
             assert response.status_code == 200
 
@@ -259,7 +256,7 @@ def test_patch_unset_field_keeps_following_the_deployment_value_on_restart(
 
     async def read_again() -> Response:
         async with make_client(app2) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     response = _run(read_again)
@@ -281,7 +278,7 @@ def test_patch_empty_body_returns_current_settings_and_changes_nothing(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             first = await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
             empty = await client.patch(SETTINGS_URL, json={})
             return first, empty
@@ -299,7 +296,7 @@ def test_patch_empty_body_returns_current_settings_and_changes_nothing(
     # A second empty PATCH must not bump updated_at either.
     async def second_empty() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={})
 
     _run(second_empty)
@@ -319,7 +316,7 @@ def test_patch_empty_body_creates_no_row_when_none_existed(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={})
 
     response = _run(scenario)
@@ -342,7 +339,7 @@ def test_patch_accepts_valid_iana_timezones(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={"timezone": timezone})
 
     response = _run(scenario)
@@ -364,7 +361,7 @@ def test_patch_rejects_invalid_timezones(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
             invalid = await client.patch(SETTINGS_URL, json={"timezone": timezone})
             after = await client.get(SETTINGS_URL)
@@ -394,7 +391,7 @@ def test_patch_rejects_invalid_model_names(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"model_name": "kimi-k3-turbo"})
             invalid = await client.patch(SETTINGS_URL, json={"model_name": model_name})
             after = await client.get(SETTINGS_URL)
@@ -419,7 +416,7 @@ def test_patch_strips_surrounding_whitespace_from_model_name(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={"model_name": "  kimi-k3  "})
 
     response = _run(scenario)
@@ -448,7 +445,7 @@ def test_patch_rejects_fields_outside_the_settings_contract(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             invalid = await client.patch(SETTINGS_URL, json=body)
             after = await client.get(SETTINGS_URL)
             return invalid, after
@@ -473,7 +470,7 @@ def test_patch_is_atomic_valid_timezone_with_invalid_model_name_persists_neither
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             invalid = await client.patch(
                 SETTINGS_URL, json={"timezone": "America/New_York", "model_name": ""}
             )
@@ -502,7 +499,7 @@ def test_patch_timezone_does_not_change_a_stored_deadline_instant(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             before = await client.get(f"/api/v1/tasks/{task_id}")
             patch_response = await client.patch(
                 SETTINGS_URL, json={"timezone": "America/New_York"}
@@ -547,7 +544,7 @@ def test_get_effective_settings_resolves_override_else_deployment_default(
 def _get(app: FastAPI) -> Response:
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     return _run(scenario)
@@ -584,7 +581,7 @@ def test_patch_response_carries_available_models(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={"model_name": "other-model"})
 
     response = _run(scenario)
@@ -607,7 +604,7 @@ def test_patch_rejects_a_model_the_deployment_does_not_serve_and_stores_nothing(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             rejected = await client.patch(
                 SETTINGS_URL, json={"timezone": "Asia/Tokyo", "model_name": " planora-pro "}
             )
@@ -635,7 +632,7 @@ def test_patch_rejects_available_models_in_the_body(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.patch(SETTINGS_URL, json={"available_models": ["x"]})
 
     response = _run(scenario)
@@ -655,7 +652,7 @@ def test_stored_override_no_longer_allowed_falls_back_to_llm_model(
 
     async def choose() -> None:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             response = await client.patch(SETTINGS_URL, json={"model_name": "kimi-k3-thinking"})
             assert response.status_code == 200
             assert response.json()["model_name"] == "kimi-k3-thinking"
@@ -691,10 +688,10 @@ def test_get_and_patch_require_authentication(
 
     get_response, patch_response = _run(scenario)
 
-    assert get_response.status_code == 401
-    assert get_response.json()["code"] == "NOT_AUTHENTICATED"
-    assert patch_response.status_code == 401
-    assert patch_response.json()["code"] == "NOT_AUTHENTICATED"
+    assert get_response.status_code == 422
+    assert get_response.json()["code"] == "VALIDATION_ERROR"
+    assert patch_response.status_code == 422
+    assert patch_response.json()["code"] == "VALIDATION_ERROR"
 
 
 def test_patch_rejects_a_mismatched_origin_and_changes_nothing(
@@ -704,16 +701,9 @@ def test_patch_rejects_a_mismatched_origin_and_changes_nothing(
 ) -> None:
     app = app_factory()
 
-    async def login_and_get_cookie() -> dict[str, str]:
-        async with make_client(app) as client:
-            await _login(client)
-            return dict(client.cookies)
-
-    cookies = _run(login_and_get_cookie)
-
     async def cross_origin_patch() -> tuple[Response, Response]:
         async with make_client(app, origin=FOREIGN_ORIGIN) as client:
-            client.cookies.update(cookies)
+            await _select_profile(client)
             patch_response = await client.patch(SETTINGS_URL, json={"timezone": "Asia/Tokyo"})
             return patch_response, patch_response
 
@@ -723,7 +713,7 @@ def test_patch_rejects_a_mismatched_origin_and_changes_nothing(
 
     async def same_origin_get() -> Response:
         async with make_client(app) as client:
-            client.cookies.update(cookies)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     after = _run(same_origin_get)
@@ -741,16 +731,9 @@ def test_get_settings_is_not_origin_checked(
 ) -> None:
     app = app_factory()
 
-    async def login_and_get_cookie() -> dict[str, str]:
-        async with make_client(app) as client:
-            await _login(client)
-            return dict(client.cookies)
-
-    cookies = _run(login_and_get_cookie)
-
     async def cross_origin_get() -> Response:
         async with make_client(app, origin=FOREIGN_ORIGIN) as client:
-            client.cookies.update(cookies)
+            await _select_profile(client)
             return await client.get(SETTINGS_URL)
 
     response = _run(cross_origin_get)

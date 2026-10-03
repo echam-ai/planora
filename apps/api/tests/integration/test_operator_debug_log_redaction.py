@@ -28,7 +28,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import pytest
-from conftest import AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import Response
 
@@ -58,7 +58,7 @@ def debug_env(valid_env: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
     return valid_env
 
 
-def test_login_password_sentinel_is_redacted_on_a_failed_login(
+def test_select_profile_password_sentinel_is_redacted_on_a_failed_select_profile(
     debug_env: pytest.MonkeyPatch,
     seeded_user: tuple[str, str],
     app_factory: Callable[[], FastAPI],
@@ -72,11 +72,11 @@ def test_login_password_sentinel_is_redacted_on_a_failed_login(
     async def scenario() -> Response:
         async with make_client(app) as client:
             return await client.post(
-                "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": sentinel}
+                "/api/v1/tasks", json={"title": sentinel}, headers={"X-Planora-Profile": "hamster_knight"}
             )
 
     response = _run(scenario)
-    assert response.status_code == 401
+    assert response.status_code == 422
 
     # The real failed-login request never logs the password anywhere today
     # — this asserts that stays true.
@@ -96,7 +96,7 @@ def test_login_password_sentinel_is_redacted_on_a_failed_login(
     assert line["password"] == "[REDACTED]"
 
 
-def test_login_password_sentinel_is_redacted_on_a_422_login(
+def test_select_profile_password_sentinel_is_redacted_on_a_422_select_profile(
     debug_env: pytest.MonkeyPatch,
     app_factory: Callable[[], FastAPI],
     caplog: pytest.LogCaptureFixture,
@@ -109,7 +109,7 @@ def test_login_password_sentinel_is_redacted_on_a_422_login(
     async def scenario() -> Response:
         async with make_client(app) as client:
             # `username` missing entirely -> 422 before any auth logic runs.
-            return await client.post("/api/v1/auth/login", json={"password": sentinel})
+            return await client.post("/api/v1/tasks", json={"content": sentinel}, headers={"X-Planora-Profile": "hamster_knight"})
 
     response = _run(scenario)
     assert response.status_code == 422

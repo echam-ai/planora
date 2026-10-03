@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import select
@@ -44,11 +44,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _fixed_clock(app: FastAPI, now: datetime) -> None:
@@ -131,7 +128,7 @@ def test_spec_example_scenario_returns_the_draft_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"timezone": "Asia/Singapore"})
             text = (
                 "Prepare the search-quality review by Friday 4 PM. Use the "
@@ -186,7 +183,7 @@ def test_parsed_draft_is_always_creatable(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"timezone": "Asia/Singapore"})
             text = "Prepare the search-quality review by Friday 4 PM. https://dash.example/exp"
             parse_response = await client.post(PARSE_URL, json={"text": text})
@@ -214,7 +211,7 @@ def test_invalid_category_gives_503_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "buy stuff"})
 
     response = _run(scenario)
@@ -239,7 +236,7 @@ def test_malformed_date_gives_503(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "do the thing"})
 
     response = _run(scenario)
@@ -275,7 +272,7 @@ def test_every_malformed_shape_gives_503(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "do the thing"})
 
     response = _run(scenario)
@@ -302,7 +299,7 @@ def test_no_content_from_the_model_gives_503(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "do the thing"})
 
     response = _run(scenario)
@@ -325,7 +322,7 @@ def test_model_leaves_title_empty_falls_back_to_first_line(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(
                 PARSE_URL, json={"text": "buy milk and eggs\nfrom the corner shop"}
             )
@@ -347,7 +344,7 @@ def test_omitted_fields_use_spec_defaults(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "a bare task"})
 
     response = _run(scenario)
@@ -377,7 +374,7 @@ def test_timezone_change_between_parses_changes_the_resolved_deadline(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"timezone": "Asia/Singapore"})
             first = await client.post(PARSE_URL, json={"text": "tomorrow at 3pm"})
             await client.patch(SETTINGS_URL, json={"timezone": "America/New_York"})
@@ -405,7 +402,7 @@ def test_model_name_is_resolved_per_request(
 
     async def scenario() -> None:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(SETTINGS_URL, json={"model_name": "custom-model-one"})
             first = await client.post(PARSE_URL, json={"text": "first request"})
             assert first.status_code == 200
@@ -441,7 +438,7 @@ def test_no_task_row_is_created_across_success_and_failure_paths(
 
     async def scenario() -> list[Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             first = await client.post(PARSE_URL, json={"text": "a task, maybe"})
             second = await client.post(PARSE_URL, json={"text": "another task"})
             return [first, second]
@@ -464,7 +461,7 @@ def test_no_tool_is_offered_to_the_model(
 
     async def scenario() -> None:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             response = await client.post(PARSE_URL, json={"text": "do the thing"})
             assert response.status_code == 200
 
@@ -487,7 +484,7 @@ def test_no_database_task_content_reaches_the_prompt(
 
     async def scenario() -> None:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             response = await client.post(PARSE_URL, json={"text": "an unrelated task"})
             assert response.status_code == 200
 
@@ -527,7 +524,7 @@ def test_injection_bad_category_gives_503_and_writes_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": injected_text})
 
     response = _run(scenario)
@@ -565,7 +562,7 @@ def test_injection_invented_url_is_dropped_with_a_valid_category(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": injected_text})
 
     response = _run(scenario)
@@ -597,7 +594,7 @@ def test_a_url_the_user_actually_wrote_is_kept(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": text})
 
     response = _run(scenario)
@@ -633,7 +630,7 @@ def test_cancellation_writes_nothing_and_logs_cancelled(
 
     async def scenario() -> tuple[Response, float]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             started = time.perf_counter()
             response = await client.post(PARSE_URL, json={"text": "a task while I wait"})
             elapsed = time.perf_counter() - started
@@ -667,8 +664,8 @@ def test_requires_a_session(
             return await client.post(PARSE_URL, json={"text": "hello"})
 
     response = _run(scenario)
-    assert response.status_code == 401
-    assert response.json()["code"] == "NOT_AUTHENTICATED"
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
 
 
 def test_rejects_a_foreign_origin(
@@ -682,7 +679,7 @@ def test_rejects_a_foreign_origin(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
         async with make_client(app, origin=FOREIGN_ORIGIN) as foreign_client:
             return await foreign_client.post(PARSE_URL, json={"text": "hello"})
 
@@ -714,7 +711,7 @@ def test_invalid_text_gives_422_and_never_calls_the_model(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json=body)
 
     response = _run(scenario)
@@ -737,7 +734,7 @@ def test_exactly_4000_characters_is_accepted(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "x" * 4000})
 
     response = _run(scenario)
@@ -760,7 +757,7 @@ def test_a_resolved_deadline_in_the_past_is_returned_unchanged(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(PARSE_URL, json={"text": "overdue by now, I guess"})
 
     response = _run(scenario)

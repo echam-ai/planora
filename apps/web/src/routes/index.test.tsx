@@ -1,67 +1,48 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { createElement } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { Route } from "@/routes/index";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { Route } from "./index";
 import { api } from "@/services/api";
-
+import { PROFILES, getSelectedProfile } from "@/services/api/profiles";
+const AccountChooser = Route.options.component!;
 const navigate = vi.fn();
-
-vi.mock("@tanstack/react-router", async () => {
-  const actual =
-    await vi.importActual<typeof import("@tanstack/react-router")>("@tanstack/react-router");
-  return { ...actual, useNavigate: () => navigate };
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
+vi.mock("@tanstack/react-router", async () => ({
+  ...(await vi.importActual("@tanstack/react-router")),
+  useNavigate: () => navigate,
+}));
+beforeEach(() => {
+  localStorage.clear();
   navigate.mockClear();
 });
-
-function renderIndex() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+afterEach(() => vi.restoreAllMocks());
+function mount() {
   return render(
-    createElement(
-      QueryClientProvider,
-      { client: queryClient },
-      createElement(Route.options.component!),
-    ),
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <AccountChooser />
+    </QueryClientProvider>,
   );
 }
-
-describe("Index route", () => {
-  it("sends a signed-out visitor to login", async () => {
-    vi.spyOn(api, "getSession").mockResolvedValue(null);
-    renderIndex();
-
-    await vi.waitUntil(() => navigate.mock.calls.length > 0);
-    expect(navigate).toHaveBeenCalledWith({ to: "/login", replace: true });
-  });
-
-  it("sends a signed-in visitor straight to the board", async () => {
-    vi.spyOn(api, "getSession").mockResolvedValue({
-      username: "demo",
-      signedInAt: new Date().toISOString(),
-    });
-    renderIndex();
-
-    await vi.waitUntil(() => navigate.mock.calls.length > 0);
-    expect(navigate).toHaveBeenCalledWith({ to: "/tasks", replace: true });
-  });
-
-  it("waits for the session before navigating, showing a loading state", async () => {
-    vi.spyOn(api, "getSession").mockReturnValue(new Promise(() => {}));
-    renderIndex();
-
-    expect(await screen.findByText("Loading your workspace…")).toBeInTheDocument();
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
-  it("sets the landing page title", () => {
-    expect(
-      (Route.options.head as (() => { meta: Array<Record<string, string>> }) | undefined)?.(),
-    ).toMatchObject({
-      meta: expect.arrayContaining([{ title: "Planora — Your calm AI task board" }]),
-    });
-  });
+it("always offers both accounts, remembers choice and opens board without credentials", async () => {
+  localStorage.setItem("planora.profile", "hamster_knight");
+  vi.spyOn(api, "getProfiles").mockResolvedValue(PROFILES);
+  mount();
+  expect(await screen.findByRole("button", { name: "Hamster Knight" })).toBeVisible();
+  expect(screen.queryByLabelText("Password")).toBeNull();
+  expect(navigate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Ech Princess" }));
+  expect(getSelectedProfile()).toBe("ech_princess");
+  expect(navigate).toHaveBeenCalledWith({ to: "/tasks" });
+});
+it("recovers a failed catalog load", async () => {
+  const get = vi
+    .spyOn(api, "getProfiles")
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockResolvedValue(PROFILES);
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent("couldn't load accounts");
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  await screen.findByRole("button", { name: "Ech Princess" });
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
 });

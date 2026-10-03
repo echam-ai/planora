@@ -10,7 +10,6 @@
 #
 # Usage (from anywhere in the repository, or by absolute path):
 #   scripts/run-local.sh
-#   scripts/run-local.sh --setup-account  # explicitly create/reset account
 #
 # Configuration lives entirely in apps/api/.env (copy from
 # apps/api/.env.example — see README.md, "Run locally on macOS"). This
@@ -59,12 +58,7 @@ log() { printf 'planora: %s\n' "$*"; }
 err() { printf 'planora: %s\n' "$*" >&2; }
 die() { err "$*"; exit 1; }
 
-SETUP_ACCOUNT=0
-case "$#:${1:-}" in
-    0:) ;;
-    1:--setup-account) SETUP_ACCOUNT=1 ;;
-    *) die "Usage: scripts/run-local.sh [--setup-account]" ;;
-esac
+[ "$#" -eq 0 ] || die "Usage: scripts/run-local.sh"
 
 # Reads one KEY=value line from the env file, ignoring comment and blank
 # lines, and never `source`s the file — a value containing a shell
@@ -93,8 +87,6 @@ is_blank() {
 if [ ! -f "$ENV_FILE" ]; then
     die "apps/api/.env not found. Copy apps/api/.env.example to apps/api/.env and fill in LLM_API_KEY, then re-run this script."
 fi
-
-SESSION_SECRET_VALUE="$(env_get SESSION_SECRET "$ENV_FILE")"
 
 LLM_API_KEY_VALUE="$(env_get LLM_API_KEY "$ENV_FILE")"
 if is_blank "$LLM_API_KEY_VALUE"; then
@@ -139,8 +131,7 @@ fi
 # them. A response from an existing API is not evidence that ours started.
 # SO_REUSEADDR permits immediate restart after shutdown, without sharing an
 # active listener. Keep the probes open together to detect conflicting ports.
-if [ "$SETUP_ACCOUNT" -eq 0 ]; then
-    if ! (cd "$API_DIR" && uv run python -c '
+if ! (cd "$API_DIR" && uv run python -c '
 import socket
 import sys
 
@@ -158,34 +149,19 @@ for service, host, port in (("API", sys.argv[1], sys.argv[2]),
         print(f"planora: {service} port {port} is unavailable. Stop the existing local launcher with Ctrl-C, or inspect the listener before retrying.", file=sys.stderr)
         sys.exit(1)
 ' "$API_HOST" "$API_PORT" "$WEB_HOST" "$WEB_PORT"); then
-        die "Required local ports are unavailable; no services were started."
-    fi
+    die "Required local ports are unavailable; no services were started."
 fi
 
-# Generate once, keep it only in this invocation's environment, and share
-# identical values with migrations, administration and every service. Export
-# explicit file values too, so inherited shell settings cannot override them.
-if is_blank "$SESSION_SECRET_VALUE"; then
-    if ! SESSION_SECRET_VALUE="$(cd "$API_DIR" && uv run python -c 'import secrets; print(secrets.token_hex(32))')"; then
-        die "Could not generate a local SESSION_SECRET."
-    fi
-fi
-export SESSION_SECRET="$SESSION_SECRET_VALUE"
+# Export file configuration so inherited shell values cannot override it.
 export APP_ORIGIN="$APP_ORIGIN_VALUE"
 export LLM_API_KEY="$LLM_API_KEY_VALUE"
 
-if [ "$SETUP_ACCOUNT" -eq 0 ] && ! (cd "$WEB_DIR" && bun install --frozen-lockfile); then
+if ! (cd "$WEB_DIR" && bun install --frozen-lockfile); then
     die "bun install --frozen-lockfile failed in apps/web."
 fi
 
 if ! (cd "$API_DIR" && uv run alembic upgrade head); then
     die "alembic upgrade head failed in apps/api."
-fi
-
-if [ "$SETUP_ACCOUNT" -eq 1 ]; then
-    log "Creating or resetting the local account through the interactive prompts..."
-    cd "$API_DIR"
-    exec uv run python -m planora_api.admin.reset_password
 fi
 
 # --- Start the three supervised services ------------------------------------
@@ -322,7 +298,7 @@ if ! wait_for_health; then
 fi
 
 log "Ready. Open ${APP_ORIGIN_VALUE} in your browser."
-log "First time only: scripts/run-local.sh --setup-account"
+log "Choose Hamster Knight or Ech Princess on the landing page."
 log "Press Ctrl-C to stop."
 
 while true; do

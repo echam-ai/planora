@@ -39,6 +39,7 @@ from planora_api.db.models import (
     Task,
     TaskStatus,
 )
+from planora_api.db.profile import profile_id
 from planora_api.domain import chat_actions
 from planora_api.domain.chat_actions import ActionField
 from planora_api.errors import ApiError
@@ -83,6 +84,7 @@ def create_action(
     started = time.perf_counter()
     action = ChatAction(
         id=uuid.uuid4(),
+        profile_id=profile_id(db),
         message_id=message_id,
         kind=kind,
         status=ChatActionStatus.PENDING,
@@ -103,14 +105,14 @@ def create_action(
 
 
 def get_action(db: Session, action_id: uuid.UUID) -> ChatAction | None:
-    return db.get(ChatAction, action_id)
+    return db.execute(select(ChatAction).where(ChatAction.id == action_id, ChatAction.profile_id == profile_id(db))).scalar_one_or_none()
 
 
 def list_actions_by_message_id(db: Session) -> dict[uuid.UUID, ChatAction]:
     """Every `chat_action` row, keyed by `message_id` — `api.v1.chat`
     attaches at most one to each message when building `ConversationResponse`
     (spec §41: "Every `ChatMessageResponse` has an `action` key")."""
-    actions = db.execute(select(ChatAction)).scalars().all()
+    actions = db.execute(select(ChatAction).where(ChatAction.profile_id == profile_id(db))).scalars().all()
     return {action.message_id: action for action in actions}
 
 
@@ -122,7 +124,7 @@ def _try_transition(
     the winner's committed status."""
     result = db.execute(
         update(ChatAction)
-        .where(ChatAction.id == action_id, ChatAction.status == ChatActionStatus.PENDING)
+        .where(ChatAction.id == action_id, ChatAction.profile_id == profile_id(db), ChatAction.status == ChatActionStatus.PENDING)
         .values(status=new_status, updated_at=now)
         .execution_options(synchronize_session=False)
     )
@@ -150,7 +152,7 @@ def try_mark_rejected(db: Session, action_id: uuid.UUID, *, now: datetime) -> bo
 def _reread_committed(db: Session, action_id: uuid.UUID) -> ChatAction | None:
     """Re-read a row after a lost compare-and-set, bypassing the session's
     identity-map copy so the winner's committed status is what we see."""
-    return db.get(ChatAction, action_id, populate_existing=True)
+    return db.execute(select(ChatAction).where(ChatAction.id == action_id, ChatAction.profile_id == profile_id(db)).execution_options(populate_existing=True)).scalar_one_or_none()
 
 
 def _task_field_snapshot(task: Task) -> dict[str, Any]:

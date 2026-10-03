@@ -73,7 +73,7 @@ function installClient(seed: Task[]) {
   store = { tasks: seed };
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
 
-  vi.spyOn(api, "getSession").mockResolvedValue({ username: "demo", signedInAt: iso(-HOUR) });
+  window.localStorage.setItem("planora.profile", "hamster_knight");
   vi.spyOn(api, "getSettings").mockResolvedValue({
     timezone: "UTC",
     modelName: "kimi-k3",
@@ -631,7 +631,7 @@ describe("task detail sheet", () => {
     fireEvent.click(textButton(dialog, "Delete"));
 
     const confirm = await screen.findByRole("alertdialog");
-    expect(within(confirm).getByText(/Delete “Ship it”\?/)).toBeInTheDocument();
+    expect(within(confirm).getByText(/Delete “Ship it” permanently\?/)).toBeInTheDocument();
     expect(deleteTask).not.toHaveBeenCalled();
 
     fireEvent.click(textButton(confirm, "Keep task"));
@@ -932,15 +932,15 @@ describe("task detail sheet", () => {
     permanentlyDeleteTask.mockRejectedValueOnce(new ApiError("NETWORK", "Delete failed"));
     fireEvent.click(hiddenButton("Delete Archived A permanently"));
     fireEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete task" }),
     );
     await waitFor(() => expect(permanentlyDeleteTask).toHaveBeenCalledWith("a"));
-    expect(screen.getByRole("dialog", { name: "Archived A" })).toBe(dialog);
+    expect(dialog).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Delete failed");
     expect(requireTask("a")).toBeDefined();
 
-    fireEvent.click(hiddenButton("Delete Archived A permanently"));
     fireEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete" }),
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete task" }),
     );
     await waitFor(() => expect(permanentlyDeleteTask).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

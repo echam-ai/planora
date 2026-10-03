@@ -1,7 +1,8 @@
+import { getSelectedProfile, type ProfileId } from "./profiles";
 import type { ApiClient } from "./ApiClient";
 import { invalidApiModeMessage } from "./apiMode";
-import { httpApiClient } from "./http/httpApiClient";
-import { mockApiClient } from "./mockApiClient";
+import { httpApiClient, createHttpApiClient } from "./http/httpApiClient";
+import { mockApiClient, createMockApiClient } from "./mockApiClient";
 
 /**
  * Selected once, at build time, from `VITE_API_MODE` (documented in
@@ -23,7 +24,39 @@ function resolveApiClient(): ApiClient {
   throw new Error(invalidApiModeMessage(mode));
 }
 
-export const api: ApiClient = resolveApiClient();
+const adapter = resolveApiClient();
+const clients = new Map<string, ApiClient>();
+export function scopedApi(profile: ProfileId | null): ApiClient {
+  const key = profile ?? "none";
+  if (!clients.has(key))
+    clients.set(
+      key,
+      adapter === httpApiClient ? createHttpApiClient(profile) : createMockApiClient(profile),
+    );
+  return clients.get(key)!;
+}
+const forwardingClient: ApiClient = Object.fromEntries(
+  Object.keys(adapter).map((name) => [
+    name,
+    (...args: unknown[]) => {
+      const client = scopedApi(getSelectedProfile());
+      return (client[name as keyof ApiClient] as (...args: unknown[]) => unknown)(...args);
+    },
+  ]),
+) as unknown as ApiClient;
+export const api: ApiClient = { ...forwardingClient };
+/** Capture the immutable adapter and any seam interception when a hook mounts. */
+export function captureApi(): ApiClient {
+  const client = scopedApi(getSelectedProfile());
+  return Object.fromEntries(
+    Object.keys(client).map((name) => [
+      name,
+      api[name as keyof ApiClient] !== forwardingClient[name as keyof ApiClient]
+        ? api[name as keyof ApiClient]
+        : client[name as keyof ApiClient],
+    ]),
+  ) as unknown as ApiClient;
+}
 
 export type { ApiClient, ArchivePage } from "./ApiClient";
 export { mockDevTools } from "./mockApiClient";

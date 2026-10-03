@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from conftest import AUTH_PASSWORD, AUTH_USERNAME, make_client
+from conftest import make_client
 from fastapi import FastAPI
 from httpx import AsyncClient, Response
 from sqlalchemy import event, select
@@ -36,11 +36,8 @@ def _run(coro_fn: Callable[[], Awaitable[Any]]) -> Any:
     return asyncio.run(coro_fn())
 
 
-async def _login(client: AsyncClient) -> None:
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": AUTH_USERNAME, "password": AUTH_PASSWORD}
-    )
-    assert response.status_code == 200
+async def _select_profile(client: AsyncClient) -> None:
+    client.headers["X-Planora-Profile"] = "hamster_knight"
 
 
 def _fixed_clock(app: FastAPI, now: datetime = NOW) -> None:
@@ -129,7 +126,7 @@ def test_propose_create_task_returns_pending_action_with_expected_shape(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             await client.patch(app_settings_url, json={"timezone": "America/New_York"})
             return await client.post(
                 MESSAGES_URL, json={"text": "add a dentist booking for Friday 5pm"}
@@ -180,7 +177,7 @@ def test_action_field_entries_have_exactly_label_from_to_keys(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "add x"})
 
     response = _run(scenario)
@@ -215,7 +212,7 @@ def test_multiple_proposals_first_on_final_text_message_rest_on_empty_ones(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "bump priority on both"})
 
     response = _run(scenario)
@@ -260,7 +257,7 @@ def test_sixth_proposal_call_in_one_turn_gets_too_many_proposals_error(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "bump all six"})
 
     response = _run(scenario)
@@ -309,7 +306,7 @@ def test_model_proposes_invalid_calls_get_error_result_and_no_proposal(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "do three bad things"})
 
     response = _run(scenario)
@@ -351,7 +348,7 @@ def test_llm_failure_after_a_successful_proposal_call_persists_nothing(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": "add x"})
 
     response = _run(scenario)
@@ -391,7 +388,7 @@ def test_injected_closing_delimiter_cannot_trigger_a_proposed_write(
 
     async def scenario() -> Response:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             return await client.post(MESSAGES_URL, json={"text": injected_text})
 
     response = _run(scenario)
@@ -442,7 +439,7 @@ def test_replayed_history_carries_proposal_kind_summary_status_not_content(
 
     async def scenario() -> tuple[Response, Response]:
         async with make_client(app) as client:
-            await _login(client)
+            await _select_profile(client)
             first = await client.post(MESSAGES_URL, json={"text": "add a dentist booking"})
             second = await client.post(MESSAGES_URL, json={"text": "what did you just propose?"})
             return first, second
@@ -489,7 +486,7 @@ def test_no_statement_modifies_task_during_a_proposal_producing_request(
             # Login first, outside the listener, so its own writes aren't
             # counted (matches `test_chat_messages.py`'s established
             # pattern for this exact kind of assertion).
-            await _login(client)
+            await _select_profile(client)
 
             engine = app.state.session_factory.kw["bind"]
 

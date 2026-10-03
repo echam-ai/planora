@@ -13,10 +13,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { api } from "@/services/api";
+import { captureApi } from "@/services/api";
 
 /** Mock-mode only: the API has no counterpart for resetting demo data. */
 export function DemoDataSection() {
+  const api = captureApi();
   const qc = useQueryClient();
   const [resetOpen, setResetOpen] = useState(false);
 
@@ -25,7 +26,7 @@ export function DemoDataSection() {
       <section className="space-y-3 rounded-2xl border border-dashed border-border p-6">
         <h2 className="text-sm font-semibold">Demo data</h2>
         <p className="text-sm text-muted-foreground">
-          Reset everything back to the sample tasks and a fresh conversation.
+          Reset this account’s tasks, conversation and settings to their demo defaults.
         </p>
         <Button variant="outline" className="min-h-11" onClick={() => setResetOpen(true)}>
           <RotateCcw className="h-4 w-4" /> Reset demo data
@@ -37,7 +38,8 @@ export function DemoDataSection() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reset demo data?</AlertDialogTitle>
             <AlertDialogDescription>
-              All current tasks, chat history and settings will be replaced with the sample set.
+              This account’s tasks, chat history and settings will be replaced with its demo
+              defaults.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

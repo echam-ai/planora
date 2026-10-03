@@ -9,19 +9,10 @@ import { TaskDetailSheet } from "@/features/tasks/components/TaskDetailSheet";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { DeleteTaskDialog } from "@/features/tasks/components/DeleteTaskDialog";
 import { useArchive, useArchivedTask, useTaskMutations } from "@/features/tasks/hooks";
 import { useSettings } from "@/features/settings/hooks";
-import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useProfileGuard } from "@/hooks/useProfileGuard";
 import { useAdoptDomValue } from "@/hooks/useAdoptDomValue";
 import { ApiError, type Task } from "@/types";
 
@@ -46,7 +37,7 @@ export const Route = createFileRoute("/archive")({
 });
 
 function ArchivePage() {
-  useAuthGuard();
+  useProfileGuard();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -60,7 +51,7 @@ function ArchivePage() {
   const { data: settings } = useSettings();
   const { data, isLoading, isError, refetch } = useArchive(search, page);
   const archivedTask = useArchivedTask(selectedId);
-  const { restore, purge } = useTaskMutations();
+  const { restore } = useTaskMutations();
   // An archive page is only a filtered, paginated view. The detail query is
   // keyed by ID and is the authority for the open sheet.
   const selected = archivedTask.data ?? null;
@@ -202,34 +193,18 @@ function ArchivePage() {
         onRetry={() => archivedTask.refetch()}
       />
 
-      <AlertDialog open={!!purgeTarget} onOpenChange={(o) => !o && setPurgeTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete permanently?</AlertDialogTitle>
-            <AlertDialogDescription>
-              "{purgeTarget?.title}" will be removed for good. This can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (!purgeTarget) return;
-                purge.mutate(purgeTarget.id, {
-                  onSuccess: () => {
-                    if (selectedId === purgeTarget.id) setSelectedId(null);
-                    toast.success("Task deleted");
-                  },
-                  onError: () => toast.error("Couldn't delete that task"),
-                });
-                setPurgeTarget(null);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {purgeTarget && (
+        <DeleteTaskDialog
+          task={purgeTarget}
+          open
+          onOpenChange={(open) => {
+            if (!open) setPurgeTarget(null);
+          }}
+          onDeleted={() => {
+            if (selectedId === purgeTarget.id) setSelectedId(null);
+          }}
+        />
+      )}
     </AppShell>
   );
 }

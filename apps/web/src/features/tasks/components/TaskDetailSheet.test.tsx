@@ -120,7 +120,28 @@ describe("TaskDetailSheet", () => {
     fireEvent.click(within(confirm).getByRole("button", { name: "Delete task" }));
 
     await waitFor(() => expect(deleteTask).toHaveBeenCalledWith("a"));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { hidden: true })).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
+});
+
+it("archived detail offers titled irreversible deletion and retries a failure", async () => {
+  const purge = vi
+    .spyOn(api, "permanentlyDeleteTask")
+    .mockRejectedValueOnce(new Error("Try deletion again"))
+    .mockResolvedValue(undefined);
+  const { onClose } = renderSheet({
+    readOnly: true,
+    task: makeTask({ archivedAt: new Date().toISOString() }),
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  const confirmation = screen.getByRole("alertdialog");
+  expect(within(confirmation).getByRole("heading")).toHaveTextContent("Ship it");
+  expect(confirmation).toHaveTextContent("cannot be undone");
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Delete task" }));
+  expect(await within(confirmation).findByRole("alert")).toHaveTextContent("Try deletion again");
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(within(confirmation).getByRole("button", { name: "Delete task" }));
+  await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  expect(purge).toHaveBeenCalledTimes(2);
 });
