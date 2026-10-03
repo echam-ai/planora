@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { SortableTaskCard } from "@/features/tasks/components/TaskCard";
@@ -11,7 +12,14 @@ type Props = {
   onOpen: (task: Task) => void;
 };
 
-export function BoardColumn({ status, label, tasks, timezone, onOpen }: Props) {
+export const BoardColumn = memo(function BoardColumn({
+  status,
+  label,
+  tasks,
+  timezone,
+  onOpen,
+}: Props) {
+  const items = useMemo(() => tasks.map((task) => task.id), [tasks]);
   const { setNodeRef, isOver } = useDroppable({ id: `column:${status}` });
   return (
     <section className="flex min-w-0 flex-col rounded-2xl bg-secondary/50 p-3">
@@ -25,10 +33,7 @@ export function BoardColumn({ status, label, tasks, timezone, onOpen }: Props) {
         ref={setNodeRef}
         className={`flex min-h-32 flex-1 flex-col gap-3 rounded-xl p-1 transition-colors ${isOver ? "bg-primary/5 ring-2 ring-primary/30" : ""}`}
       >
-        <SortableContext
-          items={tasks.map((task) => task.id)}
-          strategy={verticalListSortingStrategy}
-        >
+        <SortableContext items={items} strategy={verticalListSortingStrategy}>
           {tasks.map((task) => (
             <SortableTaskCard key={task.id} task={task} timezone={timezone} onOpen={onOpen} />
           ))}
@@ -39,4 +44,4 @@ export function BoardColumn({ status, label, tasks, timezone, onOpen }: Props) {
       </div>
     </section>
   );
-}
+});

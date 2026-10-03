@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Sparkles, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,9 +32,12 @@ const LIMIT_MESSAGE_ID = "quick-capture-limit-message";
 export function CreateTaskDialog({
   open,
   onOpenChange,
+  returnFocusTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Element that takes focus when the dialog closes. */
+  returnFocusTo?: RefObject<HTMLElement | null> | undefined;
 }) {
   const { create } = useTaskMutations();
   const [tab, setTab] = useState("quick");
@@ -82,7 +85,14 @@ export function CreateTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : close())}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+      <DialogContent
+        className="max-h-[92vh] max-w-2xl overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          if (!returnFocusTo?.current) return;
+          event.preventDefault();
+          returnFocusTo.current.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Add a task</DialogTitle>
           <DialogDescription>Capture it quickly, or fill in the full form.</DialogDescription>

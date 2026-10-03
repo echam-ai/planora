@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { GripVertical, Link2, StickyNote } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -11,7 +12,7 @@ import {
 } from "@/features/tasks/components/TaskBadges";
 import type { Task } from "@/types";
 
-export function TaskCardContent({
+export const TaskCardContent = memo(function TaskCardContent({
   task,
   timezone,
   dragging,
@@ -71,7 +72,7 @@ export function TaskCardContent({
       </div>
     </div>
   );
-}
+});
 
 export function SortableTaskCard({
   task,

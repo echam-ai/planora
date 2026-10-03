@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, LayoutGrid, LogOut, Plus, Settings, Sparkles, WifiOff } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -51,6 +51,7 @@ function useIsDesktopChat() {
 export function AppShell({ children }: { children: ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const addTaskRef = useRef<HTMLButtonElement>(null);
   const [online, setOnline] = useState(true);
   const isDesktopChat = useIsDesktopChat();
   const navigate = useNavigate();
@@ -107,6 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-2 max-[360px]:gap-0">
             <Button
+              ref={addTaskRef}
               onClick={() => setCreateOpen(true)}
               className="min-h-11 max-[360px]:w-11 max-[360px]:px-0"
               aria-label="Add task"
@@ -222,7 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
       </nav>
 
-      <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateTaskDialog open={createOpen} onOpenChange={setCreateOpen} returnFocusTo={addTaskRef} />
     </div>
   );
 }
