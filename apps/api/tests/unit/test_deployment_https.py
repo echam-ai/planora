@@ -34,5 +34,7 @@ def test_runbook_keeps_external_checks_and_setup_warning_explicit():
     runbook = (ROOT / "docs/ops/deploy.md").read_text()
     for phrase in ("initial setup only", "not approved for normal use", "credentials",
                    "outside the VPS", "--force-recreate", "--volumes", "AAAA",
-                   "login?check=redirect", "certificate", "PLANORA_DOMAIN"):
+                   "http://tasks.example.com/?check=redirect",
+                   "Location: https://tasks.example.com/?check=redirect",
+                   "certificate", "PLANORA_DOMAIN"):
         assert phrase in runbook
