@@ -113,12 +113,13 @@ export function createHttpApiClient(profile: ProfileId | null): ApiClient {
       return wire.map(taskToDomain);
     },
 
-    async parseTaskText(text) {
+    async parseTaskText(text, signal) {
       const body: ParseTaskRequest = { text };
       const wire = await request<ParseTaskResponse>({
         method: "POST",
         path: "/ai/parse-task",
         body,
+        signal,
       });
       return taskDraftToDomain(wire);
     },
@@ -163,12 +164,13 @@ export function createHttpApiClient(profile: ProfileId | null): ApiClient {
       });
       return conversationToDomain(wire);
     },
-    async sendChatMessage(text) {
+    async sendChatMessage(text, signal) {
       const body: SendMessageRequest = { text };
       const wire = await request<ConversationResponse>({
         method: "POST",
         path: "/chat/messages",
         body,
+        signal,
       });
       return conversationToDomain(wire);
     },

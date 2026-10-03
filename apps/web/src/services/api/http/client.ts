@@ -31,6 +31,8 @@ export type RequestOptions = {
   query?: Record<string, QueryValue>;
   body?: unknown;
   profile?: import("../profiles").ProfileId | null;
+  /** Aborting it aborts the fetch; the rejection is the abort error itself, not an `ApiError`. */
+  signal?: AbortSignal | undefined;
 };
 
 type WireValidationDetail = {
@@ -94,11 +96,12 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 export async function request<TResponse>(options: RequestOptions): Promise<TResponse> {
-  const { method, path, query, body } = options;
+  const { method, path, query, body, signal } = options;
   const hasBody = body !== undefined;
 
   const init: RequestInit = {
     method,
+    ...(signal ? { signal } : {}),
     credentials: "omit",
     headers: {
       Accept: "application/json",
@@ -111,7 +114,9 @@ export async function request<TResponse>(options: RequestOptions): Promise<TResp
   let response: Response;
   try {
     response = await fetch(buildUrl(path, query), init);
-  } catch {
+  } catch (error) {
+    // A cancellation is not a network failure: let callers tell the two apart.
+    if (signal?.aborted) throw error;
     throw new ApiError(
       "NETWORK_ERROR",
       "Can't reach Planora. Check your connection and try again.",

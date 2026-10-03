@@ -120,6 +120,51 @@ describe("AppShell", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
+  describe("closing the assistant while a message is pending", () => {
+    async function sendPending() {
+      const send = vi.spyOn(api, "sendChatMessage").mockReturnValue(new Promise(() => {}));
+      fireEvent.click(screen.getByRole("button", { name: "AI Assistant" }));
+      const input = await screen.findByLabelText("Message the assistant");
+      fireEvent.change(input, { target: { value: "What is overdue?" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+      return send.mock.calls[0]![1] as AbortSignal;
+    }
+
+    it("aborts the request when the docked panel is closed", async () => {
+      setViewportWidth(1280);
+      renderShell();
+      const signal = await sendPending();
+      expect(signal.aborted).toBe(false);
+
+      fireEvent.click(screen.getByRole("button", { name: "Close assistant" }));
+
+      expect(signal.aborted).toBe(true);
+    });
+
+    it("aborts the request when the mobile drawer is dismissed with Escape", async () => {
+      setViewportWidth(500);
+      renderShell();
+      const signal = await sendPending();
+
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(signal.aborted).toBe(true);
+    });
+
+    it("aborts the request when the account is switched", async () => {
+      setViewportWidth(1280);
+      renderShell();
+      const signal = await sendPending();
+
+      fireEvent.pointerDown(screen.getByRole("button", { name: "Account menu" }), { button: 0 });
+      fireEvent.click(await screen.findByText("Switch account"));
+
+      expect(signal.aborted).toBe(true);
+    });
+  });
+
   it("logs out through the account menu: clears cached queries and navigates to login", async () => {
     setViewportWidth(320);
     window.localStorage.setItem("planora.profile", "hamster_knight");

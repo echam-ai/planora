@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-import logging
-import time
-import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 
 from planora_api.ai.client import HttpLLMClient, register_llm_error_handler
 from planora_api.api.v1.ai import router as ai_router
@@ -18,8 +15,9 @@ from planora_api.api.v1.settings import router as settings_router
 from planora_api.api.v1.tasks import router as tasks_router
 from planora_api.config import Settings, load_settings
 from planora_api.db.session import create_session_factory
-from planora_api.errors import register_error_handlers, unexpected_error_response
-from planora_api.logging import configure_logging, reset_request_id, set_request_id
+from planora_api.errors import register_error_handlers
+from planora_api.logging import configure_logging
+from planora_api.request_logging import RequestLoggingMiddleware
 from planora_api.security.csrf import CSRFOriginMiddleware, normalize_origin
 
 
@@ -76,28 +74,9 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     app.include_router(ai_router)
     app.include_router(chat_router)
 
-    @app.middleware("http")
-    async def request_logging(request: Request, call_next: object) -> Response:
-        value = str(uuid.uuid4())
-        token = set_request_id(value)
-        started = time.perf_counter()
-        try:
-            try:
-                response = await call_next(request)  # type: ignore[operator]
-            except Exception as exc:  # noqa: BLE001 - final API error boundary
-                response = unexpected_error_response(exc)
-            response.headers["X-Request-ID"] = value
-            level = logging.DEBUG if request.url.path == "/api/v1/health" else (
-                logging.INFO if response.status_code < 400 else logging.WARNING if response.status_code < 500 else logging.ERROR
-            )
-            logging.getLogger("planora_api.request").log(
-                level,
-                "Request completed",
-                extra={"method": request.method, "path": request.url.path, "status": response.status_code, "duration_ms": round((time.perf_counter() - started) * 1000, 3), "request_id": value},
-            )
-            return response
-        finally:
-            reset_request_id(token)
+    # Outermost (added last): every request, including a CSRF rejection,
+    # gets an `X-Request-ID` and a "Request completed" line.
+    app.add_middleware(RequestLoggingMiddleware)
 
     # No path/query params and no auth dependency: nothing here can
     # produce 422, 404 or 405 (issue #34, from #27's acceptance note), so

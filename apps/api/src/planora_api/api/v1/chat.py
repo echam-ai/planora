@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from planora_api.ai.chat import MAX_HISTORY_MESSAGES, send_chat_message
 from planora_api.ai.chat_tools import PendingProposal
 from planora_api.ai.client import LLMClient
-from planora_api.ai.deps import get_llm_client
+from planora_api.ai.deps import ensure_request_connected, get_llm_client
 from planora_api.api.deps import (
     DbSession,
     get_current_time,
@@ -176,6 +176,10 @@ async def send_message(
         history=history,
         actions_by_message_id=actions_by_message_id,
     )
+
+    # A client that disconnected while (or just after) the provider answered
+    # gets no saved turn: nothing is written until this check passes.
+    await ensure_request_connected(request)
 
     chat_repository.append_message(db, role=ChatRole.USER, text=body.text, now=now)
     _persist_assistant_turn(db, text=turn.text, proposals=turn.proposals, now=now)

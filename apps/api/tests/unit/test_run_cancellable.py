@@ -136,3 +136,29 @@ def test_cancels_and_raises_within_one_second_of_disconnect(
     assert len(failed_records) == 1
     assert failed_records[0].levelno == logging.WARNING
     assert failed_records[0].reason == "cancelled"
+
+
+def test_ensure_request_connected_passes_while_the_client_is_connected() -> None:
+    async def scenario() -> None:
+        await ai_deps.ensure_request_connected(_FakeRequest(asyncio.Event()))  # type: ignore[arg-type]
+
+    _run(scenario())
+
+
+def test_ensure_request_connected_raises_cancelled_once_the_client_is_gone(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+
+    async def scenario() -> None:
+        gone = asyncio.Event()
+        gone.set()
+        await ai_deps.ensure_request_connected(_FakeRequest(gone))  # type: ignore[arg-type]
+
+    with pytest.raises(LLMUnavailableError) as exc_info:
+        _run(scenario())
+
+    assert exc_info.value.reason == "cancelled"
+    records = [r for r in caplog.records if r.getMessage() == "request_cancelled_before_save"]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING

@@ -18,6 +18,11 @@ function required(name: string): string {
   return value;
 }
 
+/** Origin of the deterministic loopback provider fixture (`delayed-provider.ts`). */
+export function llmOrigin(): string {
+  return `http://127.0.0.1:${required("PLANORA_E2E_HTTP_LLM_PORT")}`;
+}
+
 export function runSettings() {
   const dir = required("PLANORA_E2E_HTTP_DIR");
   const webOrigin = `http://127.0.0.1:${required("PLANORA_E2E_HTTP_WEB_PORT")}`;
@@ -29,13 +34,14 @@ export function runSettings() {
  * Every configuration variable `Settings` reads, set explicitly so nothing
  * leaks in from the developer's shell. The API also runs with the run
  * directory as its cwd, so its `.env` lookup never sees `apps/api/.env`.
- * The LLM endpoint is the discard port: no request can leave the host.
+ * The LLM endpoint is a deterministic loopback fixture (`delayed-provider.ts`) that answers
+ * only when a test releases the request: no model traffic can leave the host.
  */
 export function apiEnv(): Record<string, string> {
   const { dir, webOrigin } = runSettings();
   return {
     DATABASE_URL: `sqlite:///${dir}/planora.db`,
-    LLM_BASE_URL: "http://127.0.0.1:9",
+    LLM_BASE_URL: llmOrigin(),
     LLM_API_KEY: "e2e-http-placeholder-key",
     LLM_MODEL: "kimi-k3",
     LLM_ALLOWED_MODELS: "",

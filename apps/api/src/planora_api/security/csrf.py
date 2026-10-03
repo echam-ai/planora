@@ -4,8 +4,10 @@ Single-origin deployment (spec §3.2, §15.1): the reverse proxy serves both
 the web app and the API from one hostname, so CSRF protection reduces to
 verifying that every state-changing request's `Origin` header exactly
 matches the configured application origin. `CSRFOriginMiddleware` is
-registered app-wide in `main.create_app()` as plain Starlette middleware —
-not a FastAPI dependency — so it runs before routing, authentication, rate
+registered app-wide in `main.create_app()` as a pure ASGI middleware — not a
+FastAPI dependency, and deliberately not a `BaseHTTPMiddleware`, which
+substitutes its own `receive` and so hides a client's `http.disconnect` from
+`Request.is_disconnected()` (issue #123) — so it runs before routing, authentication, rate
 limiting and body parsing: a rejected request never reaches a route, a
 dependency, or the JSON body parser.
 
@@ -27,10 +29,9 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
-from starlette.types import ASGIApp
+from starlette.datastructures import Headers
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 # Methods this middleware never checks. They must not mutate state, so a
 # foreign origin reading a resource does no harm.
@@ -71,7 +72,7 @@ def normalize_origin(origin: str) -> str:
     return f"{scheme}://{netloc}"
 
 
-class CSRFOriginMiddleware(BaseHTTPMiddleware):
+class CSRFOriginMiddleware:
     """Rejects every non-safe-method request whose `Origin` header does not
     exactly equal `expected_origin`, with `403 CSRF_ORIGIN_MISMATCH`.
 
@@ -80,24 +81,27 @@ class CSRFOriginMiddleware(BaseHTTPMiddleware):
     missing header, `Origin: null`, and any near-miss (different scheme,
     host, port, path, casing, or a multi-value list) are all rejected —
     there is no `Referer` fallback.
+
+    Pure ASGI: an accepted request is handed to the next app with the
+    server's own `receive`, untouched.
     """
 
     def __init__(self, app: ASGIApp, *, expected_origin: str) -> None:
-        super().__init__(app)
+        self.app = app
         self._expected_origin = expected_origin
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        if request.method in _SAFE_METHODS:
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] in _SAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
 
         # RFC 6454 gives a request one Origin value. Starlette's `.get()`
         # chooses one line when duplicates arrive, so it would let a request
         # through if the configured origin happened to be that chosen line.
         # Reject duplicates explicitly, regardless of their order.
-        origins = request.headers.getlist("origin")
+        origins = Headers(scope=scope).getlist("origin")
         if len(origins) != 1 or origins[0] != self._expected_origin:
-            return JSONResponse(status_code=403, content=_MISMATCH_BODY)
+            await JSONResponse(status_code=403, content=_MISMATCH_BODY)(scope, receive, send)
+            return
 
-        return await call_next(request)
+        await self.app(scope, receive, send)

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
 import { api } from "@/services/api";
-import { ApiError, type Task, type TaskDraft } from "@/types";
+import { selectProfile } from "@/services/api/profiles";
+import { ApiError, type ParsedTaskText, type Task, type TaskDraft } from "@/types";
 
 function draft(overrides: Partial<TaskDraft> = {}): TaskDraft {
   return {
@@ -98,7 +99,7 @@ describe("CreateTaskDialog", () => {
     });
     expect(screen.queryByText(limitMessage)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
-    await waitFor(() => expect(parseTaskText).toHaveBeenCalledWith(note));
+    await waitFor(() => expect(parseTaskText).toHaveBeenCalledWith(note, expect.any(AbortSignal)));
   });
 
   it("counts emoji as Unicode code points", () => {
@@ -298,5 +299,186 @@ it("quick capture accepts Python whitespace at the API boundary without changing
   const button = screen.getByRole("button", { name: "Parse task" });
   expect(button).toBeEnabled();
   fireEvent.click(button);
-  await waitFor(() => expect(parse).toHaveBeenCalledWith(raw));
+  await waitFor(() => expect(parse).toHaveBeenCalledWith(raw, expect.any(AbortSignal)));
+});
+
+describe("CreateTaskDialog cancellation", () => {
+  const NOTE = "Ship the release notes by Friday";
+  const noteField = () => screen.getByLabelText("Describe the task in your own words");
+
+  function deferredParse() {
+    let resolve!: (d: ParsedTaskText) => void;
+    let reject!: (e: Error) => void;
+    const promise = new Promise<ParsedTaskText>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    const parse = vi.spyOn(api, "parseTaskText").mockReturnValue(promise);
+    return { parse, resolve, reject };
+  }
+
+  async function startParsing(onOpenChange = vi.fn()) {
+    const d = deferredParse();
+    const utils = renderDialog(onOpenChange);
+    fireEvent.change(noteField(), { target: { value: NOTE } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    await screen.findByRole("button", { name: "Stop parsing" });
+    const signal = d.parse.mock.calls[0]![1] as AbortSignal;
+    return { ...d, ...utils, signal };
+  }
+
+  it("swaps Cancel for an enabled Stop parsing beside the disabled progress button", async () => {
+    renderDialog();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Stop parsing" })).not.toBeInTheDocument();
+
+    deferredParse();
+    fireEvent.change(noteField(), { target: { value: NOTE } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+
+    expect(await screen.findByRole("button", { name: "Stop parsing" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reading your note…" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+  });
+
+  it("Stop parsing aborts, keeps the dialog open on the editable note and focuses it", async () => {
+    const { signal, onOpenChange } = await startParsing();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop parsing" }));
+
+    expect(signal.aborted).toBe(true);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(noteField()).toHaveValue(NOTE);
+    expect(noteField()).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Parse task" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Reading your note…" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stop parsing" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Continue in the form instead/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("a result arriving after Stop parsing never opens the review; a new parse shows its own", async () => {
+    const { resolve, parse } = await startParsing();
+    fireEvent.click(screen.getByRole("button", { name: "Stop parsing" }));
+
+    await act(async () => resolve(draft({ title: "Late result" })));
+
+    expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+    expect(noteField()).toHaveValue(NOTE);
+    expect(screen.getByRole("button", { name: "Parse task" })).toBeEnabled();
+
+    parse.mockResolvedValue(draft({ title: "Fresh result" }));
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    expect(await screen.findByLabelText("Title")).toHaveValue("Fresh result");
+  });
+
+  it("an old result cannot end a newer parse's progress state", async () => {
+    const { resolve, parse } = await startParsing();
+    fireEvent.click(screen.getByRole("button", { name: "Stop parsing" }));
+    parse.mockReturnValue(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    await screen.findByRole("button", { name: "Stop parsing" });
+
+    await act(async () => resolve(draft({ title: "Late result" })));
+
+    expect(screen.getByRole("button", { name: "Reading your note…" })).toBeDisabled();
+    expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+  });
+
+  it("shows no error when the stopped request rejects", async () => {
+    const { reject } = await startParsing();
+    fireEvent.click(screen.getByRole("button", { name: "Stop parsing" }));
+
+    await act(async () => reject(new DOMException("Aborted", "AbortError")));
+
+    expect(screen.queryByText(/Continue in the form instead/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+    expect(noteField()).toHaveValue(NOTE);
+  });
+
+  /** Like the real adapters: rejects with an AbortError as soon as the signal aborts. */
+  function parseThatHonoursAbort() {
+    return vi
+      .spyOn(api, "parseTaskText")
+      .mockImplementation(
+        (_text, signal) =>
+          new Promise<ParsedTaskText>((_resolve, reject) =>
+            signal?.addEventListener("abort", () => reject(signal.reason)),
+          ),
+      );
+  }
+
+  it("a closing dialog keeps showing its progress until the 200 ms delay, even though the request rejects at once", async () => {
+    parseThatHonoursAbort();
+    const { onOpenChange } = renderDialog();
+    fireEvent.change(noteField(), { target: { value: NOTE } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    await screen.findByRole("button", { name: "Stop parsing" });
+    vi.useFakeTimers();
+    try {
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(screen.getByRole("button", { name: "Reading your note…" })).toBeInTheDocument();
+      expect(noteField()).toHaveValue(NOTE);
+      act(() => vi.advanceTimersByTime(200));
+      expect(noteField()).toHaveValue("");
+      expect(screen.getByRole("button", { name: "Parse task" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an account change ends the progress state of a dialog that stays mounted", async () => {
+    parseThatHonoursAbort();
+    renderDialog();
+    fireEvent.change(noteField(), { target: { value: NOTE } });
+    fireEvent.click(screen.getByRole("button", { name: "Parse task" }));
+    await screen.findByRole("button", { name: "Stop parsing" });
+
+    act(() => selectProfile("ech_princess"));
+
+    expect(await screen.findByRole("button", { name: "Parse task" })).toBeEnabled();
+    expect(screen.queryByText(/aborted/i)).not.toBeInTheDocument();
+  });
+
+  it("closing aborts the request and keeps the content for the 200 ms close delay, then resets", async () => {
+    const { signal, onOpenChange, resolve } = await startParsing();
+    vi.useFakeTimers();
+    try {
+      fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+      expect(signal.aborted).toBe(true);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      act(() => vi.advanceTimersByTime(199));
+      expect(noteField()).toHaveValue(NOTE);
+      expect(screen.getByRole("button", { name: "Reading your note…" })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(1));
+      expect(noteField()).toHaveValue("");
+      expect(screen.getByRole("button", { name: "Parse task" })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "Reading your note…" })).not.toBeInTheDocument();
+
+      await act(async () => resolve(draft({ title: "Late result" })));
+      expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("aborts the request when the dialog unmounts", async () => {
+    const { signal, unmount } = await startParsing();
+    unmount();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("aborts the request when the account changes", async () => {
+    const { signal } = await startParsing();
+    act(() => selectProfile("ech_princess"));
+    expect(signal.aborted).toBe(true);
+  });
 });

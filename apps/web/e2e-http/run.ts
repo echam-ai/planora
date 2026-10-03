@@ -27,12 +27,17 @@ const scratch = resolve(repoRoot, ".tmp");
 mkdirSync(scratch, { recursive: true });
 const dir = mkdtempSync(resolve(scratch, "e2e-http-"));
 
-const [apiPort, webPort] = [await getFreePort(host), await getFreePort(host)];
+const [apiPort, webPort, llmPort] = [
+  await getFreePort(host),
+  await getFreePort(host),
+  await getFreePort(host),
+];
 // `env.ts` reads these from this process's own environment too, and every
 // child (setup commands, Playwright and its workers) inherits them.
 process.env["PLANORA_E2E_HTTP_DIR"] = dir;
 process.env["PLANORA_E2E_HTTP_API_PORT"] = String(apiPort);
 process.env["PLANORA_E2E_HTTP_WEB_PORT"] = String(webPort);
+process.env["PLANORA_E2E_HTTP_LLM_PORT"] = String(llmPort);
 const runEnv = { ...process.env };
 
 function prepare(command: string[]) {

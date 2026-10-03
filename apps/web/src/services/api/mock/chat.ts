@@ -301,8 +301,8 @@ export function createChatClient(
 > {
   const { read, write, ensureTasks } = store;
   return {
-    async parseTaskText(text) {
-      await delay(700, 1400);
+    async parseTaskText(text, signal) {
+      await delay(700, 1400, signal);
       if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT) throw textTooLongError();
       if (read<boolean>(KEYS.forceError, false) || /\bfail\b/i.test(text))
         throw assistantUnavailableError();
@@ -316,8 +316,8 @@ export function createChatClient(
       write(KEYS.conversation, fresh);
       return fresh;
     },
-    async sendChatMessage(text) {
-      await delay(600, 1200);
+    async sendChatMessage(text, signal) {
+      await delay(600, 1200, signal);
       text = trimApiText(text);
       if (countTrimmedCodePoints(text) > AI_TEXT_LIMIT) throw textTooLongError();
       // Like the API, a failed send persists nothing — not even the user's message.

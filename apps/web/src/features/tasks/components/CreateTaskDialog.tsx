@@ -1,5 +1,5 @@
-import { useState, type RefObject } from "react";
-import { Sparkles, Wand2 } from "lucide-react";
+import { useRef, useState, type RefObject } from "react";
+import { Sparkles, Square, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +15,7 @@ import { TaskForm } from "@/features/tasks/components/TaskForm";
 import { emptyDraft } from "@/features/tasks/formMapping";
 import { useTaskMutations } from "@/features/tasks/hooks";
 import { api } from "@/services/api";
+import { isAbortError, useCancellableRequest } from "@/shared/cancellation";
 import {
   AI_TEXT_LIMIT,
   countTrimmedCodePoints,
@@ -45,13 +46,21 @@ export function CreateTaskDialog({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [reviewDraft, setReviewDraft] = useState<TaskDraft | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
+  const request = useCancellableRequest();
+  const closing = useRef(false);
   const characterCount = countTrimmedCodePoints(text);
   const overLimit = characterCount > AI_TEXT_LIMIT;
   const visibleError = overLimit ? LIMIT_MESSAGE : parseError;
 
   const close = () => {
+    // Stop the parse now. The content stays as it is until the close animation is over.
+    closing.current = true;
+    request.abort();
     onOpenChange(false);
     setTimeout(() => {
+      closing.current = false;
+      setParsing(false);
       setTab("quick");
       setText("");
       setReviewDraft(null);
@@ -61,16 +70,28 @@ export function CreateTaskDialog({
 
   const parse = async () => {
     if (!trimApiText(text) || overLimit) return;
+    const controller = request.begin();
     setParsing(true);
     setParseError(null);
     try {
-      const draft = await api.parseTaskText(text);
+      const draft = await api.parseTaskText(text, controller.signal);
+      // A stopped or closed parse may still resolve; its result is never shown.
+      if (controller.signal.aborted) return;
       setReviewDraft(draft);
     } catch (e) {
+      if (controller.signal.aborted || isAbortError(e)) return;
       setParseError(isTextValidationError(e) ? LIMIT_MESSAGE : (e as Error).message);
     } finally {
-      setParsing(false);
+      // A newer parse owns the progress state; a closing dialog resets it after its delay.
+      if (request.isLatest(controller) && !closing.current) setParsing(false);
     }
+  };
+
+  // Unlike closing, this keeps the dialog and the note: the user can edit it and parse again.
+  const stopParsing = () => {
+    request.abort();
+    setParsing(false);
+    noteRef.current?.focus();
   };
 
   const submit = (draft: TaskDraft) => {
@@ -112,6 +133,7 @@ export function CreateTaskDialog({
             {!reviewDraft && (
               <>
                 <Textarea
+                  ref={noteRef}
                   rows={6}
                   value={text}
                   onChange={(e) => {
@@ -139,9 +161,15 @@ export function CreateTaskDialog({
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={close}>
-                    Cancel
-                  </Button>
+                  {parsing ? (
+                    <Button variant="outline" onClick={stopParsing}>
+                      <Square className="h-4 w-4 fill-current" aria-hidden /> Stop parsing
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={close}>
+                      Cancel
+                    </Button>
+                  )}
                   <Button onClick={parse} disabled={parsing || !trimApiText(text) || overLimit}>
                     {parsing ? (
                       <>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Check, RefreshCw, Send, X } from "lucide-react";
+import { Bot, Check, RefreshCw, Send, Square, X } from "lucide-react";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { StatePanel } from "@/components/layout/StatePanel";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ import {
   isTextValidationError,
   trimApiText,
 } from "@/shared/api/textLimits";
+import { isAbortError } from "@/shared/cancellation";
 import { cn } from "@/lib/utils";
 
 const LIMIT_MESSAGE =
@@ -90,7 +91,7 @@ function ActionCard({
 
 export function ChatPanel({ onClose }: { onClose: () => void }) {
   const { data: conversation, isLoading } = useConversation();
-  const { send, reset, confirm, reject } = useChatMutations();
+  const { send, cancelSend, reset, confirm, reject } = useChatMutations();
   const [text, setText] = useState("");
   const [confirmNew, setConfirmNew] = useState(false);
   // Actions whose Confirm failed with ACTION_STALE. Session state only; the API decides.
@@ -98,6 +99,8 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
   const characterCount = countTrimmedCodePoints(text);
   const overLimit = characterCount > AI_TEXT_LIMIT;
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sentText = useRef("");
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -110,14 +113,24 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
     const trimmed = trimApiText(value);
     if (!trimmed || send.isPending || countTrimmedCodePoints(trimmed) > AI_TEXT_LIMIT) return;
     if (fromInput) setText("");
+    sentText.current = trimmed;
     send.mutate(trimmed, {
       // A failed send persists nothing, so hand the text back rather than lose it —
       // unless the user has already started typing something else.
       onError: (e: Error) => {
+        // A cancellation is not a failure (the panel may linger while the account changes).
+        if (isAbortError(e)) return;
         setText((current) => (current === "" ? trimmed : current));
         toast.error(isTextValidationError(e) ? LIMIT_MESSAGE : e.message);
       },
     });
+  };
+
+  // Cancelling follows the failed-send rule: the text comes back unless the user typed more.
+  const cancel = () => {
+    cancelSend();
+    setText((current) => (current === "" ? sentText.current : current));
+    inputRef.current?.focus();
   };
 
   const messages = conversation?.messages ?? [];
@@ -226,7 +239,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             <span className="h-2 w-2 animate-bounce rounded-full bg-primary [animation-delay:240ms]" />
           </div>
         )}
-        {send.isError && !isTextValidationError(send.error) && (
+        {send.isError && !isTextValidationError(send.error) && !isAbortError(send.error) && (
           <div className="rounded-2xl border border-destructive/30 bg-card p-3 text-sm text-destructive">
             The assistant didn't respond.{" "}
             <button className="min-h-11 min-w-11 underline" onClick={() => send.reset()}>
@@ -250,6 +263,7 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-end gap-2 rounded-2xl border border-input bg-background p-1.5 transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/40">
           <Textarea
             id="chat-input"
+            ref={inputRef}
             rows={2}
             value={text}
             aria-invalid={overLimit ? true : undefined}
@@ -274,6 +288,13 @@ export function ChatPanel({ onClose }: { onClose: () => void }) {
             <Send className="h-4 w-4" />
           </Button>
         </div>
+        {send.isPending && (
+          <div className="mt-2 flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={cancel}>
+              <Square className="h-4 w-4 fill-current" aria-hidden /> Cancel request
+            </Button>
+          </div>
+        )}
         {overLimit && (
           <div className="mt-2 space-y-1 text-sm" aria-live="polite">
             <p id={LIMIT_MESSAGE_ID} className="text-destructive">
