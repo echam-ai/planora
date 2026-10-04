@@ -11,7 +11,7 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 3 and 6
 
 ## Workflow
 
-1. **Read the issue.** `gh issue view {N} --repo hgiang/planora`. The acceptance criteria are what done means. Read the spec sections the description cites — approximating a threshold is how this work fails review.
+1. **Read the issue.** `gh issue view {N} --repo echam-ai/planora`. The acceptance criteria are what done means. Read the spec sections the description cites — approximating a threshold is how this work fails review.
 2. **Find the affected code.** Use targeted `rg` / `rg --files` under `apps/web/src`; read only affected files and relevant neighbours.
 3. **Select verification using `docs/PROCESS.md`.** For application changes with an available harness, write the test first, watch it fail for the right reason, then implement. Bootstrap work uses existing checks; documentation/agent configuration uses static checks and workflow walkthroughs.
    - Pure logic (deadline derivation, mappers, ordering) — unit test beside the module. Highest value; they are I/O-free.

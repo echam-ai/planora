@@ -16,7 +16,7 @@ Planora — a private AI task manager with two fixed profiles, Hamster Knight an
 | Process | `docs/PROCESS.md` |
 | Browser checks | `docs/BROWSER-VERIFICATION.md` — read only when an issue needs a browser |
 | Roles | `.agents/` |
-| Issues | https://github.com/hgiang/planora/issues |
+| Issues | https://github.com/echam-ai/planora/issues |
 
 ## Stack
 
