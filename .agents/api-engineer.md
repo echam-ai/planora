@@ -11,7 +11,7 @@ Read `AGENTS.md` — its binding rules are not optional, and rules 1, 2, 4 and 5
 
 ## Workflow
 
-1. **Read the issue.** `gh issue view {N} --repo hgiang/planora`. Read the spec sections cited. Section 5 is the authoritative field list; 7.3, 7.4 and 9.1 pin the derived rules to exact thresholds, and approximating one is the most common way this work fails review.
+1. **Read the issue.** `gh issue view {N} --repo echam-ai/planora`. Read the spec sections cited. Section 5 is the authoritative field list; 7.3, 7.4 and 9.1 pin the derived rules to exact thresholds, and approximating one is the most common way this work fails review.
 2. **Select verification using `docs/PROCESS.md`.** For application changes, write the test first. From `apps/api`, run `uv run pytest tests/path/test_x.py -v` — watch it fail, then implement. The existing harness handles application tests; documentation-only work uses static checks and workflow walkthroughs.
    - `tests/unit/` for the pure `domain/` modules. Highest value: deadline derivation, ordering and archive eligibility are I/O-free so you can hit the boundaries with no fixtures.
    - `tests/integration/` for endpoints and database work against a temporary database.

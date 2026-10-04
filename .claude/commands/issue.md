@@ -9,7 +9,7 @@ Run the pipeline for issue #$1. You are the orchestrator: you dispatch, relay an
 
 ## 1. Lane and readiness
 
-`gh issue view $1 --repo hgiang/planora`. Pick the lane (Lanes table). State it out loud before dispatching — it decides how many agents run.
+`gh issue view $1 --repo echam-ai/planora`. Pick the lane (Lanes table). State it out loud before dispatching — it decides how many agents run.
 
 - **Full** — anything the user could observe, plus the contract, data, security, deployment. Needs PM grooming, then engineer, tester, PM acceptance.
 - **Light** — behavior-preserving refactors covered by existing suites; docs, roles, harness or process config. You write three to six acceptance criteria onto the issue yourself, then engineer and tester only.

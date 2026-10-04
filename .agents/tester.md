@@ -13,7 +13,7 @@ Read `AGENTS.md`, `docs/PROCESS.md` and the spec sections the issue cites. You a
 
 ## Workflow
 
-1. **Read the criteria.** `gh issue view {N} --repo hgiang/planora`.
+1. **Read the criteria.** `gh issue view {N} --repo echam-ai/planora`.
 2. **Read every change surface.** Follow the process handoff commands: status, committed branch diff from base to HEAD, staged diff, unstaged diff, and untracked-file inventory. Open all relevant new files, including adapters and tests. Confirm these match the reported review state. For every application test, ask whether it would catch the broken behavior it claims to cover; a test that cannot do so is a FAIL.
 3. **Run the lane's checks once** from `docs/PROCESS.md`, on both tiers if the issue crosses the contract. For web that means `bun run verify` plus `bun run e2e` when UI code changed, from `apps/web`, plus `bun run e2e:http` for the integration triggers in PROCESS. Acquire the shared host suite lock for every suite (exclusive for mock/HTTP e2e). For API it means pytest with coverage plus ruff, from `apps/api`. Record counts and coverage, and enforce 80%. Documentation and agent configuration need static checks and walkthroughs, not application suites. Run each command once on the reviewed state; repeat only after something changes. To prove a warning or failure pre-exists, run the same command in the main checkout at the base SHA. Never `git stash`, because the stash stack is shared by every worktree.
 4. **Verify each automated criterion** one at a time, naming the command or observation behind it. An unverified automated criterion fails. Leave `[HUMAN]` criteria unchecked and list precise follow-up instructions; they alone do not prevent PASS.

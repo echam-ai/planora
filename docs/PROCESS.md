@@ -39,9 +39,9 @@ Issue  →  PM grooms          →  Engineer builds  →  Tester verifies  →  
 
 ### CI observation
 
-The on-call agent is the sole observer. Match the run's `headSha` to the supplied merge SHA, then use one active blocking `gh run watch {RUN_ID} --repo hgiang/planora --interval 30 --exit-status` (use the interval flag where supported). No polling loop, duplicate watch or second watcher. A matched watch exiting 0 is PASS.
+The on-call agent is the sole observer. Match the run's `headSha` to the supplied merge SHA, then use one active blocking `gh run watch {RUN_ID} --repo echam-ai/planora --interval 30 --exit-status` (use the interval flag where supported). No polling loop, duplicate watch or second watcher. A matched watch exiting 0 is PASS.
 
-A nonzero watch is not automatically failed CI. Record its exit/error and make one bounded `gh run view {RUN_ID} --repo hgiang/planora --json headSha,status,conclusion,jobs`. PASS requires this command to exit 0, the exact expected SHA, `status=completed`, `conclusion=success`, and no failed/cancelled/timed-out jobs. Report both the watcher error and authoritative terminal success; exit 0 alone is insufficient. Startup permission/transport errors may require standard approval escalation for this read-only check; preserve security and report the error.
+A nonzero watch is not automatically failed CI. Record its exit/error and make one bounded `gh run view {RUN_ID} --repo echam-ai/planora --json headSha,status,conclusion,jobs`. PASS requires this command to exit 0, the exact expected SHA, `status=completed`, `conclusion=success`, and no failed/cancelled/timed-out jobs. Report both the watcher error and authoritative terminal success; exit 0 alone is insufficient. Startup permission/transport errors may require standard approval escalation for this read-only check; preserve security and report the error.
 
 Confirmed terminal failure/cancellation/timeout or another non-success terminal conclusion goes through on-call diagnosis and the repair pipeline. Queued/in-progress, missing/mismatched or unretrievable results are pending, never green; do not reopen an issue solely because a watcher connection failed. If pending, the same observer may make a single terminal-status follow-up on orchestrator request, with no second watch or autonomous polling. A newer SHA requires a new handoff. Never rerun suites merely because observation transport failed.
 
@@ -126,7 +126,7 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 - It manages: files intake issues, picks the lane, dispatches agents, relays handoffs, commits reviewed states, merges, keeps the pipeline full. On the full lane it does not groom, write feature code, run suites, or accept.
 - File intake immediately, with a concrete reproduction or quoted context, unless the user explicitly declines issue creation; then carry the local request and criteria through the same lane gates.
 - Launch agents non-blocking unless the result blocks the next action. Continue an agent that still holds the context (Claude `SendMessage`, a Codex follow-up) instead of spawning a fresh one for the same role and issue — for example, return a FAIL to the engineer who wrote the code.
-- Cap three active agents (orchestrator plus two children). Every local suite uses the shared host lock protocol below. Mock and HTTP e2e require exclusive access; verify/Vitest/pytest take shared access and may overlap one another. An e2e run that overlaps any other suite is **void**, repeated in an exclusive window. The e2e suite is stable on a quiet host ([#84](https://github.com/hgiang/planora/issues/84#issuecomment-5891442727)).
+- Cap three active agents (orchestrator plus two children). Every local suite uses the shared host lock protocol below. Mock and HTTP e2e require exclusive access; verify/Vitest/pytest take shared access and may overlap one another. An e2e run that overlaps any other suite is **void**, repeated in an exclusive window. The e2e suite is stable on a quiet host ([#84](https://github.com/echam-ai/planora/issues/84#issuecomment-5891442727)).
 - Before creating a worktree, verify the main checkout is clean, on `main`, and synchronized with `origin/main`; record the base SHA. Preserve unrelated user edits and report any conflict rather than resetting them.
 - Respect dependencies: API issues need #1, `apps/web/` paths need #7, database writes need #21 and #22, LLM calls need #37.
 - Route failures: code and test failures back to the engineer, CI and infrastructure failures to on-call.
@@ -290,12 +290,12 @@ Backlog issues carry one phase and one area label, and no priority. Intake issue
 ## Picking issues
 
 ```bash
-gh issue list --repo hgiang/planora --state open --limit 60 \
+gh issue list --repo echam-ai/planora --state open --limit 60 \
   --json number,title,labels \
   --jq 'sort_by(.number) | .[] | "#\(.number) \(.title) [\(.labels|map(.name)|join(", "))]"'
 ```
 
-Read candidate bodies with `gh issue view N --repo hgiang/planora`. Ready means substantive `Acceptance Criteria` checkboxes, executable `Test Scenarios`, explicit `Dependencies` (including `none`), correct labels, and no `needs grooming`. An absent label alone is not readiness. If a section is missing or placeholder-only, groom before implementation; if no ready issue exists, groom the lowest-numbered otherwise unblocked candidate. Do not bulk rewrite backlog scope.
+Read candidate bodies with `gh issue view N --repo echam-ai/planora`. Ready means substantive `Acceptance Criteria` checkboxes, executable `Test Scenarios`, explicit `Dependencies` (including `none`), correct labels, and no `needs grooming`. An absent label alone is not readiness. If a section is missing or placeholder-only, groom before implementation; if no ready issue exists, groom the lowest-numbered otherwise unblocked candidate. Do not bulk rewrite backlog scope.
 
 Prefer the lowest-numbered ready, unblocked issue — the backlog is ordered deliberately, and Phase 1 establishes the toolchain everything else builds on. #2 and #3 carry the main technical risk and are sequenced before the file moves on purpose; do not reorder them behind #7.
 

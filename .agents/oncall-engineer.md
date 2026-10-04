@@ -15,15 +15,15 @@ Input: the handoff block from `docs/PROCESS.md`, plus the merge SHA.
 
 1. **Watch once for the exact merge SHA.** Find the run whose `headSha` matches the supplied merge SHA, then block on that run exactly once:
    ```bash
-   gh run list --repo hgiang/planora --limit 5 --json databaseId,headSha,status,conclusion
-   gh run watch {RUN_ID} --repo hgiang/planora --interval 30 --exit-status
+   gh run list --repo echam-ai/planora --limit 5 --json databaseId,headSha,status,conclusion
+   gh run watch {RUN_ID} --repo echam-ai/planora --interval 30 --exit-status
    ```
    Use `--interval 30` where supported to limit chatter; retain `--exit-status`. One active blocking watch per exact merge SHA. No `sleep`, polling loop, duplicate watch or second watcher. A startup permission/transport error before observation is not a CI result; use standard approval escalation for the read-only terminal check below rather than weakening security or hiding the error.
 
 2. **Interpret the workflow separately from the watcher connection.** A successful watch (exit 0) for the matched run is PASS. A nonzero watch may mean failed CI or a permission/transport error. Record its exit code and error, then perform one bounded terminal check:
 
    ```bash
-   gh run view {RUN_ID} --repo hgiang/planora --json headSha,status,conclusion,jobs
+   gh run view {RUN_ID} --repo echam-ai/planora --json headSha,status,conclusion,jobs
    ```
 
    Record this command's exit code and returned fields. Exit 0 alone is not PASS: compare `headSha` to the supplied merge SHA and require `status=completed` and `conclusion=success`. Include job results in the handoff; any failed/cancelled/timed-out job requires diagnosis, not a green report.
