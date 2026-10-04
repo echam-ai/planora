@@ -82,8 +82,9 @@ rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:1
 ```
 
 Both health requests return `{"status":"ok"}`. The profile chooser and its assets
-come from web. An unknown `/api/v1/*` route must return the API error JSON rather
-than an HTML page. Profile selection and a non-AI task write use one browser origin and the
+come from web. An unknown `/api/v1/*` route must return API error JSON rather
+than an HTML page: `401 NOT_AUTHENTICATED` without the cookie (the site-password
+gate runs before routing), `404 NOT_FOUND` once unlocked. Profile selection and a non-AI task write use one browser origin and the
 explicit `X-Planora-Profile` header, after unlocking with the shared site password
 (the `planora_access` cookie). A data request without the cookie must return
 `401 NOT_AUTHENTICATED`. Unsafe requests without `Origin`, or with a foreign
