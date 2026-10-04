@@ -3,11 +3,13 @@ import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useTaskMutations } from "./hooks";
 import { selectProfile } from "@/services/api/profiles";
+import { ACCESS_KEY } from "@/services/api/mock/access";
 import { createMockApiClient } from "@/services/api/mockApiClient";
 import { qk } from "@/shared/queryKeys";
 afterEach(() => vi.useRealTimers());
 it("a pending move retains its account and writes only to its original cache", async () => {
   localStorage.clear();
+  localStorage.setItem(ACCESS_KEY, "1");
   vi.useFakeTimers();
   selectProfile("hamster_knight");
   const knight = createMockApiClient("hamster_knight"),

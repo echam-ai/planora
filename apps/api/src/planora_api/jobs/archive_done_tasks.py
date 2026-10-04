@@ -186,7 +186,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     configure_logging(
         level=settings.log_level,
-        secrets=(settings.session_secret, settings.llm_api_key, settings.database_url),
+        secrets=(
+            settings.app_password,
+            settings.session_secret,
+            settings.llm_api_key,
+            settings.database_url,
+        ),
     )
 
     session_factory = create_session_factory(settings)

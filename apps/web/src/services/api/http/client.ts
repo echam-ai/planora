@@ -3,7 +3,8 @@
  * spec §3.2, §13.1).
  *
  * - Every request goes to a relative `/api/v1/...` URL with
- *   `credentials: "omit"` (the session cookie is first-party) and
+ *   `credentials: "same-origin"` (the `planora_access` cookie is first-party; the wrapper never
+ *   reads it, the API sets and clears it) and
  *   `Accept: application/json`. A request with a body also sends
  *   `Content-Type: application/json`.
  * - The wrapper never sets `Origin` itself — the browser supplies it, and
@@ -102,7 +103,7 @@ export async function request<TResponse>(options: RequestOptions): Promise<TResp
   const init: RequestInit = {
     method,
     ...(signal ? { signal } : {}),
-    credentials: "omit",
+    credentials: "same-origin",
     headers: {
       Accept: "application/json",
       ...(options.profile ? { "X-Planora-Profile": options.profile } : {}),

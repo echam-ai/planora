@@ -1,9 +1,11 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { getSelectedProfile, selectProfile, PROFILES } from "./profiles";
+import { ACCESS_KEY } from "./mock/access";
 import { createMockApiClient } from "./mockApiClient";
 describe("profile selection and immutable mock scope", () => {
   beforeEach(() => {
     localStorage.clear();
+    localStorage.setItem(ACCESS_KEY, "1");
     vi.useFakeTimers();
   });
   afterEach(() => vi.useRealTimers());
@@ -25,7 +27,8 @@ describe("profile selection and immutable mock scope", () => {
         markdownNote: "",
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR", status: 422 });
-    expect(localStorage.length).toBe(0);
+    // Nothing but the unlocked-gate marker: no task, settings or chat data was written.
+    expect(Object.keys(localStorage)).toEqual([ACCESS_KEY]);
     expect(getSelectedProfile()).toBeNull();
   });
   it("offers two names and rejects invalid selection", () => {
@@ -95,6 +98,7 @@ describe("profile selection and immutable mock scope", () => {
 
 it("preserves legacy IDs, archive, messages/proposals and overrides only in Knight", async () => {
   localStorage.clear();
+  localStorage.setItem(ACCESS_KEY, "1");
   vi.useFakeTimers();
   const task = {
     id: "legacy-id",

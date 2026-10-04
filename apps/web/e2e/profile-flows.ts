@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectHydrated } from "./hydration";
+import { DEMO_PASSWORD, unlock } from "./unlock";
 async function choose(page: Page, name: string) {
   await page.goto("/");
   await page.getByRole("button", { name, exact: true }).click();
@@ -22,17 +23,15 @@ async function create(page: Page, title: string) {
   await form.getByRole("button", { name: "Create task" }).click();
   await expect(form).toBeHidden();
 }
-export function profileFlows() {
-  test("chooser and remembered deep links preserve tasks after refresh", async ({
-    page,
-    context,
-  }) => {
+/** `password` is what the suite's backend accepts: the demo one for the mock, `APP_PASSWORD` over HTTP. */
+export function profileFlows(password: string = DEMO_PASSWORD) {
+  test("chooser and remembered deep links preserve tasks after refresh", async ({ page }) => {
+    await unlock(page, password);
     await page.goto("/tasks");
     // Vite's cold module graph can outlive the document load event. Start
     // the chooser assertion only once React can run the profile guard.
     await expectHydrated(page, "main");
     await expect(page.getByRole("button", { name: "Hamster Knight" })).toBeVisible();
-    expect(await context.cookies()).toEqual([]);
     await choose(page, "Hamster Knight");
     const title = `Knight ${Date.now()}`;
     await create(page, title);
@@ -46,6 +45,7 @@ export function profileFlows() {
     }
   });
   test("account switching isolates tasks and discards unsaved drafts", async ({ page }) => {
+    await unlock(page, password);
     await choose(page, "Hamster Knight");
     const title = `Knight ${Date.now()}`;
     await create(page, title);
@@ -71,13 +71,14 @@ export function profileFlows() {
       page.getByRole("button", { name: "Open task Unsaved draft", exact: true }),
     ).toHaveCount(0);
   });
-  test("legacy login links and invalid remembered profiles return to the chooser", async ({
+  test("an unlocked visit to /login and invalid remembered profiles return to the chooser", async ({
     page,
   }) => {
     await page.addInitScript(() => {
       if (localStorage.getItem("planora.profile") === null)
         localStorage.setItem("planora.profile", "hamster_knight");
     });
+    await unlock(page, password);
     await page.goto("/login");
     await expectHydrated(page, "main");
     await expect(page.getByRole("button", { name: "Ech Princess" })).toBeVisible();
@@ -89,6 +90,7 @@ export function profileFlows() {
     test(`permanent deletion from ${status} detail cancels and persists after keyboard confirmation`, async ({
       page,
     }) => {
+      await unlock(page, password);
       await choose(page, "Hamster Knight");
       const title = `Delete ${status} ${Date.now()}`;
       await create(page, title);

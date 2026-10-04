@@ -25,7 +25,8 @@ from planora_api.config import load_settings
 from planora_api.main import create_app
 
 REPO = Path(__file__).resolve().parents[4]
-PASSWORD = "local-test-password"
+SITE_PASSWORD = "local-site-password"  # >= 12 characters
+SIGNING_SECRET = "local-signing-secret-0123456789abcdef"  # >= 32 characters
 
 DOUBLE = '''#!PYTHON
 import json, os, sys, time
@@ -36,6 +37,7 @@ if name == "uv" and args[:3] == ["run", "python", "-c"]:
     os.execv(sys.executable, [sys.executable, *args[2:]])
 record = {"name": name, "args": args,
           "secret": os.environ.get("SESSION_SECRET"),
+          "password": os.environ.get("APP_PASSWORD"),
           "origin": os.environ.get("APP_ORIGIN"),
           "key": os.environ.get("LLM_API_KEY"),
           "mode": os.environ.get("VITE_API_MODE"),
@@ -103,7 +105,10 @@ class Launcher:
         )
 
     def configure(self, extra: str = "") -> str:
-        content = f"DATABASE_URL=sqlite:///{self.root / 'local.db'}\nLLM_API_KEY=placeholder\n{extra}"
+        content = (
+            f"DATABASE_URL=sqlite:///{self.root / 'local.db'}\nLLM_API_KEY=placeholder\n"
+            f"APP_PASSWORD={SITE_PASSWORD}\nSESSION_SECRET={SIGNING_SECRET}\n{extra}"
+        )
         self.env_file.write_text(content)
         return content
 
@@ -152,19 +157,20 @@ def launcher(tmp_path: Path) -> Launcher:
 def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     launcher: Launcher, blank: str | None,
 ) -> None:
-    extra = "" if blank is None else f"SESSION_SECRET={blank}\nAPP_ORIGIN={blank}\n"
+    extra = "" if blank is None else f"APP_ORIGIN={blank}\n"
     original = launcher.configure(extra)
     code, output = launcher.run(ready=True)
     assert code == 0, output
     records = launcher.records()
     configured = [r for r in records if r["name"] in {"uv", "bun"} and r["args"] != ["sync", "--locked"]]
-    secret = configured[0]["secret"]
-    assert secret is None
-    assert all(r["secret"] == secret for r in configured)
+    assert all(r["secret"] == SIGNING_SECRET for r in configured)
+    assert all(r["password"] == SITE_PASSWORD for r in configured)
     assert all(r["origin"] == launcher.origin for r in configured)
     assert all(r["key"] == "placeholder" for r in configured)
-    assert "SESSION_SECRET" not in output
+    # Neither secret is ever echoed by the launcher.
+    assert SIGNING_SECRET not in output and SITE_PASSWORD not in output
     assert f"Ready. Open {launcher.origin}" in output
+    assert "unlock with the APP_PASSWORD" in output
     web = next(r for r in records if "dev" in r["args"])
     assert web["args"] == ["run", "dev", "--", "--host", "localhost", "--port", str(launcher.web_port), "--strictPort"]
     assert web["mode"] == "http"
@@ -173,22 +179,26 @@ def test_defaults_are_shared_private_ephemeral_and_env_is_unchanged(
     assert not any("planora_api.admin.reset_password" in r["args"] for r in records)
     code, output = launcher.run(ready=True)
     assert code == 0, output
-    new_secret = launcher.records()[len(records) + 1]["secret"]
-    assert new_secret is None
-    assert "SESSION_SECRET" not in output
+    assert all(r["secret"] == SIGNING_SECRET for r in launcher.records()[len(records):]
+               if r["name"] in {"uv", "bun"} and r["args"] != ["sync", "--locked"])
     assert launcher.env_file.read_text() == original
 
 
 @pytest.mark.parametrize("host", ["localhost", "127.0.0.1"])
 def test_overrides_are_preserved_without_shell_execution(launcher: Launcher, host: str) -> None:
     origin = f"http://{host}:{launcher.web_port}"
-    secret = 'literal-$(touch SHOULD_NOT_EXIST)-`echo secret`'
-    original = launcher.configure(f"SESSION_SECRET={secret}\nAPP_ORIGIN={origin}\n")
+    secret = 'literal-$(touch SHOULD_NOT_EXIST)-`echo secret`-padding-padding'
+    password = 'pw-$(touch SHOULD_NOT_EXIST)-`echo pw`'
+    launcher.env_file.write_text(
+        f"DATABASE_URL=sqlite:///{launcher.root / 'local.db'}\nLLM_API_KEY=placeholder\n"
+        f"APP_PASSWORD={password}\nSESSION_SECRET={secret}\nAPP_ORIGIN={origin}\n"
+    )
+    original = launcher.env_file.read_text()
     code, output = launcher.run(ready=True)
     assert code == 0, output
-    assert all(r["secret"] is None and r["origin"] == origin
+    assert all(r["secret"] == secret and r["password"] == password and r["origin"] == origin
                for r in launcher.records() if r["args"] != ["sync", "--locked"])
-    assert "SESSION_SECRET" not in output
+    assert secret not in output and password not in output
     assert not (launcher.root / "SHOULD_NOT_EXIST").exists()
     assert launcher.env_file.read_text() == original
 
@@ -199,6 +209,27 @@ def test_blank_llm_key_fails_before_any_command(launcher: Launcher, key: str | N
     code, output = launcher.run()
     assert code != 0
     assert "LLM_API_KEY" in output
+    assert launcher.records() == []
+
+
+@pytest.mark.parametrize("name", ["APP_PASSWORD", "SESSION_SECRET"])
+@pytest.mark.parametrize("value", [None, "", " \t ", "short"])
+def test_blank_or_short_gate_secret_fails_naming_it_before_any_command(
+    launcher: Launcher, name: str, value: str | None,
+) -> None:
+    lines = {"LLM_API_KEY": "placeholder", "APP_PASSWORD": SITE_PASSWORD, "SESSION_SECRET": SIGNING_SECRET}
+    if value is None:
+        del lines[name]
+    else:
+        lines[name] = value
+    launcher.env_file.write_text("".join(f"{k}={v}\n" for k, v in lines.items()))
+    code, output = launcher.run()
+    assert code != 0
+    assert name in output
+    minimum = "12" if name == "APP_PASSWORD" else "32"
+    expected = f"at least {minimum} characters" if value == "short" else "blank"
+    assert expected in output
+    assert "short" not in output  # the supplied value is never echoed
     assert launcher.records() == []
 
 
@@ -219,8 +250,9 @@ def test_invalid_origin_fails_before_any_command(launcher: Launcher, origin: str
 def test_missing_env_gives_llm_only_setup_instructions(launcher: Launcher) -> None:
     code, output = launcher.run()
     assert code != 0
-    assert "LLM_API_KEY" in output and "Copy apps/api/.env.example" in output
-    assert "fill in SESSION_SECRET" not in output
+    assert "Copy apps/api/.env.example" in output
+    for name in ("LLM_API_KEY", "APP_PASSWORD", "SESSION_SECRET"):
+        assert name in output
     assert launcher.records() == []
 
 
@@ -272,6 +304,8 @@ def test_launcher_migrates_and_both_profiles_work_without_setup(
     origin = None if host is None else f"http://{host}:{launcher.web_port}"
     template = (REPO / "apps/api/.env.example").read_text()
     content = template.replace("LLM_API_KEY=\n", "LLM_API_KEY=placeholder\n")
+    content = content.replace("APP_PASSWORD=\n", f"APP_PASSWORD={SITE_PASSWORD}\n")
+    content = content.replace("SESSION_SECRET=\n", f"SESSION_SECRET={SIGNING_SECRET}\n")
     if origin is not None:
         content = content.replace("APP_ORIGIN=\n", f"APP_ORIGIN={origin}\n")
     launcher.env_file.write_text(content)
@@ -287,13 +321,18 @@ def test_launcher_migrates_and_both_profiles_work_without_setup(
     config = next(r for r in records if "uvicorn" in r["args"])
     monkeypatch.setenv("APP_ORIGIN", config["origin"])
     monkeypatch.setenv("LLM_API_KEY", "placeholder")
+    monkeypatch.setenv("APP_PASSWORD", config["password"])
+    monkeypatch.setenv("SESSION_SECRET", config["secret"])
     app = create_app()
     async def scenario() -> None:
-        async with make_client(app, origin=config["origin"], base_url=config["origin"]) as client:
+        async with make_client(app, origin=config["origin"], base_url=config["origin"],
+                               authenticated=False) as client:
+            # Locked until the launcher's password is entered, then both profiles work.
+            assert (await client.get("/api/v1/tasks", headers={"X-Planora-Profile": "hamster_knight"})).status_code == 401
+            assert (await client.post("/api/v1/auth/login", json={"password": SITE_PASSWORD})).status_code == 200
             for profile in ("hamster_knight", "ech_princess"):
                 client.headers["X-Planora-Profile"] = profile
                 assert (await client.get("/api/v1/tasks")).status_code == 200
-                assert not client.cookies
             wrong_host = "127.0.0.1" if origin is None else "localhost"
             response = await client.post("/api/v1/tasks", json={"title": "x", "content": "y"},
                                          headers={"Origin": f"http://{wrong_host}:{launcher.web_port}"})

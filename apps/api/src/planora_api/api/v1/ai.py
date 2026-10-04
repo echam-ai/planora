@@ -27,13 +27,16 @@ from planora_api.config import Settings
 from planora_api.db import settings_repository
 from planora_api.errors import (
     ERROR_RESPONSE,
+    UNAUTHENTICATED_RESPONSE,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
 )
 from planora_api.schemas.ai import ParsedTaskResponse, ParseTaskRequest
 from planora_api.schemas.task import TaskUrl
 
-router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
+router = APIRouter(
+    prefix="/api/v1/ai", tags=["ai"], responses=UNAUTHENTICATED_RESPONSE
+)
 
 _PARSE_RESPONSES = {
     **WRITE_RESPONSES,

@@ -1,7 +1,9 @@
-"""Server configuration: LLM key/origin required, no authentication secret.
+"""Server configuration: the shared site password, the cookie-signing secret,
+the LLM key and the public origin are all required (issue #124).
 
-An optional legacy SESSION_SECRET is accepted solely for redaction when old
-configuration files are reused. It is never used to authenticate requests.
+`APP_PASSWORD` is the single shared password in front of the profile chooser;
+`SESSION_SECRET` signs the stateless access cookie. Neither has a default, and
+neither ever appears in a repr, an error message or a log line.
 """
 from __future__ import annotations
 
@@ -17,6 +19,7 @@ from planora_api.domain.llm_models import available_models
 # so error messages can always name the variable an operator actually sets.
 _ENV_VAR_NAMES: dict[str, str] = {
     "database_url": "DATABASE_URL",
+    "app_password": "APP_PASSWORD",
     "session_secret": "SESSION_SECRET",
     "llm_base_url": "LLM_BASE_URL",
     "llm_api_key": "LLM_API_KEY",
@@ -28,7 +31,10 @@ _ENV_VAR_NAMES: dict[str, str] = {
 }
 
 # Field names whose values must never appear in a repr()/str() of Settings.
-_SECRET_FIELDS: tuple[str, ...] = ("session_secret", "llm_api_key")
+_SECRET_FIELDS: tuple[str, ...] = ("app_password", "session_secret", "llm_api_key")
+
+APP_PASSWORD_MIN_LENGTH = 12
+SESSION_SECRET_MIN_LENGTH = 32
 
 
 class ConfigurationError(RuntimeError):
@@ -37,6 +43,16 @@ class ConfigurationError(RuntimeError):
     The message names every offending environment variable and never
     includes a secret's value.
     """
+
+
+def _checked_secret(value: str, minimum: int) -> str:
+    # The messages never include `value`: pydantic's own `input_value` is
+    # dropped by `load_settings`, which renders only `error["msg"]`.
+    if value.strip() == "":
+        raise ValueError("must not be blank")
+    if len(value) < minimum:
+        raise ValueError(f"must be at least {minimum} characters")
+    return value
 
 
 class Settings(BaseSettings):
@@ -54,8 +70,8 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "sqlite:///./planora.db"
-    # Accepted only to redact legacy environment values; never used for auth.
-    session_secret: str = ""
+    app_password: str
+    session_secret: str
     llm_base_url: str = "https://api.moonshot.ai/v1"
     llm_api_key: str
     llm_model: str = "kimi-k3"
@@ -72,6 +88,16 @@ class Settings(BaseSettings):
         if value.strip() == "":
             raise ValueError("must not be blank")
         return value
+
+    @field_validator("app_password")
+    @classmethod
+    def _password_is_long_enough(cls, value: str) -> str:
+        return _checked_secret(value, APP_PASSWORD_MIN_LENGTH)
+
+    @field_validator("session_secret")
+    @classmethod
+    def _session_secret_is_long_enough(cls, value: str) -> str:
+        return _checked_secret(value, SESSION_SECRET_MIN_LENGTH)
 
     @field_validator("default_timezone")
     @classmethod

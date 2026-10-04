@@ -71,7 +71,7 @@ describe("http/client request()", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("sends a relative /api/v1 URL with no cookies and an Accept header", async () => {
+  it("sends a relative /api/v1 URL with same-origin cookies and an Accept header", async () => {
     const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(200, { ok: true }));
     vi.stubGlobal("fetch", fetchSpy);
 
@@ -79,7 +79,7 @@ describe("http/client request()", () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/v1/tasks",
-      expect.objectContaining({ method: "GET", credentials: "omit" }),
+      expect.objectContaining({ method: "GET", credentials: "same-origin" }),
     );
     const init = fetchSpy.mock.calls[0]![1] as RequestInit;
     const headers = new Headers(init.headers);

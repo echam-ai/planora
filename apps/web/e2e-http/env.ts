@@ -18,6 +18,15 @@ function required(name: string): string {
   return value;
 }
 
+/**
+ * Disposable gate secrets for the run's API (#124). The password is what every
+ * spec types on `/login`; both are fixed, throwaway values with no meaning
+ * outside the run (a fresh SQLite file and loopback ports), long enough for
+ * the API's minimum lengths (12 and 32).
+ */
+export const SITE_PASSWORD = "e2e-http-site-password";
+export const SESSION_SECRET = "e2e-http-session-secret-0123456789abcdef";
+
 /** Origin of the deterministic loopback provider fixture (`delayed-provider.ts`). */
 export function llmOrigin(): string {
   return `http://127.0.0.1:${required("PLANORA_E2E_HTTP_LLM_PORT")}`;
@@ -43,6 +52,8 @@ export function apiEnv(): Record<string, string> {
     DATABASE_URL: `sqlite:///${dir}/planora.db`,
     LLM_BASE_URL: llmOrigin(),
     LLM_API_KEY: "e2e-http-placeholder-key",
+    APP_PASSWORD: SITE_PASSWORD,
+    SESSION_SECRET,
     LLM_MODEL: "kimi-k3",
     LLM_ALLOWED_MODELS: "",
     APP_ORIGIN: webOrigin,

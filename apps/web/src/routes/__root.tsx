@@ -1,6 +1,6 @@
 import { getSelectedProfile, useSelectedProfile } from "@/services/api/profiles";
 import { createQueryClient } from "@/lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -8,19 +8,22 @@ import {
   useRouter,
   HeadContent,
   Scripts,
-  useLocation,
   useNavigate,
+  useRouterState,
 } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRootBoundaryError } from "../lib/root-error-reporting";
+import { StatePanel } from "@/components/layout/StatePanel";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { refreshAccess, setAccessState, useAccessState } from "@/features/auth/access";
 import { useTheme } from "@/lib/theme";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
 import { cn } from "@/lib/utils";
-import { Compass, TriangleAlert } from "lucide-react";
+import { CloudOff, Compass, TriangleAlert } from "lucide-react";
 
 function StatusPage({
   icon,
@@ -168,26 +171,78 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function ScopedContent() {
   const profile = useSelectedProfile();
+  const access = useAccessState();
   // Keep the SSR tree through the first browser snapshot so inputs typed
   // before hydration survive. Actual account changes still remount its cache.
   const [initialProfile] = useState(getSelectedProfile);
   const scopeKey =
     profile === undefined || profile === initialProfile ? "initial" : (profile ?? "chooser");
-  const location = useLocation();
+  // The path of the matches that are rendered right now. `useLocation` already holds the
+  // destination while a navigation is pending, when the Outlet still renders the page being
+  // left: gating on it would show that private page to a locked visitor for a moment.
+  const pathname = useRouterState({
+    select: (state) => (state.resolvedLocation ?? state.location).pathname,
+  });
   const navigate = useNavigate();
-  const publicRoute = location.pathname === "/" || location.pathname === "/login";
+  const isLogin = pathname === "/login";
+  const publicRoute = pathname === "/" || isLogin;
+  // The cookie is HttpOnly, so the API has to be asked. Until it answers, only the password page
+  // renders: no private page, profile name or data appears before the answer (#124).
   useEffect(() => {
-    if (profile === null && !publicRoute) navigate({ to: "/", replace: true });
-  }, [profile, publicRoute, navigate]);
+    if (access === "unknown") void refreshAccess();
+  }, [access]);
+  useEffect(() => {
+    if (access === "locked" && !isLogin) navigate({ to: "/login", replace: true });
+    if (access === "unlocked" && isLogin) navigate({ to: "/", replace: true });
+  }, [access, isLogin, navigate]);
+  useEffect(() => {
+    if (access === "unlocked" && profile === null && !publicRoute)
+      navigate({ to: "/", replace: true });
+  }, [access, profile, publicRoute, navigate]);
+
+  let page: ReactNode = null;
+  if (isLogin) {
+    if (access !== "unlocked") page = <Outlet />;
+  } else if (access === "unlocked") {
+    if (publicRoute || profile !== null) page = <Outlet />;
+  } else if (access === "unreachable") {
+    page = <AccessUnreachable />;
+  }
   return (
     <WorkspaceQueries key={scopeKey}>
-      {(publicRoute || profile !== null) && <Outlet />}
+      {page}
       <Toaster position="top-right" />
     </WorkspaceQueries>
   );
 }
+function AccessUnreachable() {
+  return (
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <StatePanel
+        icon={CloudOff}
+        tone="error"
+        className="w-full max-w-sm"
+        action={
+          <Button variant="outline" onClick={() => void refreshAccess()}>
+            Try again
+          </Button>
+        }
+      >
+        Can't reach Planora. Check your connection and try again.
+      </StatePanel>
+    </main>
+  );
+}
 function WorkspaceQueries({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(createQueryClient);
+  const [queryClient] = useState(() => {
+    // A 401 from any query or mutation means the access cookie is gone: forget this account's
+    // data and let the gate send the browser to /login (once; the state change is the trigger).
+    const client: QueryClient = createQueryClient(() => {
+      client.clear();
+      setAccessState("locked");
+    });
+    return client;
+  });
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
 /**

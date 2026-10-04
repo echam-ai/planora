@@ -43,6 +43,8 @@ POSTGRES_USER=planora_smoke
 POSTGRES_PASSWORD=disposable43password
 DATABASE_URL=postgresql+psycopg://planora_smoke:disposable43password@db:5432/planora_smoke
 LLM_API_KEY=disposable43key
+APP_PASSWORD=disposable43-site-password
+SESSION_SECRET=disposable43-session-secret-0123456789abc
 LLM_BASE_URL=https://api.moonshot.ai/v1
 LLM_MODEL=kimi-k3
 DEFAULT_TIMEZONE=Asia/Singapore
@@ -53,9 +55,12 @@ DEFAULT_TIMEZONE=Asia/Singapore
 Use a unique project name for each verification. The commands below use
 `planora43-smoke`; never run its destructive cleanup against an existing project.
 Builds use application directory contexts and committed lockfiles. Initialize
-the existing migration history before starting the scheduler. No credential
-setup or session secret is required: select a fixed profile on `/`. Profile
-choice separates data and is not identity protection.
+the existing migration history before starting the scheduler. The env file must
+set `APP_PASSWORD` (at least 12 characters) and `SESSION_SECRET` (at least 32):
+`docker compose config` fails naming whichever is missing, and the API and
+scheduler refuse to start with a blank or too-short value. Unlock with the
+password on `/login`, then select a fixed profile. Profile choice separates data
+and is not identity protection.
 
 The migration environment handles three known historical PostgreSQL duplicate
 Enum/check declarations while retaining their explicit canonical checks and
@@ -79,8 +84,12 @@ rtk curl --fail --retry 15 --retry-all-errors --retry-delay 1 http://127.0.0.1:1
 Both health requests return `{"status":"ok"}`. The profile chooser and its assets
 come from web. An unknown `/api/v1/*` route must return the API error JSON rather
 than an HTML page. Profile selection and a non-AI task write use one browser origin and the
-explicit `X-Planora-Profile` header; no login cookie is used. Unsafe requests without `Origin`, or with a foreign
-one, must return `403 CSRF_ORIGIN_MISMATCH`.
+explicit `X-Planora-Profile` header, after unlocking with the shared site password
+(the `planora_access` cookie). A data request without the cookie must return
+`401 NOT_AUTHENTICATED`. Unsafe requests without `Origin`, or with a foreign
+one, must return `403 CSRF_ORIGIN_MISMATCH`. The Compose browser check also needs
+the password: pass it as `PLANORA_E2E_COMPOSE_PASSWORD` next to
+`PLANORA_E2E_COMPOSE_ORIGIN`.
 
 The committed Compose browser checks connect to the existing stack; they launch
 no development server and alter no schema. Install frozen web dependencies in
@@ -96,6 +105,7 @@ rtk bun install --frozen-lockfile
   suite_process_status=$?
   [ "$suite_process_status" -eq 1 ] || exit 1
   PLANORA_E2E_COMPOSE_ORIGIN=http://127.0.0.1:18080 \
+  PLANORA_E2E_COMPOSE_PASSWORD=disposable43-site-password \
   rtk bun run e2e:compose
 ) 9>/home/hamster/code/planora/.tmp/host-suites.lock
 ```
@@ -104,8 +114,9 @@ Inspect port bindings with `docker inspect` for every project container: only
 Caddy may have nonempty bindings. On a quiet host with no unrelated service
 occupying those ports, direct loopback connections to 8000/5432 must fail.
 Inspect the API command to verify `--forwarded-allow-ips` is exactly `CADDY_IP`.
-Forwarded headers remain restricted to the fixed Caddy peer. The former login
-rate-limit check is retired along with credential authentication.
+Forwarded headers remain restricted to the fixed Caddy peer, which is what lets
+the in-memory unlock rate limit (5 wrong passwords per client IP per 15 minutes)
+see the real client address rather than Caddy's.
 
 ## Persistence and workers
 
@@ -149,6 +160,32 @@ The worker retains the latest seven successful dumps, ordered by UTC completion
 identity after durable publication. See [backup and restore](backup-restore.md)
 for exact explicit-target restore commands, decoded credential-content audit,
 and the executed disposable PostgreSQL recovery smoke.
+
+## Continuous integration
+
+The `Compose stack (Docker)` job in `.github/workflows/ci.yml` runs these checks
+on every push, on a fresh GitHub-hosted runner with Docker and Compose v2. It
+writes disposable env files with the fake values shown above (and the TLS
+fixture values from [deploy.md](deploy.md)); it reads no repository secret.
+Nothing from the sequence above is skipped in CI:
+
+1. Builds the images, starts `db`, runs `alembic upgrade head`, brings the stack
+   up (project `planora43-ci-<run id>`, loopback 18080) and waits for `/health`,
+   `/api/v1/health` and `/`, then runs `bun run e2e:compose` with
+   `PLANORA_E2E_COMPOSE_ORIGIN` and `PLANORA_E2E_COMPOSE_PASSWORD`.
+2. Runs `tests/integration/test_deployment_https.py` with
+   `PLANORA_TLS_SMOKE_PROJECT=planora46-ci-<run id>` and `PLANORA_TLS_SMOKE_ENV`
+   (subnet 172.30.46.0/24, ports 18046/18446; the test builds, starts and
+   removes its own stack).
+3. Runs `tests/integration/test_deployment_backup_restore.py` against
+   `planora45-ci-<run id>` from `deploy/compose.test-backup.yml` (port 15445).
+
+The three stages use distinct projects, subnets and ports, and the TLS and backup
+stages run even if the browser stage fails. Teardown always runs
+`down --volumes --remove-orphans` for exactly those three projects, and on
+failure the Compose logs and Playwright output upload as the
+`compose-diagnostics` artifact. CI proves the disposable stack only; the public
+certificate checks in [deploy.md](deploy.md) remain human, off-host evidence.
 
 ## Cleanup disposable verification only
 

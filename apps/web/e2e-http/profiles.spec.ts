@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { profileFlows } from "../e2e/profile-flows";
+import { unlock } from "../e2e/unlock";
 import { seedArchivedTask } from "./db";
-profileFlows();
+import { SITE_PASSWORD } from "./env";
+profileFlows(SITE_PASSWORD);
 test("archived details permanently delete a task after refresh", async ({ page }) => {
   const title = `Archived delete ${Date.now()}`;
   seedArchivedTask(title);
-  await page.goto("/");
+  await unlock(page, SITE_PASSWORD);
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   await page.goto("/archive");
   await page.getByLabel("Search archived tasks").fill(title);
@@ -26,7 +28,7 @@ test("archived details permanently delete a task after refresh", async ({ page }
   await expect(card).toHaveCount(0);
 });
 test("a delayed write retains Knight context and cannot enter Princess views", async ({ page }) => {
-  await page.goto("/");
+  await unlock(page, SITE_PASSWORD);
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {

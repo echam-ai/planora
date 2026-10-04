@@ -51,9 +51,12 @@ export default {
     }
 
     if (request.method === "POST" && new URL(request.url).pathname === "/login") {
+      // The password form posts natively when React has not hydrated yet. Never read the body
+      // and never set the access cookie: send the visitor back to the form, which works
+      // once the page has hydrated.
       return new Response(null, {
         status: 303,
-        headers: { Location: "/", "Cache-Control": "no-store" },
+        headers: { Location: "/login", "Cache-Control": "no-store" },
       });
     }
 

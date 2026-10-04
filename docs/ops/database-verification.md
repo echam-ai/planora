@@ -96,12 +96,15 @@ run from `apps/api` (credentials below are test-only):
 ```sh
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic current
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
+  APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
   rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
 ```
 
@@ -125,7 +128,7 @@ rtk docker compose --env-file .tmp/compose44.env -p planora44-target -f deploy/c
 
 Both identify PostgreSQL and the same database at host `db`, without printing
 credentials. Migrations use `run ... api alembic ...` with that same
-environment. No account administration or session secret is required.
+environment, which also needs `APP_PASSWORD` and `SESSION_SECRET` (the API and scheduler load the same settings). No account administration is required.
 To inspect the SQLite development default from `apps/api`, set only fake required
 secrets/origin and print `create_engine(load_settings()).dialect.name`; with
 `DATABASE_URL` unset and no local `.env` override it reports `sqlite`.

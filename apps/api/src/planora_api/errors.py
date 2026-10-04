@@ -30,6 +30,9 @@ class ErrorResponse(BaseModel):
 
 ERROR_RESPONSE = {"model": ErrorResponse, "description": "API error envelope"}
 VALIDATION_RESPONSE = {"model": ErrorResponse, "description": "Invalid request fields"}
+# Every gated router documents this (issue #124): the access gate returns it
+# before the route runs, so it is not part of any one handler's own contract.
+UNAUTHENTICATED_RESPONSE = {401: ERROR_RESPONSE}
 PROFILE_RESPONSES = {422: VALIDATION_RESPONSE}
 WRITE_RESPONSES = {**PROFILE_RESPONSES, 403: ERROR_RESPONSE}
 

@@ -58,7 +58,7 @@ function AccountChooser() {
           Choose your account
         </h1>
         <p className="mx-auto mt-3 max-w-md text-base text-muted-foreground">
-          Two separate workspaces. Anyone who can reach Planora can choose either account.
+          Two separate workspaces. Anyone with the shared password can choose either account.
         </p>
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2">

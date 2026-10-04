@@ -155,6 +155,8 @@ Cleanup **only the new disposable project**, after recording/reviewing results:
 docker compose -p planora45-smoke -f deploy/compose.test-backup.yml down --volumes --remove-orphans
 ```
 
+The `Compose stack (Docker)` CI job runs this smoke on every push against a
+fresh `planora45-ci-<run id>` project and tears it down with the command above.
 Never use that cleanup on the normal deployment. #44's separate
 `compose.test-postgres.yml` remains the disposable migration/parity seam; #45's
 smoke uses persistent volumes specifically to verify recreation persistence.

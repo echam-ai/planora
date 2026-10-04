@@ -7,7 +7,7 @@ the committed `apps/api/openapi.json` — the file the web tier's
 needs no running server, no database connection and no real secrets:
 `_PLACEHOLDER_SETTINGS` below passes every `Settings` field as an explicit
 keyword argument, which pydantic-settings treats as the highest-priority
-source, so construction never reads `SESSION_SECRET`, `LLM_API_KEY`,
+source, so construction never reads `APP_PASSWORD`, `SESSION_SECRET`, `LLM_API_KEY`,
 `APP_ORIGIN` or any other environment variable or `.env` file — the export
 is identical whether those are set, unset, or set to something else
 entirely. None of the placeholder values below ever reaches the exported
@@ -30,7 +30,8 @@ from planora_api.main import create_app
 # of them appear in the rendered document.
 _PLACEHOLDER_SETTINGS = Settings(
     database_url="sqlite:///:memory:",
-    session_secret="openapi-export-placeholder-secret",
+    app_password="openapi-export-placeholder-password",
+    session_secret="openapi-export-placeholder-session-secret",
     llm_base_url="https://llm.invalid/v1",
     llm_api_key="openapi-export-placeholder-key",
     llm_model="openapi-export-placeholder-model",

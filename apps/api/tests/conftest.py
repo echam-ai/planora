@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ from alembic import command
 from planora_api.config import load_settings
 from planora_api.db.session import create_session_factory
 from planora_api.main import create_app
+from planora_api.security import access
 
 # Binding rule 10: temporary files go in the repository's `.tmp/`, never the
 # system temp dir. pytest's own `PYTEST_DEBUG_TEMPROOT` moves the root that
@@ -34,10 +36,11 @@ _REPO_TMP = Path(__file__).resolve().parents[3] / ".tmp"
 _REPO_TMP.mkdir(exist_ok=True)
 os.environ["PYTEST_DEBUG_TEMPROOT"] = str(_REPO_TMP)
 
-# The seven variable names fixed by #21; #22, #25, #26, #37 and #43 rely on
-# these exact names.
+# The variable names fixed by #21 (plus `APP_PASSWORD`, issue #124); #22,
+# #25, #26, #37 and #43 rely on these exact names.
 ENV_VAR_NAMES: tuple[str, ...] = (
     "DATABASE_URL",
+    "APP_PASSWORD",
     "SESSION_SECRET",
     "LLM_BASE_URL",
     "LLM_API_KEY",
@@ -49,9 +52,13 @@ ENV_VAR_NAMES: tuple[str, ...] = (
 
 # A complete, valid configuration a test can start from and selectively
 # override or unset.
+APP_PASSWORD = "correct-site-password"
+SESSION_SECRET = "test-session-secret-0123456789abcdef-xyz"
+
 VALID_ENV: dict[str, str] = {
     "DATABASE_URL": "sqlite:///./test.db",
-    "SESSION_SECRET": "test-session-secret",
+    "APP_PASSWORD": APP_PASSWORD,
+    "SESSION_SECRET": SESSION_SECRET,
     "LLM_BASE_URL": "https://llm.example.com/v1",
     "LLM_API_KEY": "test-llm-api-key",
     "LLM_MODEL": "test-model",
@@ -95,9 +102,15 @@ def make_client(
     base_url: str = "https://test",
     client: tuple[str, int] | None = None,
     raise_app_exceptions: bool = True,
+    authenticated: bool = True,
 ) -> AsyncClient:
     """An `httpx.AsyncClient` against `app`, sending `origin` as the
     `Origin` header by default on every request it makes.
+
+    `authenticated` (issue #124) also sends a valid `planora_access` cookie,
+    minted from the app's own settings and access clock, so a test of a data
+    route needs no unlock step. A test of the password gate itself passes
+    `authenticated=False`.
 
     A test exercising the CSRF middleware itself passes `origin=None` (no
     header at all) or an explicit foreign value; every other test gets a
@@ -112,12 +125,36 @@ def make_client(
         transport_kwargs["client"] = client
     transport = ASGITransport(app=app, **transport_kwargs)
     headers = {"Origin": origin} if origin is not None else None
-    return AsyncClient(transport=transport, base_url=base_url, headers=headers)
+    cookies = {access.COOKIE_NAME: valid_access_token(app)} if authenticated else None
+    return AsyncClient(transport=transport, base_url=base_url, headers=headers, cookies=cookies)
+
+
+def valid_access_token(app: FastAPI) -> str:
+    """A currently valid access cookie value for `app` (issue #124)."""
+    settings = app.state.settings
+    return access.issue_token(
+        session_secret=settings.session_secret,
+        app_password=settings.app_password,
+        now=app.state.access_clock(),
+    )
+
+
+class FakeClock:
+    """An injectable, advanceable access clock (issue #124)."""
+
+    def __init__(self, now: datetime | None = None) -> None:
+        self.now = now or datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC)
+
+    def __call__(self) -> datetime:
+        return self.now
+
+    def advance(self, **kwargs: float) -> None:
+        self.now += timedelta(**kwargs)
 
 
 @pytest.fixture
 def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
-    """Remove all seven configuration variables from the environment.
+    """Remove every configuration variable from the environment.
 
     Prevents a developer's real shell environment from leaking into a test
     that wants to control every value explicitly.
@@ -129,7 +166,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
 
 @pytest.fixture
 def valid_env(clean_env: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
-    """Set all seven configuration variables to valid values."""
+    """Set every configuration variable to a valid value."""
     for name, value in VALID_ENV.items():
         clean_env.setenv(name, value)
     yield clean_env
@@ -139,7 +176,7 @@ def valid_env(clean_env: pytest.MonkeyPatch) -> Iterator[pytest.MonkeyPatch]:
 #
 # Every scratch database lives under the repository's `.tmp/`, never `/tmp`
 # (binding rule 10) — deliberately not pytest's `tmp_path`. `valid_env` first
-# clears all seven configuration variables from the real shell, so these
+# clears every configuration variables from the real shell, so these
 # fixtures never touch the developer's `./planora.db` or a stray
 # `DATABASE_URL` left in the environment.
 
@@ -210,7 +247,7 @@ def seeded_user(migrated_session_factory: sessionmaker[Session]) -> tuple[str, s
 
 
 @pytest.fixture
-def app_factory() -> Iterator[Callable[[], FastAPI]]:
+def app_factory() -> Iterator[Callable[..., FastAPI]]:
     """A `create_app()` wrapper that disposes each built app's database
     engine at teardown.
 
@@ -224,8 +261,8 @@ def app_factory() -> Iterator[Callable[[], FastAPI]]:
     """
     built_apps: list[FastAPI] = []
 
-    def make_app() -> FastAPI:
-        app = create_app()
+    def make_app(**kwargs: object) -> FastAPI:
+        app = create_app(**kwargs)
         built_apps.append(app)
         return app
 

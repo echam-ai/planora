@@ -16,6 +16,7 @@ from planora_api.config import Settings
 from planora_api.db import settings_repository
 from planora_api.errors import (
     PROFILE_RESPONSES,
+    UNAUTHENTICATED_RESPONSE,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
 )
@@ -24,7 +25,9 @@ from planora_api.schemas.settings import (
     SettingsUpdate,
 )
 
-router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
+router = APIRouter(
+    prefix="/api/v1/settings", tags=["settings"], responses=UNAUTHENTICATED_RESPONSE
+)
 
 _VALIDATED_WRITE_RESPONSES = {**WRITE_RESPONSES, 422: VALIDATION_RESPONSE}
 

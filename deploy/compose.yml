@@ -1,6 +1,8 @@
 x-api-environment: &api-environment
   DATABASE_URL: ${DATABASE_URL:?Set postgresql+psycopg://...@db:5432/...}
   LLM_API_KEY: ${LLM_API_KEY:?Set an explicit LLM key (fake for smoke)}
+  APP_PASSWORD: ${APP_PASSWORD:?Set the shared site password (at least 12 characters)}
+  SESSION_SECRET: ${SESSION_SECRET:?Set the cookie-signing secret (at least 32 characters, e.g. openssl rand -base64 32)}
   LLM_BASE_URL: ${LLM_BASE_URL:?Set the OpenAI-compatible LLM endpoint}
   LLM_MODEL: ${LLM_MODEL:?Set the model}
   APP_ORIGIN: ${APP_ORIGIN:?Set the browser-facing origin}

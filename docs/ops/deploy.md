@@ -118,10 +118,14 @@ public leaf certificate to a scratch file and run
 `rtk openssl x509 -in leaf.pem -noout -issuer -subject -dates -ext subjectAltName`.
 Record issuer, exact hostname/SAN match, current validity dates, and the external
 client/network. Never use `curl -k`, a browser certificate bypass, or a fixture
-CA for these production checks. Choose Hamster Knight or Ech Princess on the
-landing page and create a non-AI task over the HTTPS origin. Scoped API requests
-carry `X-Planora-Profile`; no authentication cookie is used. Missing/foreign Origin must
-still return `403 CSRF_ORIGIN_MISMATCH`. Until off-host evidence exists, both
+CA for these production checks. Set strong production `APP_PASSWORD` and
+`SESSION_SECRET` values first (the stack refuses to start without them). Open the
+public URL in a private window, expect the password page, unlock, choose Hamster
+Knight or Ech Princess and create a non-AI task over the HTTPS origin. Scoped API
+requests carry `X-Planora-Profile` and the `planora_access` cookie (`Secure`,
+`HttpOnly`, `SameSite=Lax`); the same request without the cookie returns
+`401 NOT_AUTHENTICATED`. Missing/foreign Origin must still return
+`403 CSRF_ORIGIN_MISMATCH`. Until off-host evidence exists, both
 issue #46 HUMAN checks remain unchecked; local success is not a public deployment.
 
 ## Isolated automated TLS fixture
@@ -159,3 +163,5 @@ recreation. Cleanup deletes only this explicitly disposable project's volumes.
 Optional `PLANORA_TLS_HTTP_PORT`/`PLANORA_TLS_HTTPS_PORT` environment variables
 change the fixture ports for both Compose and curl. Fixture evidence cannot
 satisfy the external public-certificate checks.
+The `Compose stack (Docker)` CI job runs this regression on every push with
+disposable values (see [compose-stack.md](compose-stack.md#continuous-integration)).

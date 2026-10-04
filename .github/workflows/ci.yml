@@ -62,6 +62,12 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    # Disposable gate secrets (#124). The suite sets its own per-test values;
+    # these only keep any bare `load_settings()` from failing the minimum
+    # lengths (APP_PASSWORD 12, SESSION_SECRET 32).
+    env:
+      APP_PASSWORD: disposable-ci-site-password
+      SESSION_SECRET: disposable-ci-session-secret-0123456789abcdef
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: astral-sh/setup-uv@v10.2.0
@@ -103,7 +109,8 @@ jobs:
     env:
       PLANORA_TEST_POSTGRES_URL: postgresql+psycopg://planora_test:disposable-ci-only@127.0.0.1:5432/planora_test_ci
       DATABASE_URL: postgresql+psycopg://planora_test:disposable-ci-only@127.0.0.1:5432/planora_test_ci
-      SESSION_SECRET: disposable-ci-session
+      APP_PASSWORD: disposable-ci-site-password
+      SESSION_SECRET: disposable-ci-session-secret-0123456789abcdef
       LLM_API_KEY: disposable-ci-key
       APP_ORIGIN: https://planora.example
     steps:
@@ -170,6 +177,179 @@ jobs:
         with:
           name: playwright-report-http
           path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # The Docker Compose checks (#124 AC26) that need a Docker daemon: the
+  # six-service stack browser check (`bun run e2e:compose`) and the two opt-in
+  # Docker pytest smokes (TLS fixture, backup/restore). Every value below is a
+  # disposable fixture written into the env files here; no repository secret is
+  # read. Each stage owns a distinct project, subnet and loopback ports, so
+  # nothing collides: main stack 172.30.43.0/24 on 18080, TLS fixture
+  # 172.30.46.0/24 on 18046/18446 (it builds and removes its own stack), and the
+  # backup smoke's default network on 15445. A fresh runner VM has no other
+  # Compose project, so `down --volumes` below only ever touches these three.
+  compose:
+    name: Compose stack (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The `planora45-`/`planora46-` prefixes are asserted by the smokes.
+      PLANORA_CI_MAIN_PROJECT: planora43-ci-${{ github.run_id }}
+      PLANORA_CI_TLS_PROJECT: planora46-ci-${{ github.run_id }}
+      PLANORA_CI_BACKUP_PROJECT: planora45-ci-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          working-directory: apps/api
+      - uses: oven-sh/setup-bun@v2.2.0
+      - name: Install API dependencies
+        run: uv sync --frozen
+        working-directory: apps/api
+      - name: Install web dependencies
+        run: bun install --frozen-lockfile
+        working-directory: apps/web
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/bun.lock') }}
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+        working-directory: apps/web
+      # docs/ops/compose-stack.md "Configuration" values. The TLS smoke requires
+      # its env file under <repo>/.tmp (see test_deployment_https.py).
+      - name: Write disposable env files
+        run: |
+          mkdir -p .tmp
+          cat > .tmp/compose43.env <<'EOF'
+          CADDY_BIND_ADDRESS=127.0.0.1
+          CADDY_HTTP_PORT=18080
+          APP_ORIGIN=http://127.0.0.1:18080
+          PROXY_SUBNET=172.30.43.0/24
+          PROXY_DYNAMIC_RANGE=172.30.43.128/25
+          CADDY_IP=172.30.43.2
+          IMAGE_TAG=issue-43-smoke
+          POSTGRES_DB=planora_smoke
+          POSTGRES_USER=planora_smoke
+          POSTGRES_PASSWORD=disposable43password
+          DATABASE_URL=postgresql+psycopg://planora_smoke:disposable43password@db:5432/planora_smoke
+          LLM_API_KEY=disposable43key
+          APP_PASSWORD=disposable43-site-password
+          SESSION_SECRET=disposable43-session-secret-0123456789abc
+          LLM_BASE_URL=https://api.moonshot.ai/v1
+          LLM_MODEL=kimi-k3
+          DEFAULT_TIMEZONE=Asia/Singapore
+          EOF
+          # docs/ops/deploy.md "Isolated automated TLS fixture": production
+          # overlay + .localhost domain, loopback bind, its own subnet. The
+          # smoke overrides APP_PASSWORD/SESSION_SECRET through the process
+          # environment; the file still needs them so `build` can interpolate.
+          cat > .tmp/https46.env <<'EOF'
+          CADDY_BIND_ADDRESS=127.0.0.1
+          CADDY_HTTP_PORT=18046
+          APP_ORIGIN=https://planora.localhost
+          PLANORA_DOMAIN=planora.localhost
+          PROXY_SUBNET=172.30.46.0/24
+          PROXY_DYNAMIC_RANGE=172.30.46.128/25
+          CADDY_IP=172.30.46.2
+          IMAGE_TAG=issue-46-tls
+          POSTGRES_DB=planora_tls
+          POSTGRES_USER=planora_tls
+          POSTGRES_PASSWORD=disposable46password
+          DATABASE_URL=postgresql+psycopg://planora_tls:disposable46password@db:5432/planora_tls
+          LLM_API_KEY=disposable46key
+          APP_PASSWORD=disposable46-site-password
+          SESSION_SECRET=disposable46-session-secret-0123456789abc
+          LLM_BASE_URL=https://api.moonshot.ai/v1
+          LLM_MODEL=kimi-k3
+          DEFAULT_TIMEZONE=Asia/Singapore
+          EOF
+
+      # Stage 1: the setup-HTTP stack and its browser check.
+      - name: Build and initialize the Compose stack
+        run: |
+          compose() { docker compose --env-file .tmp/compose43.env -p "$PLANORA_CI_MAIN_PROJECT" -f deploy/compose.yml "$@"; }
+          compose config --quiet
+          compose build
+          compose up -d --wait db
+          compose run --rm --no-deps api alembic upgrade head
+          compose up -d
+          compose ps
+      - name: Wait for the stack to be healthy
+        run: |
+          for path in /health /api/v1/health /; do
+            curl --fail --silent --show-error --noproxy '*' \
+              --retry 30 --retry-all-errors --retry-delay 2 \
+              "http://127.0.0.1:18080$path" > /dev/null
+          done
+      - name: E2E (Compose)
+        run: bun run e2e:compose
+        working-directory: apps/web
+        env:
+          PLANORA_E2E_COMPOSE_ORIGIN: http://127.0.0.1:18080
+          PLANORA_E2E_COMPOSE_PASSWORD: disposable43-site-password
+
+      # Stage 2 and 3 build and clean up their own stacks and do not depend on
+      # stage 1, so they still run (and report) when it fails.
+      - name: Build the TLS fixture images
+        if: ${{ !cancelled() }}
+        run: >-
+          docker compose --env-file .tmp/https46.env -p "$PLANORA_CI_TLS_PROJECT"
+          -f deploy/compose.yml -f deploy/compose.production.yml -f deploy/compose.test-https.yml
+          build
+      - name: Deployment TLS smoke
+        if: ${{ !cancelled() }}
+        run: uv run pytest tests/integration/test_deployment_https.py -v -s
+        working-directory: apps/api
+        env:
+          PLANORA_TLS_SMOKE_PROJECT: ${{ env.PLANORA_CI_TLS_PROJECT }}
+          PLANORA_TLS_SMOKE_ENV: ${{ github.workspace }}/.tmp/https46.env
+      - name: Start the backup smoke database
+        if: ${{ !cancelled() }}
+        run: >-
+          docker compose -p "$PLANORA_CI_BACKUP_PROJECT"
+          -f deploy/compose.test-backup.yml up -d --wait --build
+      - name: Backup and restore smoke
+        if: ${{ !cancelled() }}
+        run: uv run pytest tests/integration/test_deployment_backup_restore.py -v -s
+        working-directory: apps/api
+        env:
+          PLANORA_BACKUP_SMOKE_PROJECT: ${{ env.PLANORA_CI_BACKUP_PROJECT }}
+
+      - name: Collect Compose logs
+        if: failure()
+        run: |
+          mkdir -p compose-ci-logs
+          docker compose --env-file .tmp/compose43.env -p "$PLANORA_CI_MAIN_PROJECT" -f deploy/compose.yml \
+            ps --all > compose-ci-logs/main-ps.txt 2>&1 || true
+          docker compose --env-file .tmp/compose43.env -p "$PLANORA_CI_MAIN_PROJECT" -f deploy/compose.yml \
+            logs --no-color --timestamps > compose-ci-logs/main.log 2>&1 || true
+          docker compose -p "$PLANORA_CI_BACKUP_PROJECT" -f deploy/compose.test-backup.yml \
+            logs --no-color --timestamps > compose-ci-logs/backup-smoke.log 2>&1 || true
+      # Only the projects created above; a failed command must not skip the rest.
+      - name: Tear down Compose projects
+        if: always()
+        run: |
+          status=0
+          docker compose --env-file .tmp/compose43.env -p "$PLANORA_CI_MAIN_PROJECT" -f deploy/compose.yml \
+            down --volumes --remove-orphans || status=1
+          docker compose --env-file .tmp/https46.env -p "$PLANORA_CI_TLS_PROJECT" \
+            -f deploy/compose.yml -f deploy/compose.production.yml -f deploy/compose.test-https.yml \
+            down --volumes --remove-orphans || status=1
+          docker compose -p "$PLANORA_CI_BACKUP_PROJECT" -f deploy/compose.test-backup.yml \
+            down --volumes --remove-orphans || status=1
+          exit "$status"
+      - name: Upload Compose diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: compose-diagnostics
+          path: |
+            compose-ci-logs/
             apps/web/playwright-report/
             apps/web/test-results/
           retention-days: 7

@@ -16,6 +16,15 @@ export type ArchivePage = {
 };
 
 export interface ApiClient {
+  /**
+   * The site-password gate (#124). `getAccess` never rejects with 401: it is how the app learns
+   * whether to show the password page. Every other method rejects with 401 `NOT_AUTHENTICATED`
+   * while locked. `unlock` rejects with 401 `INVALID_PASSWORD` for a wrong password.
+   */
+  getAccess(): Promise<{ authenticated: boolean }>;
+  unlock(password: string): Promise<void>;
+  lock(): Promise<void>;
+
   getProfiles(): Promise<ReadonlyArray<{ id: ProfileId; name: string }>>;
 
   getSettings(): Promise<AppSettings>;

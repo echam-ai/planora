@@ -3,10 +3,11 @@ import { openTaskSheet, signIn } from "./helpers";
 import { expectNoHorizontalScroll, expectSeparateBoxes, expectTouchTargets } from "./touch-targets";
 
 // Sixteen states, on both projects; no mobile/desktop skips or weakened geometry checks.
-test("touch targets: login", async ({ page }) => {
+test("touch targets: password page", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("button", { name: "Hamster Knight" })).toBeVisible();
-  await expectTouchTargets(page, "1: login");
+  await expect(page.getByRole("button", { name: "Unlock" })).toBeEnabled();
+  await expectNoHorizontalScroll(page, "1: password page");
+  await expectTouchTargets(page, "1: password page");
 });
 
 test("touch targets: filtered board and account menu", async ({ page }) => {

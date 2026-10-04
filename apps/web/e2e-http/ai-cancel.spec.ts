@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { expectHydrated } from "../e2e/hydration";
-import { llmOrigin, runSettings } from "./env";
+import { unlock } from "../e2e/unlock";
+import { SITE_PASSWORD, llmOrigin, runSettings } from "./env";
 
 /**
  * #123 against the real stack: browser, dev proxy, FastAPI and a loopback provider fixture that
@@ -64,7 +65,7 @@ async function openAssistant(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  await unlock(page, SITE_PASSWORD);
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
   // Start every spec from an empty conversation. The write needs the app's Origin (CSRF).

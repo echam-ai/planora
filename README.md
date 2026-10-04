@@ -1,7 +1,7 @@
 # Planora
 
-Planora is a private AI task manager with two fixed unauthenticated profiles,
-**Hamster Knight** and **Ech Princess**: a three-column Kanban
+Planora is a private AI task manager with two fixed profiles,
+**Hamster Knight** and **Ech Princess**, behind one shared site password: a three-column Kanban
 board, a searchable archive, and one AI chat conversation whose every write
 you confirm before it happens.
 
@@ -34,6 +34,11 @@ uvicorn API and web dev server on free ports, on a fresh migrated SQLite
 database under `.tmp/`, and never reads `apps/api/.env`. It needs `uv sync`
 in `apps/api` first, and it runs in CI as the `e2e-http` job.
 
+The Docker Compose checks (`bun run e2e:compose` against the six-service stack,
+plus the opt-in TLS and backup/restore pytest smokes) need a Docker daemon and
+run in CI as the `compose` job; see
+[`docs/ops/compose-stack.md`](docs/ops/compose-stack.md).
+
 ## API tier
 
 See [`apps/api/README.md`](apps/api/README.md) for setup with `uv`,
@@ -53,13 +58,20 @@ never used by this path.
 cp apps/api/.env.example apps/api/.env
 ```
 
-Edit `apps/api/.env` and fill in **only `LLM_API_KEY`** — use `LLM_API_KEY=placeholder`
-if you don't have a real key yet, which leaves AI parsing and chat
-unavailable (see the note below for a real key). Leave `APP_ORIGIN` blank;
-the launcher uses `http://localhost:5173` automatically. No account setup,
-username, password or session secret is required. Open the landing page and
-choose **Hamster Knight** or **Ech Princess**. Profile choice separates saved
-data and is not identity protection.
+Edit `apps/api/.env` and fill in three values. `LLM_API_KEY`: use
+`LLM_API_KEY=placeholder` if you don't have a real key yet, which leaves AI
+parsing and chat unavailable (see the note below for a real key).
+`APP_PASSWORD`: the one shared site password, at least 12 characters. `SESSION_SECRET`:
+the secret that signs the access cookie, at least 32 characters, for example the output
+of `openssl rand -base64 32`. The launcher refuses to start when either is blank or too
+short, and never prints them. Leave `APP_ORIGIN` blank; the launcher uses
+`http://localhost:5173` automatically. There are no accounts or usernames.
+Open the app, enter `APP_PASSWORD` on the unlock page, then choose
+**Hamster Knight** or **Ech Princess**. Profile choice separates saved data and
+is not identity protection; the shared password is the only gate. **Lock** in the
+account menu signs out of that browser. Changing `APP_PASSWORD` or
+`SESSION_SECRET` (and restarting) signs every browser out, which is also how to
+revoke a copied cookie.
 
 **Launch**, from the repository root:
 
@@ -79,7 +91,9 @@ Optional overrides belong in `apps/api/.env`: set `APP_ORIGIN` to
 `http://localhost:<port>` or `http://127.0.0.1:<port>` (port 1–65535) to
 choose the exact web address. A busy port fails rather than selecting another.
 Direct API and scheduler commands and deployment require explicit nonblank
-`APP_ORIGIN` and `LLM_API_KEY`. Neither profile needs credential setup.
+`APP_ORIGIN`, `LLM_API_KEY`, `APP_PASSWORD` (at least 12 characters) and
+`SESSION_SECRET` (at least 32); startup fails fast, naming each offender,
+when any is missing or too short. Neither profile has its own credentials.
 
 A placeholder `LLM_API_KEY` (e.g. `LLM_API_KEY=placeholder`) is enough to
 start everything — the board, tasks and archive all work — but AI parsing
@@ -170,8 +184,8 @@ confirm its owning process before sending any signal.
 - [Architecture decisions](docs/adr/)
 
 Profile selection separates tasks, ordering, archive/search, chat/proposals and
-preferences. It is not identity protection: anyone who can reach the app can
-choose either account. `/` always shows the chooser; refresh and direct links
+preferences. It is not identity protection: anyone who has unlocked Planora with
+the shared site password can choose either account. `/` always shows the chooser; refresh and direct links
 remember a valid browser selection. Use **Switch account** to discard unsaved
 views and return to the chooser. Legacy data belongs to Hamster Knight; Ech
 Princess starts empty with deployment defaults.

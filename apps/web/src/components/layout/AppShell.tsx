@@ -2,10 +2,11 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Archive,
+  ArrowLeftRight,
   Bot,
   ChevronDown,
   LayoutGrid,
-  LogOut,
+  Lock,
   Monitor,
   Moon,
   Palette,
@@ -29,6 +30,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { BrandMark } from "@/components/brand/BrandMark";
 import { ProfileAvatar } from "@/components/brand/ProfileAvatar";
+import { setAccessState } from "@/features/auth/access";
+import { api } from "@/services/api";
 import { THEME_OPTIONS, parseThemePreference, useTheme, type ThemePreference } from "@/lib/theme";
 import { ChatPanel } from "@/features/chat/components/ChatPanel";
 import { CreateTaskDialog } from "@/features/tasks/components/CreateTaskDialog";
@@ -104,6 +107,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     selectProfile(null);
     qc.clear();
     navigate({ to: "/" });
+  };
+  const [lockFailed, setLockFailed] = useState(false);
+  // Lock ends this browser's access (#124). Only a successful `lock()` leaves the page: if the
+  // cookie could not be cleared the user stays, told so, rather than shown a locked-looking page
+  // that is still unlocked. Leaving unmounts the board, its task sheet and the chat panel.
+  const lock = async () => {
+    setLockFailed(false);
+    try {
+      await api.lock();
+    } catch {
+      setLockFailed(true);
+      return;
+    }
+    setChatOpen(false);
+    setCreateOpen(false);
+    qc.clear();
+    setAccessState("locked");
+    navigate({ to: "/login", replace: true });
   };
 
   return (
@@ -213,13 +234,25 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}>
-                  <LogOut className="h-4 w-4" /> Switch account
+                  <ArrowLeftRight className="h-4 w-4" /> Switch account
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void lock()}>
+                  <Lock className="h-4 w-4" /> Lock
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </header>
+
+      {lockFailed && (
+        <div
+          role="alert"
+          className="sticky top-[65px] z-20 flex items-center justify-center gap-2 border-b border-destructive/30 bg-card px-4 py-2 text-sm font-medium text-destructive"
+        >
+          <Lock className="h-4 w-4" aria-hidden /> Couldn't lock. Try again.
+        </div>
+      )}
 
       <div className="flex flex-1">
         <main className="min-w-0 flex-1 pb-24 md:pb-0">{children}</main>

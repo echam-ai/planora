@@ -18,7 +18,7 @@ Kanban workflow with an AI chat assistant. The application should make it fast
 to capture an unstructured request, review the fields extracted by AI, manage
 the task through completion, and retrieve completed work from an archive.
 
-The v1 product offers two fixed, separate profiles without authentication. It prioritizes reliable task
+The v1 product offers two fixed, separate profiles behind one shared site password. It prioritizes reliable task
 capture, clear deadline visibility, explicit confirmation of AI actions, and a
 clean path from local development to VPS deployment.
 
@@ -26,7 +26,7 @@ clean path from local development to VPS deployment.
 
 v1 is successful when the user can:
 
-1. Choose Hamster Knight or Ech Princess without credentials.
+1. Unlock the application with the shared site password, then choose Hamster Knight or Ech Princess.
 2. Create a task using either a structured form or natural-language input.
 3. Review and correct every AI-extracted field before the task is saved.
 4. Move tasks among Todo, In Progress, and Done.
@@ -46,30 +46,53 @@ v1 is successful when the user can:
   **Ech Princess** (`ech_princess`). Neither can be created, renamed, or removed.
 - Each owns independent tasks, board order, archive/search, one current chat
   conversation/messages/proposals, timezone, and editable non-secret model overrides.
-- Profile choice is not identity protection: anyone who can reach the application
-  can select either profile. No registration, invitations, sharing, permissions,
-  username, password, or authenticated session exists.
+- Profile choice is not identity protection: anyone who has unlocked the application
+  can select either profile. The only credential is **one shared site password**
+  (`APP_PASSWORD`) that gates the whole application, including the chooser. No
+  registration, invitations, sharing, permissions, usernames, per-profile
+  passwords or per-user identities exist.
 - Existing database and legacy mock browser data migrate intact to Hamster Knight;
   Ech Princess begins empty with deployment-default settings.
 
-### 3.2 Profile selection and request context
+### 3.2 Site password, profile selection and request context
 
+- **Site password.** Before anything else, `/login` shows a password page with one
+  password field and an **Unlock** button. A correct password sets the access cookie
+  and goes to `/`; a wrong one shows `Incorrect password.` in an alert. Every other
+  route, `/` included, redirects to `/login` while the browser has no valid cookie,
+  and any `401 NOT_AUTHENTICATED` from the API mid-session returns there too.
+- **Access cookie.** `planora_access` is HttpOnly, `SameSite=Lax`, `Path=/`, and
+  `Secure` when `APP_ORIGIN` is https. It is a stateless signed token carrying its
+  own expiry, valid for exactly 30 days from unlock and not renewed on use, so no
+  table or session store exists. Changing `APP_PASSWORD` or `SESSION_SECRET`
+  invalidates every issued cookie. The shell account menu offers **Lock**, which
+  signs out of that browser only; a copied cookie stays valid until it expires, so
+  rotating `SESSION_SECRET` is the way to revoke every copy.
+- **Rate limit.** Five failed unlock attempts from one client IP within a sliding
+  15-minute window block further attempts from that IP with `429 RATE_LIMITED` and
+  `Retry-After`; a successful unlock resets the count. The counter is in memory
+  (one API process) and the client IP comes from the trusted reverse proxy.
 - `/` always shows the account chooser, even after a previous selection. Choosing
   a profile enters its Active Tasks board. The valid selection is remembered in
   browser storage for refresh and direct tasks/archive/settings navigation.
-- Missing or invalid remembered selection returns to the chooser. Former `/login`
-  links also return there. The shell displays the selected name and **Switch account**.
+- Missing or invalid remembered selection returns to the chooser. The shell
+  displays the selected name, **Switch account** and **Lock**.
 - Switching discards unsaved view state, task/chat panels, drafts, and confirmations.
   Requests and writes retain their originating profile; late results cannot enter
   the new profile's cache or alter its data.
-- Public `GET /api/v1/profiles` lists the fixed catalog. Every scoped data/AI request
-  requires `X-Planora-Profile: hamster_knight` or `ech_princess`; missing/invalid
-  context returns `422 VALIDATION_ERROR`, with no fallback or login cookie.
+- `GET /api/v1/profiles` lists the fixed catalog and, like every other data route,
+  needs the access cookie. Every scoped data/AI request also requires
+  `X-Planora-Profile: hamster_knight` or `ech_princess`; missing/invalid context
+  returns `422 VALIDATION_ERROR`, with no fallback. The access check runs first, so a
+  request without a valid cookie gets `401 NOT_AUTHENTICATED` whatever its profile
+  header, and an unauthenticated AI request never reaches the LLM.
 - **Single origin.** `/api/v1/*` routes to the API on the same hostname as the web.
   State-changing requests must have `Origin` matching the configured application
   origin. Server-side validation and transactions remain authoritative.
-- Credential/session/password APIs and password administration are retired. Runtime
-  startup requires no authentication session secret.
+- The only credential APIs are the three under `/api/v1/auth/*` (§13.1). Per-user
+  accounts, password change and password administration remain retired. Startup
+  requires `APP_PASSWORD` (at least 12 characters) and `SESSION_SECRET` (at least 32)
+  and fails fast when either is blank or too short.
 - LLM keys, endpoints, available models, deployment infrastructure and backup
   scheduling remain global/server-owned; secrets never reach the browser.
 
@@ -458,11 +481,22 @@ that is the property acceptance criterion 16 protects.
 
 ### 13.1 Surface
 
-All endpoints except profiles and health require the explicit profile header in
-§3.2. Missing/invalid profile returns the standard `422 VALIDATION_ERROR` envelope.
-Other-profile task/proposal IDs return not-found without mutation (including
-reorder); unknown reorder IDs retain validation errors. `/auth/*` and
-`/settings/password` no longer perform credential/session operations.
+Every endpoint except health and `/auth/*` requires the access cookie and returns
+`401 NOT_AUTHENTICATED` without one. All of those except the profiles catalog also
+require the explicit profile header in §3.2; missing/invalid profile returns the
+standard `422 VALIDATION_ERROR` envelope, after the access check. Other-profile
+task/proposal IDs return not-found without mutation (including reorder); unknown
+reorder IDs retain validation errors. `/settings/password` no longer exists.
+
+The site-password endpoints are public and need no profile header; `Origin` checking
+covers login and logout:
+
+- `POST /api/v1/auth/login` `{password}` returns `200 {authenticated: true}` and sets
+  `planora_access`. A wrong password returns `401 INVALID_PASSWORD` (constant-time
+  comparison), a missing or empty one `422 VALIDATION_ERROR`, and a blocked client IP
+  `429 RATE_LIMITED` with `Retry-After`.
+- `POST /api/v1/auth/logout` clears the cookie and returns `204`.
+- `GET /api/v1/auth/session` returns `{authenticated: bool}` and never `401`.
 
 The API is a versioned JSON REST API under `/api/v1`, with a streaming response
 mechanism for chat if needed. Exact paths may change during API design, but the
@@ -601,14 +635,14 @@ For a personal dataset of up to 10,000 tasks:
 
 - Structured server logs for request failures, archive jobs, backups, and LLM
   failures.
-- Logs must redact passwords, session tokens, API keys, full chat prompts, and
-  sensitive task content by default.
+- Logs must redact the site password, session secret and access cookie, API keys,
+  full chat prompts, and sensitive task content by default.
 - A simple public or internal health endpoint is required for deployment
   checks.
 
 ## 16. Explicitly out of scope for v1
 
-- Additional profiles, registration, authentication, sharing, assignments, teams, or permissions.
+- Additional profiles, registration, per-user authentication, sharing, assignments, teams, or permissions. The single shared site password (§3.2) is in scope.
 - Recurring tasks.
 - Subtasks, dependencies, projects, custom tags, or custom categories.
 - Browser, push, email, SMS, or messaging reminders.
@@ -630,8 +664,10 @@ For a personal dataset of up to 10,000 tasks:
 
 v1 may be considered complete only when all of the following pass:
 
-1. `/` always offers exactly Hamster Knight and Ech Princess without credentials
-   or sessions; valid selection persists for refresh/deep links. Switch account
+1. Behind the shared site password (`/login`, the signed access cookie and `401`
+   on every data route without it), `/` always offers exactly Hamster Knight and
+   Ech Princess without per-profile credentials; valid selection persists for
+   refresh/deep links. Switch account
    clears unsaved views and isolates late requests. Tasks/order/archive/chat/
    proposals/timezone/model overrides remain independent; legacy data is preserved
    under Hamster Knight and Ech Princess begins empty/default.
@@ -669,7 +705,7 @@ v1 may be considered complete only when all of the following pass:
 19. Daily backup rotation retains seven backups, and the documented restore
     procedure succeeds.
 20. No frontend bundle or API response contains the LLM API key, database
-    credentials, or historical password hashes.
+    credentials, `APP_PASSWORD`, `SESSION_SECRET`, or historical password hashes.
 21. **Contract integrity.** Regenerating TypeScript types from the live
     `openapi.json` produces no diff against the committed output.
 22. **Filter composition.** Multi-select filters combine across category,

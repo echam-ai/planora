@@ -26,7 +26,7 @@ function lastRequest(fetchSpy: ReturnType<typeof vi.fn>) {
 
 describe("httpApiClient — profiles", () => {
   afterEach(() => vi.unstubAllGlobals());
-  it("reads the public catalog without cookies or profile context", async () => {
+  it("reads the catalog with same-origin cookies and without profile context", async () => {
     const fetchSpy = stubFetch(
       jsonResponse(200, [
         { id: "hamster_knight", name: "Hamster Knight" },
@@ -36,7 +36,7 @@ describe("httpApiClient — profiles", () => {
     expect(await httpApiClient.getProfiles()).toHaveLength(2);
     const { url, init } = lastRequest(fetchSpy);
     expect(url).toBe("/api/v1/profiles");
-    expect(init.credentials).toBe("omit");
+    expect(init.credentials).toBe("same-origin");
     expect(new Headers(init.headers).has("X-Planora-Profile")).toBe(false);
   });
   it("captures the originating profile for every scoped endpoint", async () => {
@@ -598,4 +598,66 @@ describe("httpApiClient — cancellation", () => {
       expect(fetchSpy.mock.calls[0]?.[1]).not.toHaveProperty("signal");
     },
   );
+});
+
+describe("httpApiClient — site password gate (#124)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("getAccess: GET /api/v1/auth/session, never carrying a profile", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, { authenticated: false }));
+    await expect(createHttpApiClient("hamster_knight").getAccess()).resolves.toEqual({
+      authenticated: false,
+    });
+    const { url, init } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/auth/session");
+    expect(init.method).toBe("GET");
+    expect(init.credentials).toBe("same-origin");
+  });
+
+  it("unlock: POST /api/v1/auth/login with the password as the JSON body", async () => {
+    const fetchSpy = stubFetch(jsonResponse(200, { authenticated: true }));
+    await expect(httpApiClient.unlock("a long passphrase")).resolves.toBeUndefined();
+    const { url, init, body } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/auth/login");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+    expect(body).toEqual({ password: "a long passphrase" });
+    expect(new Headers(init.headers).has("Origin")).toBe(false);
+  });
+
+  it("unlock surfaces INVALID_PASSWORD and RATE_LIMITED as ApiErrors", async () => {
+    stubFetch(jsonResponse(401, { code: "INVALID_PASSWORD", message: "Incorrect password." }));
+    await expect(httpApiClient.unlock("nope")).rejects.toMatchObject({
+      status: 401,
+      code: "INVALID_PASSWORD",
+    });
+    stubFetch(
+      jsonResponse(429, {
+        code: "RATE_LIMITED",
+        message: "Too many incorrect attempts. Try again later.",
+      }),
+    );
+    await expect(httpApiClient.unlock("nope")).rejects.toMatchObject({
+      status: 429,
+      code: "RATE_LIMITED",
+    });
+  });
+
+  it("lock: POST /api/v1/auth/logout resolves on 204", async () => {
+    const fetchSpy = stubFetch(noBodyResponse(204));
+    await expect(httpApiClient.lock()).resolves.toBeUndefined();
+    const { url, init } = lastRequest(fetchSpy);
+    expect(url).toBe("/api/v1/auth/logout");
+    expect(init.method).toBe("POST");
+  });
+
+  it("a gated route's 401 NOT_AUTHENTICATED surfaces as an ApiError", async () => {
+    stubFetch(
+      jsonResponse(401, { code: "NOT_AUTHENTICATED", message: "Authentication is required." }),
+    );
+    await expect(httpApiClient.getProfiles()).rejects.toMatchObject({
+      status: 401,
+      code: "NOT_AUTHENTICATED",
+    });
+  });
 });

@@ -1,6 +1,8 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach } from "vitest";
+import { resetAccessState } from "@/features/auth/access";
+import { ACCESS_KEY } from "@/services/api/mock/access";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -24,4 +26,9 @@ afterEach(() => {
   cleanup();
 });
 
-beforeEach(() => window.localStorage.setItem("planora.profile", "hamster_knight"));
+// Tests start with the demo gate open and an account chosen; the gate's own tests lock it.
+beforeEach(() => {
+  window.localStorage.setItem("planora.profile", "hamster_knight");
+  window.localStorage.setItem(ACCESS_KEY, "1");
+  resetAccessState();
+});

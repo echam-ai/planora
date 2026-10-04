@@ -15,6 +15,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[4]
 DOMAIN = "planora.localhost"
 ORIGIN = f"https://{DOMAIN}"
+# Disposable gate secrets for this fixture project only (#124). They reach
+# Compose through the process environment, which outranks `--env-file`, so the
+# operator's fixture env file never needs them; both meet the API's minimum
+# lengths (12 and 32).
+FIXTURE_PASSWORD = "issue46-fixture-site-password"
+FIXTURE_SECRET = "issue46-fixture-session-secret-0123456789"
 
 
 def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_path):
@@ -28,15 +34,17 @@ def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_pat
     for name in ("compose.yml", "compose.production.yml", "compose.test-https.yml"):
         compose += ["-f", str(ROOT / "deploy" / name)]
 
+    fixture_env = dict(os.environ, APP_PASSWORD=FIXTURE_PASSWORD, SESSION_SECRET=FIXTURE_SECRET)
+
     def run(*args, check=True, input=None):
-        result = subprocess.run(compose + list(args), cwd=ROOT, check=False,
+        result = subprocess.run(compose + list(args), cwd=ROOT, check=False, env=fixture_env,
                                 capture_output=True, text=True, input=input)
         if check:
             assert result.returncode == 0, result.stderr
         return result
 
     production = compose[:-2]
-    production_env = dict(os.environ, PLANORA_DOMAIN="tasks.example.com")
+    production_env = dict(fixture_env, PLANORA_DOMAIN="tasks.example.com")
     production_config = json.loads(subprocess.run(
         production + ["config", "--format", "json"], cwd=ROOT, env=production_env,
         check=True, capture_output=True, text=True).stdout)
@@ -44,9 +52,14 @@ def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_pat
     for service in ("api", "scheduler"):
         assert production_config["services"][service]["environment"]["APP_ORIGIN"] == "https://tasks.example.com"
     unset = subprocess.run(production + ["config", "--quiet"], cwd=ROOT,
-                           env=dict(os.environ, PLANORA_DOMAIN=""),
+                           env=dict(fixture_env, PLANORA_DOMAIN=""),
                            check=False, capture_output=True, text=True)
     assert unset.returncode != 0 and "PLANORA_DOMAIN" in unset.stderr
+    for name in ("APP_PASSWORD", "SESSION_SECRET"):
+        missing = subprocess.run(
+            production + ["config", "--quiet"], cwd=ROOT, check=False, capture_output=True,
+            text=True, env={**production_env, name: ""})
+        assert missing.returncode != 0 and name in missing.stderr
 
     rendered = json.loads(run("config", "--format", "json").stdout)
     for service, config in rendered["services"].items():
@@ -122,10 +135,24 @@ def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_pat
             assert status == 200 and json.loads(body) == {"status": "ok"}
         assert request("/")[0] == 200
         status, _, body = request("/api/v1/does-not-exist")
-        assert status == 404 and json.loads(body)["code"] == "NOT_FOUND"
+        assert status == 401 and json.loads(body)["code"] == "NOT_AUTHENTICATED"
+        # Locked until the shared site password is entered (#124).
+        status, _, body = request("/api/v1/profiles")
+        assert status == 401 and json.loads(body)["code"] == "NOT_AUTHENTICATED"
+        status, _, body = request("/api/v1/auth/login", method="POST", origin=ORIGIN,
+                                  body={"password": "wrong-site-password"})
+        assert status == 401 and json.loads(body)["code"] == "INVALID_PASSWORD"
+        status, headers, body = request("/api/v1/auth/login", method="POST", origin=ORIGIN,
+                                        body={"password": FIXTURE_PASSWORD})
+        assert status == 200 and json.loads(body) == {"authenticated": True}
+        cookie = next(line for line in headers.splitlines()
+                      if line.lower().startswith("set-cookie: planora_access="))
+        assert all(attr in cookie.lower() for attr in ("httponly", "secure", "samesite=lax", "path=/"))
         status, headers, body = request("/api/v1/profiles")
         assert status == 200 and len(json.loads(body)) == 2
         assert "set-cookie:" not in headers.lower()
+        status, _, body = request("/api/v1/does-not-exist")
+        assert status == 404 and json.loads(body)["code"] == "NOT_FOUND"
         status, _, body = request("/api/v1/tasks", method="POST", origin=ORIGIN,
                                  body={"title": "HTTPS transport", "content": "Fixture write"})
         assert status == 201
@@ -140,7 +167,7 @@ def test_caddy_https_redirect_profile_origin_and_persistent_certificates(tmp_pat
         run("cp", "caddy:/data/caddy/pki/authorities/local/root.crt", str(ca))
         assert ca.read_bytes() == root_before
         assert request(f"/api/v1/tasks/{task_id}")[0] == 200
-        print("308 path/query redirect; CA-validated HTTPS health/prefix; no login cookies")
+        print("308 path/query redirect; CA-validated HTTPS health/prefix; site-password gate and Secure cookie")
         print("HTTPS Origin write accepted; missing/wrong Origin rejected; all service ports private")
         print("Caddy leaf/root state and profile-owned task survive proxy recreation")
     finally:

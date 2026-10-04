@@ -64,6 +64,26 @@ def test_exit_2_with_message_naming_the_variable_on_invalid_configuration(
     assert "LLM_API_KEY" in captured.err
 
 
+@pytest.mark.parametrize("name", ["APP_PASSWORD", "SESSION_SECRET"])
+@pytest.mark.parametrize("value", [None, "", "short"])
+def test_exit_2_naming_a_missing_or_short_gate_secret(
+    valid_env: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    name: str,
+    value: str | None,
+) -> None:
+    if value is None:
+        valid_env.delenv(name)
+    else:
+        valid_env.setenv(name, value)
+
+    assert main([]) == 2
+
+    captured = capsys.readouterr()
+    assert name in captured.err
+    assert "short" not in captured.err
+
+
 def test_exit_2_for_an_unrecognized_argument(valid_env: pytest.MonkeyPatch) -> None:
     assert main(["--not-a-real-flag"]) == 2
 

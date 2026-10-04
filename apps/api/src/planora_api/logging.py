@@ -15,7 +15,7 @@ _REDACTED = "[REDACTED]"
 _KEY_PARTS = ("password", "secret", "token", "api_key", "apikey", "authorization", "cookie", "session")
 _EXACT_KEYS = frozenset({"prompt", "messages", "content", "text", "title", "notes", "q", "query", "search", "body"})
 _BEARER = re.compile(r"(?i)Bearer\s+[^\s,;]+")
-_SESSION_COOKIE = re.compile(r"(?i)(planora_session=)[^;\s,]+")
+_SESSION_COOKIE = re.compile(r"(?i)(planora_(?:session|access)=)[^;\s,]+")
 _URL_PASSWORD = re.compile(r"(://[^:/@]+:)[^@/]+(@)")
 _INPUT_VALUE = re.compile(r"(input_value=)(?:[^,\n]+)")
 _STANDARD = frozenset(logging.LogRecord(None, 0, "", 0, "", (), None).__dict__) | {"message", "asctime"}

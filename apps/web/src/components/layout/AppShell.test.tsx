@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "@/components/layout/AppShell";
 import { api } from "@/services/api";
+import { getAccessState, resetAccessState, setAccessState } from "@/features/auth/access";
 import { THEME_KEY } from "@/lib/theme";
 
 const navigate = vi.fn();
@@ -270,3 +271,82 @@ describe("AppShell", () => {
     });
   });
 });
+
+describe("Lock (#124)", () => {
+  async function openMenuByKeyboard() {
+    const trigger = screen.getByRole("button", { name: "Account menu" });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+    return within(await screen.findByRole("menu"));
+  }
+
+  it.each([320, 1280])(
+    "opens by keyboard and offers Switch account and Lock as menu items at %ipx",
+    async (width) => {
+      setViewportWidth(width);
+      renderShell();
+      const menu = await openMenuByKeyboard();
+
+      const names = menu.getAllByRole("menuitem").map((item) => item.textContent?.trim());
+      expect(names).toEqual(["Switch account", "Lock"]);
+      for (const item of menu.getAllByRole("menuitem"))
+        expect(item).not.toHaveAttribute("aria-disabled", "true");
+    },
+  );
+
+  it("locks: calls api.lock, clears the cache, closes the chat panel and goes to /login", async () => {
+    setViewportWidth(1280);
+    setAccessState("unlocked");
+    const lock = vi.spyOn(api, "lock").mockResolvedValue(undefined);
+    renderShell();
+    const clearSpy = vi.spyOn(qc, "clear");
+    qc.setQueryData(["tasks"], ["Knight only"]);
+    const toggle = screen.getByRole("button", { name: "AI Assistant" });
+    fireEvent.click(toggle);
+    await screen.findByRole("button", { name: "Close assistant" });
+
+    fireEvent.click((await openMenuByKeyboard()).getByRole("menuitem", { name: "Lock" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/login", replace: true }));
+    expect(lock).toHaveBeenCalledTimes(1);
+    expect(clearSpy).toHaveBeenCalledTimes(1);
+    expect(qc.getQueryData(["tasks"])).toBeUndefined();
+    expect(getAccessState()).toBe("locked");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the remembered account but forgets that this browser was unlocked", async () => {
+    window.localStorage.setItem("planora.profile", "hamster_knight");
+    vi.spyOn(api, "lock").mockResolvedValue(undefined);
+    renderShell();
+    fireEvent.click((await openMenuByKeyboard()).getByRole("menuitem", { name: "Lock" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalled());
+    expect(window.localStorage.getItem("planora.profile")).toBe("hamster_knight");
+  });
+
+  it("stays put and shows an alert when locking fails, then locks on retry", async () => {
+    setAccessState("unlocked");
+    const lock = vi
+      .spyOn(api, "lock")
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(undefined);
+    renderShell();
+    const clearSpy = vi.spyOn(qc, "clear");
+
+    fireEvent.click((await openMenuByKeyboard()).getByRole("menuitem", { name: "Lock" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't lock. Try again.");
+    expect(navigate).not.toHaveBeenCalled();
+    expect(clearSpy).not.toHaveBeenCalled();
+    expect(getAccessState()).toBe("unlocked");
+    expect(screen.getByText("board content")).toBeVisible();
+
+    fireEvent.click((await openMenuByKeyboard()).getByRole("menuitem", { name: "Lock" }));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/login", replace: true }));
+    expect(lock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+afterEach(() => resetAccessState());

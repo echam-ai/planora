@@ -687,13 +687,13 @@ def test_openapi_documents_move_and_reorder(
 
     move = paths["/api/v1/tasks/{task_id}/move"]["post"]["responses"]
     assert _returns_task_array(move)
-    assert "401" not in move
+    assert "401" in move  # site-password gate (#124)
     assert _refs_error_response(move, "403")
     assert _refs_error_response(move, "422")
     assert "404" in move
 
     reorder = paths["/api/v1/tasks/reorder"]["post"]["responses"]
     assert _returns_task_array(reorder)
-    assert "401" not in reorder
+    assert "401" in reorder  # site-password gate (#124)
     assert _refs_error_response(reorder, "403")
     assert _refs_error_response(reorder, "422")

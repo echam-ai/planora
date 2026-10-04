@@ -137,24 +137,37 @@ describe("server entry: ordinary responses", () => {
 });
 
 describe("server entry: native login submission", () => {
-  it("discards POST /login before TanStack without reading or logging credentials", async () => {
+  it("discards POST /login before TanStack without reading or logging the password", async () => {
     const entry = await importServerEntry();
     const credential = "distinctive-secret-114";
     const post = new Request("https://example.test/login?ignored=1", {
       method: "POST",
-      body: `username=test&password=${credential}`,
+      body: `password=${credential}`,
     });
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await entry.fetch(post, {}, {});
 
+    // Back to the password page: the form posted natively because React had not hydrated yet.
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/");
+    expect(response.headers.get("location")).toBe("/login");
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.has("set-cookie")).toBe(false);
     expect(await response.text()).toBe("");
     expect(post.bodyUsed).toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
     expect(consoleSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify([...response.headers])).not.toContain(credential);
+  });
+
+  it("only answers POST /login that way", async () => {
+    const entry = await importServerEntry();
+    fetchMock.mockResolvedValue(new Response("page", { status: 200 }));
+
+    const response = await entry.fetch(new Request("https://example.test/login"), {}, {});
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from planora_api.config import Settings
 from planora_api.schemas.profile import ProfileId
+from planora_api.security.rate_limit import LoginRateLimiter
 
 
 def get_settings(request: Request) -> Settings:
@@ -60,3 +61,17 @@ def get_current_time() -> datetime:
     """The current instant. Overridden in tests to simulate the passage of
     time (session expiry, the rate-limit window) without waiting for it."""
     return datetime.now(UTC)
+
+
+def get_access_time(request: Request) -> datetime:
+    """The instant used for the access cookie and the login limiter (issue
+    #124): `app.state.access_clock`, injectable via `create_app`.
+
+    Deliberately not `get_current_time`: tests that freeze task time must not
+    also change whether a cookie is still valid."""
+    return request.app.state.access_clock()
+
+
+def get_login_limiter(request: Request) -> LoginRateLimiter:
+    """The per-process login limiter built at startup (`main.create_app`)."""
+    return request.app.state.login_limiter

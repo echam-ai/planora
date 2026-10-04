@@ -12,6 +12,7 @@ vi.mock("@tanstack/react-router", async () => ({
 }));
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem("planora.access", "1");
   navigate.mockClear();
 });
 afterEach(() => vi.restoreAllMocks());
