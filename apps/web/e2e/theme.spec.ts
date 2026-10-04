@@ -148,6 +148,8 @@ test.describe("theme preference (#122)", () => {
     await page.emulateMedia({ colorScheme: "light" });
     await page.addInitScript(() => {
       window.localStorage.setItem("planora.profile", "hamster_knight");
+      // Already unlocked: this test is about the theme before any script runs, not the gate.
+      window.localStorage.setItem("planora.access", "1");
       window.localStorage.setItem("planora.theme", "dark");
     });
     const messages: ConsoleMessage[] = [];

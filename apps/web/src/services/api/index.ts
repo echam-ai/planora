@@ -26,13 +26,18 @@ function resolveApiClient(): ApiClient {
 
 const adapter = resolveApiClient();
 const clients = new Map<string, ApiClient>();
+/**
+ * A literal comparison on purpose, like `resolveApiClient`: Vite folds it, so an `http` build
+ * never reaches the mock adapter and its demo password stays out of the bundle.
+ */
+function createScopedClient(profile: ProfileId | null): ApiClient {
+  return import.meta.env.VITE_API_MODE === "http"
+    ? createHttpApiClient(profile)
+    : createMockApiClient(profile);
+}
 export function scopedApi(profile: ProfileId | null): ApiClient {
   const key = profile ?? "none";
-  if (!clients.has(key))
-    clients.set(
-      key,
-      adapter === httpApiClient ? createHttpApiClient(profile) : createMockApiClient(profile),
-    );
+  if (!clients.has(key)) clients.set(key, createScopedClient(profile));
   return clients.get(key)!;
 }
 const forwardingClient: ApiClient = Object.fromEntries(

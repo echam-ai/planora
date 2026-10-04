@@ -1,4 +1,4 @@
-"""Two fixed unauthenticated profiles, ownership, and legacy upgrade regression."""
+"""Two fixed profiles behind the shared site password, ownership, and legacy upgrade regression."""
 from __future__ import annotations
 
 import asyncio
@@ -20,8 +20,7 @@ PRINCESS = "ech_princess"
 HEADER = "X-Planora-Profile"
 
 
-def test_catalog_and_no_credentials(migrated_database_url, app_factory, valid_env):
-    valid_env.delenv("SESSION_SECRET", raising=False)
+def test_catalog_and_no_per_profile_credentials(migrated_database_url, app_factory, valid_env):
     app = app_factory()
     async def scenario():
         async with make_client(app) as client:
@@ -31,15 +30,20 @@ def test_catalog_and_no_credentials(migrated_database_url, app_factory, valid_en
                 {"id": KNIGHT, "name": "Hamster Knight"},
                 {"id": PRINCESS, "name": "Ech Princess"},
             ]
-            for path in ("/auth/login", "/auth/logout", "/auth/session", "/settings/password"):
-                response = await client.request("GET" if path.endswith("session") else "POST", "/api/v1" + path)
-                assert response.status_code == 404
+            # The shared site password (#124) is the only credential: no
+            # per-profile login, account or password-change endpoint exists.
+            for method, path in (("POST", "/settings/password"), ("POST", "/profiles/login"),
+                                 ("POST", "/auth/login/hamster_knight")):
+                response = await client.request(method, "/api/v1" + path)
+                assert response.status_code in (404, 405)
                 assert "set-cookie" not in response.headers
             for profile in (KNIGHT, PRINCESS):
                 response = await client.get("/api/v1/tasks", headers={HEADER: profile})
                 assert response.status_code == 200
                 assert response.json() == []
                 assert "set-cookie" not in response.headers
+        async with make_client(app, authenticated=False) as locked:
+            assert (await locked.get("/api/v1/profiles")).status_code == 401
     asyncio.run(scenario())
 
 

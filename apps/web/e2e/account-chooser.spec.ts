@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTouchTargets } from "./touch-targets";
+import { unlock } from "./unlock";
 
 const option = (page: import("@playwright/test").Page, name: string) =>
   page.getByRole("button", { name, exact: true });
@@ -8,7 +9,7 @@ test.describe("illustrated account chooser (#122)", () => {
   test("each account is one named button with its own aria-hidden inline illustration", async ({
     page,
   }) => {
-    await page.goto("/");
+    await unlock(page);
     await expect(page.getByRole("heading", { name: "Choose your account" })).toBeVisible();
     await expect(page.getByText(/Two separate workspaces/)).toBeVisible();
     await expect(page.getByRole("button")).toHaveCount(2);
@@ -27,7 +28,7 @@ test.describe("illustrated account chooser (#122)", () => {
       const url = new URL(request.url());
       if (url.protocol === "http:" || url.protocol === "https:") origins.add(url.origin);
     });
-    await page.goto("/");
+    await unlock(page);
     await option(page, "Hamster Knight").click();
     await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
     await page.waitForLoadState("networkidle");
@@ -38,7 +39,7 @@ test.describe("illustrated account chooser (#122)", () => {
     page,
   }) => {
     await page.setViewportSize({ width: 360, height: 800 });
-    await page.goto("/");
+    await unlock(page);
     await expect(option(page, "Hamster Knight")).toBeVisible();
     await expectNoHorizontalScroll(page, "chooser at 360px");
     await expectTouchTargets(page, "chooser at 360px");
@@ -52,7 +53,7 @@ test.describe("illustrated account chooser (#122)", () => {
 
   test("at 1280px the two options sit side by side", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto("/");
+    await unlock(page);
     const hamster = (await option(page, "Hamster Knight").boundingBox())!;
     const princess = (await option(page, "Ech Princess").boundingBox())!;
     expect(Math.abs(hamster.y - princess.y)).toBeLessThan(2);
@@ -61,7 +62,7 @@ test.describe("illustrated account chooser (#122)", () => {
   });
 
   test("choosing Ech Princess shows her illustration and name in the header", async ({ page }) => {
-    await page.goto("/");
+    await unlock(page);
     await option(page, "Ech Princess").click();
     await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 

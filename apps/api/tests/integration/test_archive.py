@@ -854,24 +854,24 @@ def test_openapi_documents_all_operations_and_error_envelopes(
         return ref.endswith("/ErrorResponse")
 
     list_op = paths[ARCHIVE_URL]["get"]["responses"]
-    assert "401" not in list_op
+    assert "401" in list_op  # site-password gate (#124)
     assert _refs_error_response(list_op, "422")
     list_schema_ref = list_op["200"]["content"]["application/json"]["schema"]["$ref"]
     assert list_schema_ref.endswith("/ArchiveListResponse")
 
     item_op = paths[f"{ARCHIVE_URL}/{{task_id}}"]["get"]["responses"]
-    assert "401" not in item_op
+    assert "401" in item_op  # site-password gate (#124)
     assert _refs_error_response(item_op, "404")
     assert _refs_error_response(item_op, "422")
 
     restore_op = paths[f"{ARCHIVE_URL}/{{task_id}}/restore"]["post"]["responses"]
-    assert "401" not in restore_op
+    assert "401" in restore_op  # site-password gate (#124)
     assert _refs_error_response(restore_op, "403")
     assert _refs_error_response(restore_op, "404")
     assert _refs_error_response(restore_op, "422")
 
     delete_op = paths[f"{ARCHIVE_URL}/{{task_id}}"]["delete"]["responses"]
-    assert "401" not in delete_op
+    assert "401" in delete_op  # site-password gate (#124)
     assert _refs_error_response(delete_op, "403")
     assert _refs_error_response(delete_op, "404")
     assert _refs_error_response(delete_op, "422")

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type Task } from "@/types";
 import { CHAT_SUGGESTIONS } from "@/features/chat/suggestions";
+import { ACCESS_KEY } from "./access";
 import { mockApiClient, mockDevTools } from "../mockApiClient";
 
 async function resolve<T>(promise: Promise<T>): Promise<T> {
@@ -33,6 +34,7 @@ beforeEach(() => {
   vi.spyOn(Math, "random").mockImplementation(() => (random += 0.0001));
   window.localStorage.clear();
   window.localStorage.setItem("planora.profile", "hamster_knight");
+  window.localStorage.setItem(ACCESS_KEY, "1");
   mockDevTools.setErrorMode(false);
 });
 
@@ -41,6 +43,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.localStorage.clear();
   window.localStorage.setItem("planora.profile", "hamster_knight");
+  window.localStorage.setItem(ACCESS_KEY, "1");
 });
 
 describe("mock chat: overdue", () => {

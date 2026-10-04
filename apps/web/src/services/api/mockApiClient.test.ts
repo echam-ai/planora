@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatInZone } from "@/features/tasks/deadline";
 import { ApiError, type Task, type TaskDraft } from "@/types";
-import { mockApiClient, mockDevTools } from "./mockApiClient";
+import { ACCESS_KEY, mockAccess } from "./mock/access";
+import { createMockApiClient, mockApiClient, mockDevTools } from "./mockApiClient";
 
 const draft: TaskDraft = {
   title: "Write characterization tests",
@@ -36,6 +37,7 @@ describe("mock API client characterization", () => {
     vi.spyOn(Math, "random").mockImplementation(() => (random += 0.0001));
     window.localStorage.clear();
     window.localStorage.setItem("planora.profile", "hamster_knight");
+    window.localStorage.setItem(ACCESS_KEY, "1");
     mockDevTools.setErrorMode(false);
   });
 
@@ -44,6 +46,7 @@ describe("mock API client characterization", () => {
     vi.restoreAllMocks();
     window.localStorage.clear();
     window.localStorage.setItem("planora.profile", "hamster_knight");
+    window.localStorage.setItem(ACCESS_KEY, "1");
   });
 
   it("preserves settings defaults and timezone writes", async () => {
@@ -601,6 +604,7 @@ describe("mock API client characterization", () => {
   });
 
   it("uses browser-less storage fallbacks without throwing", async () => {
+    vi.spyOn(mockAccess, "isUnlocked").mockReturnValue(true);
     vi.stubGlobal("window", undefined);
     try {
       expect(await resolve(mockApiClient.getSettings())).toEqual({
@@ -616,5 +620,91 @@ describe("mock API client characterization", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("mock API client — site password gate (#124)", () => {
+  const dataMethods = Object.keys(mockApiClient).filter(
+    (name) => !["getAccess", "unlock", "lock"].includes(name),
+  );
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem("planora.profile", "hamster_knight");
+  });
+  afterEach(() => {
+    window.localStorage.clear();
+    window.localStorage.setItem("planora.profile", "hamster_knight");
+    window.localStorage.setItem(ACCESS_KEY, "1");
+  });
+
+  it("starts locked, and getAccess reports it without rejecting", async () => {
+    await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: false });
+  });
+
+  it("rejects every data method with the API's 401 NOT_AUTHENTICATED while locked", async () => {
+    expect(dataMethods).toContain("getProfiles");
+    expect(dataMethods).toContain("listTasks");
+    expect(dataMethods).toContain("sendChatMessage");
+    for (const name of dataMethods) {
+      const method = mockApiClient[name as keyof typeof mockApiClient] as () => Promise<unknown>;
+      await expect(method.call(mockApiClient), name).rejects.toMatchObject({
+        name: "ApiError",
+        status: 401,
+        code: "NOT_AUTHENTICATED",
+        message: "Authentication is required.",
+      });
+    }
+  });
+
+  it("checks access before the profile, so a client without an account is also 401 while locked", async () => {
+    const noAccount = createMockApiClient(null);
+    await expect(noAccount.getProfiles()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+    await expect(noAccount.listTasks()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+  });
+
+  it("rejects any password but focusboard with 401 INVALID_PASSWORD and stays locked", async () => {
+    for (const wrong of ["wrong", "", "Focusboard", " focusboard"]) {
+      await expect(mockApiClient.unlock(wrong)).rejects.toMatchObject({
+        name: "ApiError",
+        status: 401,
+        code: "INVALID_PASSWORD",
+        message: "Incorrect password.",
+      });
+    }
+    await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: false });
+  });
+
+  it("unlocks with focusboard, survives a new client over the same storage, and lock() re-locks", async () => {
+    await expect(mockApiClient.unlock("focusboard")).resolves.toBeUndefined();
+    await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: true });
+    await expect(createMockApiClient("hamster_knight").getAccess()).resolves.toEqual({
+      authenticated: true,
+    });
+    await expect(createMockApiClient(null).getAccess()).resolves.toEqual({ authenticated: true });
+    await expect(createMockApiClient("ech_princess").getProfiles()).resolves.toHaveLength(2);
+
+    await expect(mockApiClient.lock()).resolves.toBeUndefined();
+    await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: false });
+    await expect(mockApiClient.getProfiles()).rejects.toMatchObject({ code: "NOT_AUTHENTICATED" });
+  });
+
+  it("treats a browser without storage as locked", async () => {
+    vi.stubGlobal("window", undefined);
+    try {
+      await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: false });
+      await expect(mockApiClient.unlock("focusboard")).resolves.toBeUndefined();
+      await expect(mockApiClient.lock()).resolves.toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("treats unreadable storage as locked", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    await expect(mockApiClient.getAccess()).resolves.toEqual({ authenticated: false });
+    vi.restoreAllMocks();
   });
 });

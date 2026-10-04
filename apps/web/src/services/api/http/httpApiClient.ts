@@ -23,6 +23,10 @@ import {
   taskToDomain,
 } from "./mappers";
 
+type AccessResponse =
+  paths["/api/v1/auth/session"]["get"]["responses"][200]["content"]["application/json"];
+type LoginRequest =
+  paths["/api/v1/auth/login"]["post"]["requestBody"]["content"]["application/json"];
 type SettingsResponse =
   paths["/api/v1/settings"]["get"]["responses"][200]["content"]["application/json"];
 type TaskListResponse =
@@ -51,6 +55,16 @@ type RestoreResponse =
 export function createHttpApiClient(profile: ProfileId | null): ApiClient {
   const request = <T>(options: RequestOptions) => baseRequest<T>({ ...options, profile });
   return {
+    async getAccess() {
+      return baseRequest<AccessResponse>({ method: "GET", path: "/auth/session" });
+    },
+    async unlock(password) {
+      const body: LoginRequest = { password };
+      await baseRequest<unknown>({ method: "POST", path: "/auth/login", body });
+    },
+    async lock() {
+      await baseRequest<void>({ method: "POST", path: "/auth/logout" });
+    },
     async getProfiles() {
       return baseRequest({ method: "GET", path: "/profiles" });
     },

@@ -31,6 +31,8 @@ using application features.
 rtk docker run -d --name planora-web-smoke -p 127.0.0.1:13000:3000 planora-web:issue-42
 rtk docker run -d --name planora-api-smoke -p 127.0.0.1:18000:8000 \
   -e LLM_API_KEY=disposable-smoke-key \
+  -e APP_PASSWORD=disposable-smoke-password \
+  -e SESSION_SECRET=disposable-smoke-session-secret-0123456789 \
   -e APP_ORIGIN=http://127.0.0.1:13000 \
   -e DATABASE_URL=sqlite:////app/data/smoke.sqlite3 \
   planora-api:issue-42

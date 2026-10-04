@@ -28,7 +28,7 @@ from planora_api.db.models import (
 )
 
 ROOT = Path(__file__).resolve().parents[4]
-MARKERS = ("issue45-password-marker", "issue45-session-marker",
+MARKERS = ("issue45-password-marker", "issue45-session-marker-0123456789",
            "issue45-llm-marker", "issue45-database-marker")
 
 
@@ -73,6 +73,7 @@ def test_actual_dump_restore_credentials_and_container_persistence(valid_env, al
             for name in (source, target):
                 connection.execute(text(f'CREATE DATABASE "{name}"'))
         valid_env.setenv("DATABASE_URL", url + source)
+        valid_env.setenv("APP_PASSWORD", MARKERS[0])
         valid_env.setenv("SESSION_SECRET", MARKERS[1])
         valid_env.setenv("LLM_API_KEY", MARKERS[2])
         command.upgrade(alembic_config, "head")

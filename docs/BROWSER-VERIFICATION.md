@@ -42,15 +42,24 @@ For a flow that needs login state across commands, open the installed stable Chr
 .tmp/pwcli open "$url" --browser=chrome --profile="$work/profile"
 ```
 
+## Unlock first
+
+Every route sits behind the shared site password (#124). A fresh browser session lands on `/login`; unlock before any flow:
+
+- **Mock mode** (`VITE_API_MODE=mock`, the default): the demo password is `focusboard`, shown on the page when `DEMO_UI_ENABLED`.
+- **HTTP mode** (`VITE_API_MODE=http`, `scripts/run-local.sh`): type the `APP_PASSWORD` from `apps/api/.env`. Never paste it into an issue comment or evidence file. Keep wrong attempts well under five per client IP in 15 minutes, or the API answers `429 RATE_LIMITED`.
+
+After unlocking, `/` shows the account chooser; **Lock** in the account menu signs out again. The access cookie lasts 30 days, so a task-local browser profile stays unlocked across commands until `APP_PASSWORD` or `SESSION_SECRET` changes.
+
 ## Evidence loop
 
 ```bash
 # Bounded page state, then identify the intended target.
 .tmp/pwcli snapshot --depth=4
-.tmp/pwcli find "Sign in"
+.tmp/pwcli find "Unlock"
 
 # Refs from the current output are valid for the next action only.
-.tmp/pwcli fill e13 "demo"
+.tmp/pwcli fill e13 "focusboard"   # mock mode; in HTTP mode type APP_PASSWORD, never paste it into evidence
 .tmp/pwcli click e16
 
 # A state change invalidates old refs — locate the result to get fresh ones.

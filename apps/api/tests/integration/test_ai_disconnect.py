@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from conftest import DEFAULT_ORIGIN, make_client
+from conftest import DEFAULT_ORIGIN, make_client, valid_access_token
 from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -99,6 +99,7 @@ class _Wire:
                 (b"content-type", b"application/json"),
                 (b"content-length", str(len(body)).encode()),
                 (b"x-planora-profile", b"hamster_knight"),
+                (b"cookie", f"planora_access={valid_access_token(app)}".encode()),
             ],
             "state": {},
         }

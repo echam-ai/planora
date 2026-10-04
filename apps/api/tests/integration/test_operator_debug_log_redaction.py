@@ -190,11 +190,28 @@ def test_session_secret_value_is_redacted(
     app_factory: Callable[[], FastAPI],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    sentinel = "SENTINEL-session-secret-value"
+    sentinel = "SENTINEL-session-secret-value-0123456789"
     debug_env.setenv("SESSION_SECRET", sentinel)
     app_factory()
 
     logging.getLogger("planora_api.__test_only").debug(f"{MARKER} signing with {sentinel}")
+
+    captured = capsys.readouterr().out
+    assert sentinel not in captured
+    line = _carrying_line(captured)
+    assert "[REDACTED]" in line["message"]
+
+
+def test_app_password_value_is_redacted(
+    debug_env: pytest.MonkeyPatch,
+    app_factory: Callable[[], FastAPI],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    sentinel = "SENTINEL-app-password-value"
+    debug_env.setenv("APP_PASSWORD", sentinel)
+    app_factory()
+
+    logging.getLogger("planora_api.__test_only").debug(f"{MARKER} unlocking with {sentinel}")
 
     captured = capsys.readouterr().out
     assert sentinel not in captured

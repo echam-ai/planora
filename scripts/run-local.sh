@@ -12,7 +12,8 @@
 #   scripts/run-local.sh
 #
 # Configuration lives entirely in apps/api/.env (copy from
-# apps/api/.env.example — see README.md, "Run locally on macOS"). This
+# apps/api/.env.example — see README.md, "Run locally on macOS"); fill in
+# LLM_API_KEY, APP_PASSWORD (12+ characters) and SESSION_SECRET (32+). This
 # script derives VITE_API_MODE and PLANORA_API_PROXY_TARGET itself, so
 # they can never drift from the API this script actually started; it
 # never reads apps/web/.env for those two values.
@@ -85,12 +86,31 @@ is_blank() {
 # --- Configuration checks: fail before any process starts ------------------
 
 if [ ! -f "$ENV_FILE" ]; then
-    die "apps/api/.env not found. Copy apps/api/.env.example to apps/api/.env and fill in LLM_API_KEY, then re-run this script."
+    die "apps/api/.env not found. Copy apps/api/.env.example to apps/api/.env and fill in LLM_API_KEY, APP_PASSWORD and SESSION_SECRET, then re-run this script."
 fi
 
 LLM_API_KEY_VALUE="$(env_get LLM_API_KEY "$ENV_FILE")"
 if is_blank "$LLM_API_KEY_VALUE"; then
     die "LLM_API_KEY is blank in apps/api/.env. A placeholder value is fine locally (AI features will report unavailable), but it must be non-blank."
+fi
+
+# The shared site password and the cookie-signing secret (issue #124) have
+# no safe default, so they are never generated or guessed here: a blank or
+# too-short value stops the launcher before any service starts. The values
+# are never printed.
+APP_PASSWORD_VALUE="$(env_get APP_PASSWORD "$ENV_FILE")"
+if is_blank "$APP_PASSWORD_VALUE"; then
+    die "APP_PASSWORD is blank in apps/api/.env. Set the shared site password (at least 12 characters); it is what you type on the Planora unlock page."
+fi
+if [ "${#APP_PASSWORD_VALUE}" -lt 12 ]; then
+    die "APP_PASSWORD in apps/api/.env must be at least 12 characters."
+fi
+SESSION_SECRET_VALUE="$(env_get SESSION_SECRET "$ENV_FILE")"
+if is_blank "$SESSION_SECRET_VALUE"; then
+    die "SESSION_SECRET is blank in apps/api/.env. Set a random signing secret of at least 32 characters, for example the output of: openssl rand -base64 32"
+fi
+if [ "${#SESSION_SECRET_VALUE}" -lt 32 ]; then
+    die "SESSION_SECRET in apps/api/.env must be at least 32 characters."
 fi
 
 APP_ORIGIN_VALUE="$(env_get APP_ORIGIN "$ENV_FILE")"
@@ -155,6 +175,8 @@ fi
 # Export file configuration so inherited shell values cannot override it.
 export APP_ORIGIN="$APP_ORIGIN_VALUE"
 export LLM_API_KEY="$LLM_API_KEY_VALUE"
+export APP_PASSWORD="$APP_PASSWORD_VALUE"
+export SESSION_SECRET="$SESSION_SECRET_VALUE"
 
 if ! (cd "$WEB_DIR" && bun install --frozen-lockfile); then
     die "bun install --frozen-lockfile failed in apps/web."
@@ -297,8 +319,8 @@ if ! wait_for_health; then
     shutdown_all 1
 fi
 
-log "Ready. Open ${APP_ORIGIN_VALUE} in your browser."
-log "Choose Hamster Knight or Ech Princess on the landing page."
+log "Ready. Open ${APP_ORIGIN_VALUE} in your browser and unlock with the APP_PASSWORD from apps/api/.env."
+log "Then choose Hamster Knight or Ech Princess."
 log "Press Ctrl-C to stop."
 
 while true; do

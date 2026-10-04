@@ -1,7 +1,9 @@
 import { expect, type Locator, type Page } from "@playwright/test";
+import { unlock } from "./unlock";
 
+/** Unlocks with the demo password, then chooses Hamster Knight and opens the board. */
 export async function signIn(page: Page) {
-  await page.goto("/");
+  await unlock(page);
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 }

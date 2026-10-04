@@ -1,6 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
+import { unlock } from "../e2e/unlock";
 import { seedArchivedTask, seedTask } from "./db";
+import { SITE_PASSWORD } from "./env";
 
 // The HTTP-mode smoke suite (#88): five flows against a real API and a fresh
 // database, asserting on roles and visible text, never on browser storage.
@@ -20,7 +22,7 @@ function uniqueTitle(label: string): string {
 }
 
 async function signIn(page: Page) {
-  await page.goto("/");
+  await unlock(page, SITE_PASSWORD);
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 }
@@ -51,11 +53,12 @@ async function addTaskThroughForm(page: Page, title: string) {
   return dialog;
 }
 
-test("signs in through the login form against the real API", async ({ page, context }) => {
+test("unlocks through the password page against the real API", async ({ page, context }) => {
   await signIn(page);
 
+  // The only cookie is the API's HttpOnly access cookie; the web never reads or sets it.
   const cookies = await context.cookies();
-  expect(cookies).toEqual([]);
+  expect(cookies.map((cookie) => cookie.name)).toEqual(["planora_access"]);
 });
 
 test("creates a task that the server stores", async ({ page }) => {
@@ -126,11 +129,15 @@ test("restores a seeded archived task to the end of To do", async ({ page }) => 
   );
 });
 
-test("rejects missing profile and offers remembered selection without credentials", async ({
+test("answers 401 before unlocking and 422 for a missing profile after, and offers the remembered selection", async ({
   page,
 }) => {
-  expect((await page.request.get("/api/v1/tasks")).status()).toBe(422);
+  // The access check runs before profile validation (#124): no cookie, no profile header, 401.
+  const locked = await page.request.get("/api/v1/tasks");
+  expect(locked.status()).toBe(401);
+  expect(await locked.json()).toMatchObject({ code: "NOT_AUTHENTICATED" });
   await signIn(page);
+  expect((await page.request.get("/api/v1/tasks")).status()).toBe(422);
   await page.goto("/settings");
   await expect(page.getByRole("combobox", { name: "Timezone" })).toBeVisible();
   await page.reload();

@@ -21,6 +21,7 @@ from planora_api.db.models import Task
 from planora_api.errors import (
     ERROR_RESPONSE,
     PROFILE_RESPONSES,
+    UNAUTHENTICATED_RESPONSE,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
     not_found,
@@ -28,7 +29,9 @@ from planora_api.errors import (
 from planora_api.schemas.archive import ArchiveListResponse
 from planora_api.schemas.task import TaskResponse
 
-router = APIRouter(prefix="/api/v1/archive", tags=["archive"])
+router = APIRouter(
+    prefix="/api/v1/archive", tags=["archive"], responses=UNAUTHENTICATED_RESPONSE
+)
 
 _NOT_FOUND_MESSAGE = "Archived task not found."
 

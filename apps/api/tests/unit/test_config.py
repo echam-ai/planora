@@ -20,6 +20,7 @@ def test_loads_all_seven_values_when_valid(valid_env: pytest.MonkeyPatch) -> Non
     settings = load_settings()
 
     assert settings.database_url == VALID_ENV["DATABASE_URL"]
+    assert settings.app_password == VALID_ENV["APP_PASSWORD"]
     assert settings.session_secret == VALID_ENV["SESSION_SECRET"]
     assert settings.llm_base_url == VALID_ENV["LLM_BASE_URL"]
     assert settings.llm_api_key == VALID_ENV["LLM_API_KEY"]
@@ -28,7 +29,7 @@ def test_loads_all_seven_values_when_valid(valid_env: pytest.MonkeyPatch) -> Non
     assert settings.default_timezone == VALID_ENV["DEFAULT_TIMEZONE"]
 
 
-@pytest.mark.parametrize("secret_name", ["LLM_API_KEY"])
+@pytest.mark.parametrize("secret_name", ["LLM_API_KEY", "APP_PASSWORD", "SESSION_SECRET"])
 def test_missing_secret_raises_naming_it(
     valid_env: pytest.MonkeyPatch, secret_name: str
 ) -> None:
@@ -40,7 +41,7 @@ def test_missing_secret_raises_naming_it(
     assert secret_name in str(exc_info.value)
 
 
-@pytest.mark.parametrize("secret_name", ["LLM_API_KEY"])
+@pytest.mark.parametrize("secret_name", ["LLM_API_KEY", "APP_PASSWORD", "SESSION_SECRET"])
 @pytest.mark.parametrize("blank_value", ["", "   ", "\t\n"])
 def test_blank_secret_treated_as_missing(
     valid_env: pytest.MonkeyPatch, secret_name: str, blank_value: str
@@ -62,16 +63,44 @@ def test_missing_app_origin_raises_naming_it(valid_env: pytest.MonkeyPatch) -> N
     assert "APP_ORIGIN" in str(exc_info.value)
 
 
-def test_both_secrets_missing_names_both(valid_env: pytest.MonkeyPatch) -> None:
-    valid_env.delenv("SESSION_SECRET", raising=False)
+def test_every_offending_variable_is_named_in_one_message(
+    valid_env: pytest.MonkeyPatch,
+) -> None:
+    valid_env.delenv("APP_PASSWORD", raising=False)
+    valid_env.setenv("SESSION_SECRET", "x" * 16)
     valid_env.delenv("LLM_API_KEY", raising=False)
 
     with pytest.raises(ConfigurationError) as exc_info:
         load_settings()
 
     message = str(exc_info.value)
-    assert "SESSION_SECRET" not in message
-    assert "LLM_API_KEY" in message
+    for name in ("APP_PASSWORD", "SESSION_SECRET", "LLM_API_KEY"):
+        assert name in message
+    assert "x" * 16 not in message
+
+
+def test_app_password_minimum_length_is_twelve(valid_env: pytest.MonkeyPatch) -> None:
+    valid_env.setenv("APP_PASSWORD", "a" * 12)
+    assert load_settings().app_password == "a" * 12
+
+    valid_env.setenv("APP_PASSWORD", "ELEVEN-char")  # 11 characters
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_settings()
+    message = str(exc_info.value)
+    assert "APP_PASSWORD" in message
+    assert "ELEVEN-char" not in message
+
+
+def test_session_secret_minimum_length_is_thirty_two(valid_env: pytest.MonkeyPatch) -> None:
+    valid_env.setenv("SESSION_SECRET", "b" * 32)
+    assert load_settings().session_secret == "b" * 32
+
+    valid_env.setenv("SESSION_SECRET", "b" * 31)
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_settings()
+    message = str(exc_info.value)
+    assert "SESSION_SECRET" in message
+    assert "b" * 31 not in message
 
 
 def test_default_timezone_defaults_to_singapore_when_unset(
@@ -142,18 +171,22 @@ def test_non_secret_defaults_used_when_unset(valid_env: pytest.MonkeyPatch) -> N
 
 def test_no_secret_field_has_a_default() -> None:
     fields = Settings.model_fields
-    assert not fields["session_secret"].is_required()
-    assert fields["llm_api_key"].is_required()
+    for name in ("app_password", "session_secret", "llm_api_key"):
+        assert fields[name].is_required()
 
 
 def test_secret_never_appears_in_repr_or_str(valid_env: pytest.MonkeyPatch) -> None:
-    valid_env.setenv("SESSION_SECRET", SENTINEL)
-    valid_env.setenv("LLM_API_KEY", SENTINEL)
+    valid_env.setenv("APP_PASSWORD", SENTINEL)
+    valid_env.setenv("SESSION_SECRET", SENTINEL * 2)
+    valid_env.setenv("LLM_API_KEY", SENTINEL + "-llm")
 
     settings = load_settings()
 
-    assert SENTINEL not in repr(settings)
-    assert SENTINEL not in str(settings)
+    for rendered in (repr(settings), str(settings)):
+        assert SENTINEL not in rendered
+        assert rendered.count("***REDACTED***") >= 3
+        assert "app_password='***REDACTED***'" in rendered
+        assert "session_secret='***REDACTED***'" in rendered
 
 
 def test_secret_does_not_leak_through_unrelated_error(
@@ -175,12 +208,12 @@ def test_real_env_var_overrides_dotenv_value(
     monkeypatch = valid_env
     monkeypatch.chdir(tmp_path)  # type: ignore[arg-type]
     dotenv_path = tmp_path / ".env"  # type: ignore[operator]
-    dotenv_path.write_text("SESSION_SECRET=from-dotenv-file\n")
-    monkeypatch.setenv("SESSION_SECRET", "from-real-env")
+    dotenv_path.write_text(f"SESSION_SECRET={'d' * 40}\n")
+    monkeypatch.setenv("SESSION_SECRET", "r" * 40)
 
     settings = load_settings()
 
-    assert settings.session_secret == "from-real-env"
+    assert settings.session_secret == "r" * 40
 
 
 def test_missing_dotenv_file_does_not_fail(valid_env: pytest.MonkeyPatch) -> None:
@@ -222,12 +255,12 @@ def test_invalid_log_level_fails_startup_naming_it(
     assert "LOG_LEVEL" in str(exc_info.value)
 
 
-def test_unedited_env_example_fails_naming_all_three_required_values(
+def test_unedited_env_example_fails_naming_all_required_values(
     tmp_path: Path, clean_env: pytest.MonkeyPatch
 ) -> None:
     # A developer who copies .env.example to .env without filling anything
     # in must be refused at startup, not booted into a broken/insecure
-    # config (SESSION_SECRET=change-me, APP_ORIGIN=<blank>, etc.). This
+    # config (blank APP_PASSWORD, SESSION_SECRET, APP_ORIGIN, etc.). This
     # loads the tracked template verbatim, with no environment variable
     # overriding it, exactly as `cp .env.example .env` would leave it.
     clean_env.chdir(tmp_path)
@@ -237,6 +270,12 @@ def test_unedited_env_example_fails_naming_all_three_required_values(
         load_settings()
 
     message = str(exc_info.value)
-    assert "SESSION_SECRET" not in message
-    assert "LLM_API_KEY" in message
-    assert "APP_ORIGIN" in message
+    for name in ("APP_PASSWORD", "SESSION_SECRET", "LLM_API_KEY", "APP_ORIGIN"):
+        assert name in message
+
+
+def test_env_example_documents_the_gate_secrets() -> None:
+    text = _ENV_EXAMPLE_PATH.read_text()
+    assert "APP_PASSWORD=" in text and "SESSION_SECRET=" in text
+    assert "12 characters" in text and "32 characters" in text
+    assert "openssl rand -base64 32" in text

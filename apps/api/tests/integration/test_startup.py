@@ -13,12 +13,28 @@ import os
 import subprocess
 import sys
 
+import pytest
 from conftest import ENV_VAR_NAMES, VALID_ENV
 
 
-def test_uvicorn_exits_fast_when_llm_key_missing() -> None:
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("LLM_API_KEY", None),
+        ("APP_PASSWORD", None),
+        ("APP_PASSWORD", "too-short"),
+        ("SESSION_SECRET", None),
+        ("SESSION_SECRET", "sixteen-chars-xxx"),
+    ],
+)
+def test_uvicorn_exits_fast_when_a_required_secret_is_missing_or_short(
+    variable: str, value: str | None
+) -> None:
     env = {**VALID_ENV}
-    del env["LLM_API_KEY"]
+    if value is None:
+        del env[variable]
+    else:
+        env[variable] = value
 
     process_env = _process_env(env)
 
@@ -42,7 +58,9 @@ def test_uvicorn_exits_fast_when_llm_key_missing() -> None:
     )
 
     assert result.returncode != 0
-    assert "LLM_API_KEY" in result.stderr
+    assert variable in result.stderr
+    if value is not None:
+        assert value not in result.stderr
     # A process that exited before serving never printed uvicorn's
     # "Application startup complete" / "Uvicorn running" banner.
     assert "Uvicorn running" not in result.stdout

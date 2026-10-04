@@ -15,7 +15,8 @@ from planora_api.openapi import OUTPUT_PATH, build_schema, export, render
 # The exact placeholder values `planora_api.openapi` builds the app from —
 # none of these may ever appear in the rendered document.
 _PLACEHOLDER_SECRETS = (
-    "openapi-export-placeholder-secret",
+    "openapi-export-placeholder-session-secret",
+    "openapi-export-placeholder-password",
     "openapi-export-placeholder-key",
     "sqlite:///:memory:",
     "https://openapi-export.invalid",
@@ -25,9 +26,9 @@ _PLACEHOLDER_SECRETS = (
 def test_build_schema_needs_no_environment_variable(
     clean_env: pytest.MonkeyPatch,
 ) -> None:
-    """Works from a clean checkout with SESSION_SECRET, LLM_API_KEY and
-    APP_ORIGIN unset — `clean_env` unsets all seven configuration
-    variables, so a `ConfigurationError` here would mean the export reads
+    """Works from a clean checkout with APP_PASSWORD, SESSION_SECRET, LLM_API_KEY
+    and APP_ORIGIN unset — `clean_env` unsets every configuration
+    variable, so a `ConfigurationError` here would mean the export reads
     the real environment instead of its own fixed placeholder config."""
     schema = build_schema()
     assert schema["paths"]

@@ -117,7 +117,8 @@ def test_get_response_never_contains_a_secret_sentinel(
 ) -> None:
     sentinels = {
         "LLM_API_KEY": "SENTINEL-llm-api-key",
-        "SESSION_SECRET": "SENTINEL-session-secret",
+        "SESSION_SECRET": "SENTINEL-session-secret-0123456789-abcdef",
+        "APP_PASSWORD": "SENTINEL-app-password",
         "LLM_BASE_URL": "https://SENTINEL-llm-base-url.example/v1",
     }
     for name, value in sentinels.items():

@@ -4,10 +4,12 @@ Requires `uv`. Python 3.12 is the canonical interpreter, pinned by
 `.python-version` (`uv` reads it and downloads 3.12 if needed; CI and the
 production image must use the same version, so do not pass `--python`). The
 package itself accepts `>=3.12`. Copy `.env.example` to `.env` and
-fill in the two required values with no default —
-`LLM_API_KEY` and `APP_ORIGIN` — plus any other values you want to change,
-before starting uvicorn. Startup fails fast, naming the missing variable, if
-a required value is left blank. Run these commands from `apps/api`:
+fill in the four required values with no default —
+`LLM_API_KEY`, `APP_ORIGIN`, `APP_PASSWORD` (at least 12 characters) and
+`SESSION_SECRET` (at least 32) — plus any other values you want to change,
+before starting uvicorn. Startup fails fast, naming each missing or invalid
+variable (never its value), if a required value is blank or too short; see
+[Site password](#site-password). Run these commands from `apps/api`:
 
 ```sh
 cp .env.example .env   # then edit .env with real values
@@ -47,7 +49,7 @@ uv run python -m planora_api.openapi
 This needs no running server, no database connection and no real secrets —
 it builds the app from fixed placeholder configuration
 (`planora_api/openapi.py`), so it works even with
-`LLM_API_KEY` and `APP_ORIGIN` unset. The output is deterministic (fixed
+`APP_PASSWORD`, `SESSION_SECRET`, `LLM_API_KEY` and `APP_ORIGIN` unset. The output is deterministic (fixed
 indent, sorted keys, a trailing newline), so re-running it with no contract
 change produces no diff. `uv run pytest` includes a test comparing the
 committed file to a fresh export, so a stale `openapi.json` fails locally
@@ -84,7 +86,7 @@ header past #26's CSRF check. Standard library only (`argparse`, `signal`,
 cron) is added.
 
 Both need the **same environment as the `api` service** — `load_settings()`
-requires `LLM_API_KEY` and `APP_ORIGIN` even though
+requires `LLM_API_KEY`, `APP_ORIGIN`, `APP_PASSWORD` and `SESSION_SECRET` even though
 neither job uses them — and a database that already has migrations applied
 (`uv run alembic upgrade head`; neither job runs it itself). Neither
 publishes a port or exposes an HTTP health endpoint.
@@ -122,12 +124,43 @@ Compose wiring itself belongs to that issue, not this one.
 
 ## Fixed profiles
 
-Public `GET /api/v1/profiles` returns exactly Hamster Knight (`hamster_knight`)
+`GET /api/v1/profiles` returns exactly Hamster Knight (`hamster_knight`)
 and Ech Princess (`ech_princess`). Every task, archive, settings and AI/chat
 request requires `X-Planora-Profile` with one of those IDs. Missing/unknown
 context returns `422 VALIDATION_ERROR`; another profile's resource returns
 `404 NOT_FOUND`. Selection is a data context, not authentication or access
-control. There are no login/logout/password/reset endpoints or setup commands.
+control. There are no per-profile or per-user credentials, password-change
+endpoints, reset commands or setup commands.
+
+## Site password
+
+One shared password, `APP_PASSWORD` (at least 12 characters), gates the whole
+API; `SESSION_SECRET` (at least 32) signs the access cookie. Both are required
+(startup and the scheduler/archive job fail fast without them), never returned,
+and redacted from logs and `Settings` repr.
+
+- `POST /api/v1/auth/login` `{password}`: `200 {"authenticated": true}` and a
+  `planora_access` cookie (HttpOnly, `SameSite=Lax`, `Path=/`, `Secure` when
+  `APP_ORIGIN` is https, `Max-Age` 2592000). Wrong password: `401
+  INVALID_PASSWORD`. Missing/empty: `422 VALIDATION_ERROR`. After 5 wrong
+  passwords from one client IP within 15 minutes: `429 RATE_LIMITED` with
+  `Retry-After` (even for the right password); a success resets the count. The
+  limiter is in memory (one uvicorn process) and keyed by the ASGI client host,
+  which `--proxy-headers --forwarded-allow-ips $CADDY_IP` sets to the real client.
+- `POST /api/v1/auth/logout`: clears the cookie, `204`.
+- `GET /api/v1/auth/session`: `{"authenticated": bool}`; never `401`.
+- Every other `/api/v1/*` route except `/api/v1/health` answers `401
+  NOT_AUTHENTICATED` without a valid cookie, before profile-header validation
+  and before any LLM call (`security/access_gate.py`, an app-wide middleware, so
+  a route added later is gated automatically). The `Origin` check still covers
+  login and logout.
+
+The cookie is stateless: `v1.<expiry>.<HMAC-SHA256>` keyed from both
+`SESSION_SECRET` and `APP_PASSWORD`, valid for exactly 30 days from unlock and
+not renewed on use. No table or migration backs it. Rotating either value
+invalidates every issued cookie (restart the API and scheduler); Lock only
+removes the cookie from one browser, so rotating `SESSION_SECRET` is the way to
+revoke every copy.
 
 Each profile owns its task order, archive, current conversation/proposals and
 settings overrides. Available models, secrets and endpoint config stay global.

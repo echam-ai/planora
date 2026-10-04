@@ -25,6 +25,7 @@ from planora_api.db.models import Task
 from planora_api.errors import (
     ERROR_RESPONSE,
     PROFILE_RESPONSES,
+    UNAUTHENTICATED_RESPONSE,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
     ApiError,
@@ -38,7 +39,9 @@ from planora_api.schemas.task import (
     TaskUpdate,
 )
 
-router = APIRouter(prefix="/api/v1/tasks", tags=["tasks"])
+router = APIRouter(
+    prefix="/api/v1/tasks", tags=["tasks"], responses=UNAUTHENTICATED_RESPONSE
+)
 
 _NOT_FOUND_MESSAGE = "Task not found."
 

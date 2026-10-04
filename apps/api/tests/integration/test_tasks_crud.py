@@ -1243,7 +1243,7 @@ def test_openapi_documents_error_responses_and_enums(
         return ref.endswith("/ErrorResponse")
 
     post = paths["/api/v1/tasks"]["post"]["responses"]
-    assert "401" not in post
+    assert "401" in post  # site-password gate (#124)
     assert _refs_error_response(post, "403")
     assert _refs_error_response(post, "422")
 
@@ -1251,13 +1251,13 @@ def test_openapi_documents_error_responses_and_enums(
     assert "404" in get_item
 
     patch_item = paths["/api/v1/tasks/{task_id}"]["patch"]["responses"]
-    assert "401" not in patch_item
+    assert "401" in patch_item  # site-password gate (#124)
     assert _refs_error_response(patch_item, "403")
     assert _refs_error_response(patch_item, "422")
     assert "404" in patch_item
 
     delete_item = paths["/api/v1/tasks/{task_id}"]["delete"]["responses"]
-    assert "401" not in delete_item
+    assert "401" in delete_item  # site-password gate (#124)
     assert _refs_error_response(delete_item, "403")
     assert _refs_error_response(delete_item, "422")
     assert "404" in delete_item

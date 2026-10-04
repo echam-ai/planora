@@ -42,6 +42,7 @@ from planora_api.db.models import (
 from planora_api.errors import (
     ERROR_RESPONSE,
     PROFILE_RESPONSES,
+    UNAUTHENTICATED_RESPONSE,
     VALIDATION_RESPONSE,
     WRITE_RESPONSES,
 )
@@ -53,7 +54,9 @@ from planora_api.schemas.chat import (
     SendMessageRequest,
 )
 
-router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+router = APIRouter(
+    prefix="/api/v1/chat", tags=["chat"], responses=UNAUTHENTICATED_RESPONSE
+)
 
 _SEND_MESSAGE_RESPONSES = {
     **WRITE_RESPONSES,

@@ -1,5 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+import { unlock } from "../e2e/unlock";
+
+// The disposable stack's `APP_PASSWORD` (docs/ops/compose-stack.md). The spec types it on the
+// password page like a visitor and never logs it.
+function sitePassword(): string {
+  const value = process.env["PLANORA_E2E_COMPOSE_PASSWORD"];
+  if (!value)
+    throw new Error("PLANORA_E2E_COMPOSE_PASSWORD is required for the disposable Compose check.");
+  return value;
+}
+
 // An already initialized disposable Compose project owns its lifecycle and
 // PostgreSQL data. These checks use only Caddy's public origin, never a dev
 // server, direct API port, local SQLite helper, or LLM request.
@@ -19,10 +30,15 @@ test("Caddy serves web assets and preserves API routing", async ({ page, request
   );
   await page.goto("/login");
   expect((await assetResponse).status()).toBe(200);
-  await expect(page.getByRole("button", { name: "Hamster Knight" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unlock" })).toBeVisible();
+
+  // Behind Caddy the data routes answer 401 until the browser has unlocked.
+  const locked = await request.get("/api/v1/profiles");
+  expect(locked.status()).toBe(401);
+  expect(await locked.json()).toMatchObject({ code: "NOT_AUTHENTICATED" });
 });
 
-test("logs in and writes a task through one origin while preserving CSRF protection", async ({
+test("unlocks and writes a task through one origin while preserving CSRF protection", async ({
   page,
   context,
   baseURL,
@@ -34,11 +50,13 @@ test("logs in and writes a task through one origin while preserving CSRF protect
     if (url.pathname.startsWith("/api/v1/")) apiOrigins.add(url.origin);
   });
   const title = `Compose task ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  await page.goto("/login");
+  await unlock(page, sitePassword());
   await page.getByRole("button", { name: "Hamster Knight" }).click();
   await expect(page.getByRole("heading", { name: "To do" })).toBeVisible();
 
-  expect(await context.cookies()).toEqual([]);
+  const cookies = await context.cookies();
+  expect(cookies).toHaveLength(1);
+  expect(cookies[0]).toMatchObject({ name: "planora_access", httpOnly: true, sameSite: "Lax" });
 
   await page.getByRole("button", { name: "Add task" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a task" });
