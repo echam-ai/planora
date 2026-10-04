@@ -21,9 +21,12 @@ test("Caddy serves web assets and preserves API routing", async ({ page, request
     expect(await response.json()).toEqual({ status: "ok" });
   }
 
+  // The site-password gate runs before routing, so a request without the cookie to an unknown
+  // `/api/v1/*` path is 401 API JSON, not web HTML: Caddy still routes it to the API.
   const missing = await request.get("/api/v1/compose-smoke-missing");
-  expect(missing.status()).toBe(404);
+  expect(missing.status()).toBe(401);
   expect(missing.headers()["content-type"]).toContain("application/json");
+  expect(await missing.json()).toMatchObject({ code: "NOT_AUTHENTICATED" });
 
   const assetResponse = page.waitForResponse((response) =>
     new URL(response.url()).pathname.startsWith("/assets/"),
@@ -57,6 +60,12 @@ test("unlocks and writes a task through one origin while preserving CSRF protect
   const cookies = await context.cookies();
   expect(cookies).toHaveLength(1);
   expect(cookies[0]).toMatchObject({ name: "planora_access", httpOnly: true, sameSite: "Lax" });
+
+  // Once unlocked, an unknown `/api/v1/*` path reaches the API router and gets its 404 JSON.
+  const missing = await page.request.get("/api/v1/compose-smoke-missing");
+  expect(missing.status()).toBe(404);
+  expect(missing.headers()["content-type"]).toContain("application/json");
+  expect(await missing.json()).toMatchObject({ code: "NOT_FOUND" });
 
   await page.getByRole("button", { name: "Add task" }).click();
   const dialog = page.getByRole("dialog", { name: "Add a task" });
