@@ -1,0 +1,18 @@
+{
+ "dompurify": [
+  {
+   "id": 1240621,
+   "url": "https://github.com/advisories/GHSA-p98j-92pf-mc4p",
+   "title": "DOMPurify: IN_PLACE: node-removing afterSanitize hook leaves detached subtree event handlers armed, causing DOM XSS",
+   "severity": "low",
+   "vulnerable_versions": ">=3.4.13 <=3.4.15",
+   "cwe": [
+    "CWE-79"
+   ],
+   "cvss": {
+    "score": 0,
+    "vectorString": null
+   }
+  }
+ ]
+}

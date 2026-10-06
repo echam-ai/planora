@@ -1,0 +1,16 @@
+# Shared-host mode: Planora's Caddy sits BEHIND a host reverse proxy that already
+# owns public 80/443 and terminates TLS (for example, a host Caddy serving several
+# apps on one VPS). Combine with compose.yml only, never with compose.production.yml:
+#
+#   docker compose --env-file <runtime.env> -p planora \
+#     -f deploy/compose.yml -f deploy/compose.behind-proxy.yml up -d
+#
+# Bind Planora's Caddy to loopback (CADDY_BIND_ADDRESS=127.0.0.1, e.g. port 3002),
+# point the host proxy's site block at it, and set
+# APP_ORIGIN=https://<public domain> so the Origin check and Secure cookie match
+# what the browser sees. See docs/ops/deploy-shared-host.md.
+services:
+  caddy:
+    volumes:
+      - ./Caddyfile.behind-proxy:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile.routes.behind-proxy:/etc/caddy/Caddyfile.routes:ro

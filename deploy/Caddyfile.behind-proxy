@@ -1,0 +1,18 @@
+{
+	admin off
+	auto_https off
+	# The only peer that can reach this listener is the host proxy, through the
+	# loopback-bound Docker port (the connection arrives from the private bridge
+	# gateway). Trust X-Forwarded-For from private ranges only, so {client_ip}
+	# is the real browser address the host proxy observed; a public peer can
+	# never set it.
+	servers {
+		trusted_proxies static private_ranges
+		trusted_proxies_strict
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+:80 {
+	import /etc/caddy/Caddyfile.routes
+}

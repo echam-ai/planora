@@ -1,0 +1,18 @@
+# Same routing as Caddyfile.routes, for shared-host mode. Differences: the client
+# address comes from the trusted host proxy ({client_ip}, not {remote_host}), so
+# the API's per-client unlock rate limit sees real browsers instead of one shared
+# bridge address; and the scheme is https because only the TLS-terminating host
+# proxy can reach this listener.
+@api path /api/v1 /api/v1/*
+handle @api {
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-Host {host}
+		header_up -Forwarded
+		header_up -X-Real-IP
+	}
+}
+handle {
+	reverse_proxy web:3000
+}
