@@ -26,8 +26,8 @@ section() { printf '\n## %s\n\n' "$1"; }
 code() { printf '```text\n'; cat; printf '```\n'; }
 
 printf '# Planora operational diagnosis\n\n'
-printf -- '- Generated: %s\n- Host: %s\n- Commit: %s\n- Compose project: %s\n- Domain: %s\n' \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(hostname)" "$(git -c safe.directory='*' rev-parse --short HEAD 2>/dev/null)" "$PROJECT" "${DOMAIN:-<setup HTTP>}"
+printf -- '- Generated: %s\n- Commit: %s\n- Compose project: %s\n- Domain: %s\n' \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(git -c safe.directory='*' rev-parse --short HEAD 2>/dev/null)" "$PROJECT" "${DOMAIN:-<setup HTTP>}"
 
 section "Services"
 dc ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}}\t{{.Status}}' 2>&1 | code

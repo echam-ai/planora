@@ -149,7 +149,7 @@ From `apps/api`, run the targeted regression under the shared host lock:
   PLANORA_TLS_SMOKE_PROJECT=planora46-fixture \
   PLANORA_TLS_SMOKE_ENV="$PWD/../../.tmp/https46.env" \
   rtk uv run pytest tests/unit/test_deployment_https.py tests/integration/test_deployment_https.py -v -s
-) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+) 9>"$PLANORA_SUITE_LOCK"
 ```
 
 The test starts/migrates/seeds only that disposable project, validates rendered

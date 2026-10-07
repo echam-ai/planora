@@ -135,8 +135,8 @@ The following example uses the same default context for Compose and pytest.
 docker compose -p planora45-smoke -f deploy/compose.test-backup.yml up -d --wait --build
 cd apps/api
 PLANORA_BACKUP_SMOKE_PROJECT=planora45-smoke python3 - <<'PY'
-import fcntl, subprocess
-with open('/Users/dohg/code/projects/planora/.tmp/host-suites.lock', 'a') as lock:
+import fcntl, os, subprocess
+with open(os.environ['PLANORA_SUITE_LOCK'], 'a') as lock:
     fcntl.flock(lock, fcntl.LOCK_SH)
     raise SystemExit(subprocess.call(['uv', 'run', 'pytest', 'tests/integration/test_deployment_backup_restore.py', '-v', '-s']))
 PY

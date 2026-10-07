@@ -10,7 +10,7 @@ mkdir -p "$(dirname "$OUT")"
 {
   echo "# Deployment proof — https://$DOMAIN"
   echo
-  echo "- Checked: $(date -u +%Y-%m-%dT%H:%M:%SZ) from $(hostname) (external network)"
+  echo "- Checked: $(date -u +%Y-%m-%dT%H:%M:%SZ) from an external network (not the VPS)"
   echo "- Deployed commit: $(git rev-parse --short HEAD)"
   echo
   echo '```text'

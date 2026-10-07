@@ -55,10 +55,10 @@ sequentially under the shared host lock:
 
 ```sh
 rtk uv sync --frozen
-rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
+rtk flock --shared "$PLANORA_SUITE_LOCK" \
   rtk uv run pytest tests/integration --db-backend=sqlite
 rtk env PLANORA_TEST_POSTGRES_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
-  rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
+  rtk flock --shared "$PLANORA_SUITE_LOCK" \
   rtk uv run pytest tests/integration --db-backend=postgresql
 ```
 
@@ -75,10 +75,10 @@ The shared migration spec uses the selected engine on both runs:
 
 ```sh
 # From apps/api; add the same explicit PostgreSQL test URL for the PG run.
-rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
+rtk flock --shared "$PLANORA_SUITE_LOCK" \
   rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py tests/integration/test_profile_migration.py --db-backend=sqlite
 rtk env PLANORA_TEST_POSTGRES_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
-  rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock \
+  rtk flock --shared "$PLANORA_SUITE_LOCK" \
   rtk uv run pytest tests/integration/test_database_parity.py tests/integration/test_migration.py tests/integration/test_profile_migration.py --db-backend=postgresql
 ```
 
@@ -97,15 +97,15 @@ run from `apps/api` (credentials below are test-only):
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
-  rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
+  rtk flock --shared "$PLANORA_SUITE_LOCK" rtk uv run alembic upgrade head
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
-  rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic current
+  rtk flock --shared "$PLANORA_SUITE_LOCK" rtk uv run alembic current
 rtk env DATABASE_URL=postgresql+psycopg://planora_test:disposable-test-only@127.0.0.1:15444/planora_test44 \
   LLM_API_KEY=disposable-test-key APP_ORIGIN=https://planora.example \
   APP_PASSWORD=disposable-test-password SESSION_SECRET=disposable-test-session-secret-0123456789 \
-  rtk flock --shared /home/hamster/code/planora/.tmp/host-suites.lock rtk uv run alembic upgrade head
+  rtk flock --shared "$PLANORA_SUITE_LOCK" rtk uv run alembic upgrade head
 ```
 
 For SQLite, replace only `DATABASE_URL` with an absolute file URL inside this

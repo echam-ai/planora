@@ -108,7 +108,7 @@ rtk bun install --frozen-lockfile
   PLANORA_E2E_COMPOSE_ORIGIN=http://127.0.0.1:18080 \
   PLANORA_E2E_COMPOSE_PASSWORD=disposable43-site-password \
   rtk bun run e2e:compose
-) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+) 9>"$PLANORA_SUITE_LOCK"
 ```
 
 Inspect port bindings with `docker inspect` for every project container: only

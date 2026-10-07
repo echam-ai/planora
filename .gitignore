@@ -68,3 +68,6 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Per-user Claude Code overrides
+.claude/settings.local.json

@@ -133,13 +133,13 @@ The `web`, `api`, `ai`, `contract` and `infra` labels give the routing without o
 
 ### Shared host suite lock
 
-Every Planora worktree and every cooperating project on this host uses the same absolute lock file in the main checkout: `/home/hamster/code/planora/.tmp/host-suites.lock`. Create its parent once with `rtk mkdir -p /home/hamster/code/planora/.tmp`. Do not derive the path from the current worktree, unlink the lock, or use a per-project lock. On another host, agree on one main-checkout path and share that exact path with all participants.
+Every Planora worktree and every cooperating project on this host uses the same absolute lock file in the main checkout, `<main checkout>/.tmp/host-suites.lock`. Export that exact path once per shell as `PLANORA_SUITE_LOCK` (for example `export PLANORA_SUITE_LOCK="$HOME/code/planora/.tmp/host-suites.lock"`), and create its parent once with `rtk mkdir -p "$(dirname "$PLANORA_SUITE_LOCK")"`. Do not derive the path from the current worktree, unlink the lock, or use a per-project lock. Every participant on a host must share that exact path. The commands below refer to it as `$PLANORA_SUITE_LOCK`.
 
 Run from the tier directory. A subshell keeps the lock open for the entire suite and releases it on exit, including failure:
 
 ```bash
 # Shared: use the same form for targeted Vitest or pytest and full API gates.
-(rtk flock --shared 9 && rtk bun run verify) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+(rtk flock --shared 9 && rtk bun run verify) 9>"$PLANORA_SUITE_LOCK"
 ```
 
 For either mock or HTTP e2e, acquire an exclusive lock and check for nonparticipating processes. A successful `pgrep` stops the run: inspect the processes and wait for unrelated suites to finish. Do not filter by `$PWD`; other projects count. A `pgrep` error also stops the run; only its no-match exit status 1 proceeds. Use `e2e:http` in place of `e2e` for the real-backend suite:
@@ -151,7 +151,7 @@ For either mock or HTTP e2e, acquire an exclusive lock and check for nonparticip
   suite_process_status=$?
   [ "$suite_process_status" -eq 1 ] || exit 1
   rtk bun run e2e
-) 9>/home/hamster/code/planora/.tmp/host-suites.lock
+) 9>"$PLANORA_SUITE_LOCK"
 ```
 
 Cooperating projects must hold this same lock for their entire suites, even when running outside Planora. `flock` prevents acquisition races among participants. `pgrep` is only a snapshot for nonparticipating processes: it cannot prevent another project from starting after the check. Coordinate a quiet window for nonparticipants and report suspected overlap; a process snapshot alone does not prove exclusivity. No application code or new lock runner is required.
