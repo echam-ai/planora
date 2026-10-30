@@ -125,14 +125,23 @@ Key decisions and their trade-offs are recorded in [`docs/adr/`](docs/adr). See 
 
 ```bash
 git clone https://github.com/echam-ai/planora.git && cd planora
-mkdir -p .tmp && cp deploy/.env.example .tmp/planora.env     # then fill every empty value (see Configuration)
-C="docker compose --env-file .tmp/planora.env -p planora-local -f deploy/compose.yml"
-$C build
-$C up -d --wait db
-$C run --rm --no-deps api alembic upgrade head
-$C up -d
-open http://127.0.0.1:18080                    # unlock with APP_PASSWORD
+scripts/up.sh                                  # then open http://127.0.0.1:18080
 ```
+
+One command: it builds the images, starts PostgreSQL, applies the migration
+history, brings up the rest of the stack and waits for the API to answer.
+
+On the first run it writes `.tmp/planora.env` (git-ignored) from
+[`deploy/.env.example`](deploy/.env.example) with random local secrets and
+`LLM_API_KEY=placeholder`, then prints the generated site password. Everything
+except the AI features works with that placeholder; set a real `LLM_API_KEY` in
+that file and re-run to enable them. An existing env file is never rewritten, so
+edits survive a restart. Override the path with `PLANORA_ENV_FILE` and the
+Compose project name with `PLANORA_PROJECT`.
+
+Stop the stack, keeping its data volumes, with `scripts/up.sh --down`. The
+underlying Compose sequence is spelled out step by step in
+[`docs/ops/compose-stack.md`](docs/ops/compose-stack.md).
 
 ### Option 2: Local development on macOS, without Docker
 
