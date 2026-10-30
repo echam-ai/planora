@@ -15,11 +15,16 @@ Scanned commit `786ec23` (main) on 2026-10-05. Raw outputs are in [`reports/`](r
 
 ## Triaged findings
 
+The table records each finding against the scanned commit `786ec23`. The Status
+column is current: S1, S2 and S3 were fixed on 2026-10-30 and the raw outputs in
+[`reports/`](reports/) still show them, since they are the 2026-10-05 run.
+
+
 | ID | Severity | Finding | Source | Status |
 | --- | --- | --- | --- | --- |
-| S1 | Medium | GitHub Actions referenced by tag, not commit SHA (18 uses, incl. third-party `oven-sh/setup-bun`, `astral-sh/setup-uv`). A re-tagged action runs arbitrary code in CI. | zizmor `unpinned-uses`, Semgrep `third-party-action-not-pinned-to-commit-sha` | Open: pin to SHAs (`zizmor --fix` / Dependabot) |
-| S2 | Low | `actions/checkout` keeps the job token in `.git/config` (`persist-credentials` not false); 5 jobs. Workflow `permissions: contents: read` limits impact. | zizmor `artipacked` | Open: add `persist-credentials: false` |
-| S3 | Low | `dompurify 3.4.15` — GHSA-p98j-92pf-mc4p (IN_PLACE mode + node-removing `afterSanitize` hook). Planora uses neither `IN_PLACE` nor a node-removing hook (its `afterSanitizeAttributes` hook only removes attributes, `apps/web/src/lib/markdown-html.ts:48`), so not exploitable. | npm advisory | Open: bump to `3.4.16` |
+| S1 | Medium | GitHub Actions referenced by tag, not commit SHA (18 uses, incl. third-party `oven-sh/setup-bun`, `astral-sh/setup-uv`). A re-tagged action runs arbitrary code in CI. | zizmor `unpinned-uses`, Semgrep `third-party-action-not-pinned-to-commit-sha` | **Fixed** 2026-10-30: all 18 uses pinned to commit SHAs, tag kept in a trailing comment. |
+| S2 | Low | `actions/checkout` keeps the job token in `.git/config` (`persist-credentials` not false); 5 jobs. Workflow `permissions: contents: read` limits impact. | zizmor `artipacked` | **Fixed** 2026-10-30: `persist-credentials: false` on all 5 checkout steps. |
+| S3 | Low | `dompurify 3.4.15` — GHSA-p98j-92pf-mc4p (IN_PLACE mode + node-removing `afterSanitize` hook). Planora uses neither `IN_PLACE` nor a node-removing hook (its `afterSanitizeAttributes` hook only removes attributes, `apps/web/src/lib/markdown-html.ts:48`), so not exploitable. | npm advisory | **Fixed** 2026-10-30: bumped to `3.4.17`. |
 | S4 | Low | Docker base images pinned by tag, not digest (`python:3.12-slim-bookworm`, `node:24-bookworm-slim`, `oven/bun:1.4.2`, `caddy`, `postgres`). | Semgrep `dockerfile-source-not-pinned` | Accepted for now; tags are exact versions |
 
 ## False positives / accepted (with reasons)

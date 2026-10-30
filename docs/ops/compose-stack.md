@@ -52,6 +52,11 @@ DEFAULT_TIMEZONE=Asia/Singapore
 
 ## Initialize and start
 
+For ordinary local use, [`scripts/up.sh`](../../scripts/up.sh) runs this whole
+sequence as one command. The step-by-step form below stays here because
+verification needs each step observable, and a unique project name per run.
+
+
 Use a unique project name for each verification. The commands below use
 `planora43-smoke`; never run its destructive cleanup against an existing project.
 Builds use application directory contexts and committed lockfiles. Initialize
